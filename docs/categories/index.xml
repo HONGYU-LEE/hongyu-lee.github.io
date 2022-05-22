@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Categories on 凌桓&#39;s BLOG</title>
+        <link>https://hongyu-lee.github.io/categories/</link>
+        <description>Recent content in Categories on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language>
+        <lastBuildDate>Sun, 22 May 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://hongyu-lee.github.io/categories/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>ClickHouse</title>
+        <link>https://hongyu-lee.github.io/categories/clickhouse/</link>
+        <pubDate>Sun, 22 May 2022 00:00:00 +0000</pubDate>
+        
+        <guid>https://hongyu-lee.github.io/categories/clickhouse/</guid>
+        <description>&lt;img src="https://hongyu-lee.github.io/categories/clickhouse/hutomo-abrianto-l2jk-uxb1BY-unsplash.jpg" alt="Featured image of post ClickHouse" /&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
