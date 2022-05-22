@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='什么是Clickhouse？ ClickHouse是一个用于联机分析(OLAP)的列式数据库管理系统(DBMS)。
+OLAP 什么是OLAP? OLAP名为联机分析，又可以称为多维分析，是由关系型数据库之父埃德加·科德（EdgarFrank Codd）于1993年提出的概念。顾名思义，它指的是通过多种不同的维度审视数据，进行深层次分析。
+维度可以看作观察数据的一种视角，例如人类能看到的世界是三维的，它包含长、宽、高三个维度。直接一点理解，维度就好比是一张数据表的字段，而多维分析则是基于这些字段进行聚合查询。
+如上图，多维分析包含以下几种操作：
+ 下钻： 从高层次向低层次明细数据穿透，例如从省下钻到市。 上卷： 和下钻相反，从低层次向高层次汇聚，例如从市汇聚成省。 切片： 观察立方体的一层，将一个或多个维度设为单个固定值，然后观察剩余的维度，例如将商品维度固定为足球。 切块： 与切片类似，只是将单个固定值变成多个值。例如将商品维度固定成足球、篮球。 旋转： 旋转立方体的一面，如果要将数据映射到一张二维表，那么就要进行旋转，这就等同于行列置换。  OLAP与OLTP OLTP（on-line transaction processing）翻译为联机事务处理， OLAP（On-Line Analytical Processing）翻译为联机分析处理。
+  从字面上来看OLTP是做事务处理，OLAP是做分析处理。
+  从对数据库操作来看，OLTP主要是对数据的增删改，OLAP是对数据的查询。
+  因为OLTP所产生的业务数据分散在不同的业务系统中，而OLAP往往需要将不同的业务数据集中到一起进行统一综合的分析，这时候就需要根据业务分析需求做对应的数据清洗后存储在数据仓库中，然后由数据仓库来统一提供OLAP分析。
+  OLTP是数据库的应用，OLAP是数据仓库的应用
+  下面用一张图来简要对比。
+列式存储 列式存储与行式存储 在传统的行式数据库系统中，处于同一行中的数据总是被物理的存储在一起，存储方式如下图
+在列式数据库系统中，来自不同列的值被单独存储，来自同一列的数据被存储在一起，数据按如下的顺序存储：
+不同的数据存储方式适用不同的业务场景，而对于OLAP来说，列式存储是最适合的选择。
+列式存储与OLAP 为什么列式数据库更适合于OLAP场景呢？下面这两张图就可以给你答案
+ 行式数据库     列式数据库      下面分别从两个I/O和CPU两个角度来分析为什么他们有如此之大的差别
+ I/O  针对分析类查询，通常只需要读取表的一小部分列。在列式数据库中你可以只读取你需要的数据。 由于数据总是打包成批量读取的，所以压缩是非常容易的。同时数据按列分别存储这也更容易压缩。这进一步降低了I/O的体积。 由于I/O的降低，这将帮助更多的数据被系统缓存,进一步降低了数据传输的成本。   CPU  由于执行一个查询需要处理大量的行，因此在整个向量上执行所有操作将比在每一行上执行所有操作更加高效。同时这将有助于实现一个几乎没有调用成本的查询引擎。如果你不这样做，使用任何一个机械硬盘，查询引擎都不可避免的停止CPU进行等待。所以，在数据按列存储并且按列执行是很有意义的。    列式存储与数据压缩 如果你想让查询变得更快，最简单且有效的方法是减少数据扫描范围和数据传输时的大小，而列式存储和数据压缩就可以帮助我们实现上述两点。'><title>ClickHouse</title>
+
+<link rel='canonical' href='https://HONGYU-LEE.github.io/p/clickhouse/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='ClickHouse'>
+<meta property='og:description' content='什么是Clickhouse？ ClickHouse是一个用于联机分析(OLAP)的列式数据库管理系统(DBMS)。
+OLAP 什么是OLAP? OLAP名为联机分析，又可以称为多维分析，是由关系型数据库之父埃德加·科德（EdgarFrank Codd）于1993年提出的概念。顾名思义，它指的是通过多种不同的维度审视数据，进行深层次分析。
+维度可以看作观察数据的一种视角，例如人类能看到的世界是三维的，它包含长、宽、高三个维度。直接一点理解，维度就好比是一张数据表的字段，而多维分析则是基于这些字段进行聚合查询。
+如上图，多维分析包含以下几种操作：
+ 下钻： 从高层次向低层次明细数据穿透，例如从省下钻到市。 上卷： 和下钻相反，从低层次向高层次汇聚，例如从市汇聚成省。 切片： 观察立方体的一层，将一个或多个维度设为单个固定值，然后观察剩余的维度，例如将商品维度固定为足球。 切块： 与切片类似，只是将单个固定值变成多个值。例如将商品维度固定成足球、篮球。 旋转： 旋转立方体的一面，如果要将数据映射到一张二维表，那么就要进行旋转，这就等同于行列置换。  OLAP与OLTP OLTP（on-line transaction processing）翻译为联机事务处理， OLAP（On-Line Analytical Processing）翻译为联机分析处理。
+  从字面上来看OLTP是做事务处理，OLAP是做分析处理。
+  从对数据库操作来看，OLTP主要是对数据的增删改，OLAP是对数据的查询。
+  因为OLTP所产生的业务数据分散在不同的业务系统中，而OLAP往往需要将不同的业务数据集中到一起进行统一综合的分析，这时候就需要根据业务分析需求做对应的数据清洗后存储在数据仓库中，然后由数据仓库来统一提供OLAP分析。
+  OLTP是数据库的应用，OLAP是数据仓库的应用
+  下面用一张图来简要对比。
+列式存储 列式存储与行式存储 在传统的行式数据库系统中，处于同一行中的数据总是被物理的存储在一起，存储方式如下图
+在列式数据库系统中，来自不同列的值被单独存储，来自同一列的数据被存储在一起，数据按如下的顺序存储：
+不同的数据存储方式适用不同的业务场景，而对于OLAP来说，列式存储是最适合的选择。
+列式存储与OLAP 为什么列式数据库更适合于OLAP场景呢？下面这两张图就可以给你答案
+ 行式数据库     列式数据库      下面分别从两个I/O和CPU两个角度来分析为什么他们有如此之大的差别
+ I/O  针对分析类查询，通常只需要读取表的一小部分列。在列式数据库中你可以只读取你需要的数据。 由于数据总是打包成批量读取的，所以压缩是非常容易的。同时数据按列分别存储这也更容易压缩。这进一步降低了I/O的体积。 由于I/O的降低，这将帮助更多的数据被系统缓存,进一步降低了数据传输的成本。   CPU  由于执行一个查询需要处理大量的行，因此在整个向量上执行所有操作将比在每一行上执行所有操作更加高效。同时这将有助于实现一个几乎没有调用成本的查询引擎。如果你不这样做，使用任何一个机械硬盘，查询引擎都不可避免的停止CPU进行等待。所以，在数据按列存储并且按列执行是很有意义的。    列式存储与数据压缩 如果你想让查询变得更快，最简单且有效的方法是减少数据扫描范围和数据传输时的大小，而列式存储和数据压缩就可以帮助我们实现上述两点。'>
+<meta property='og:url' content='https://HONGYU-LEE.github.io/p/clickhouse/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='列式存储' /><meta property='article:tag' content='ClickHouse' /><meta property='article:tag' content='OLAP' /><meta property='article:published_time' content='2022-05-22T00:00:00&#43;00:00'/><meta property='article:modified_time' content='2022-05-22T00:00:00&#43;00:00'/><meta property='og:image' content='https://HONGYU-LEE.github.io/p/clickhouse/clickhouse.jpeg' />
+<meta name="twitter:title" content="ClickHouse">
+<meta name="twitter:description" content="什么是Clickhouse？ ClickHouse是一个用于联机分析(OLAP)的列式数据库管理系统(DBMS)。
+OLAP 什么是OLAP? OLAP名为联机分析，又可以称为多维分析，是由关系型数据库之父埃德加·科德（EdgarFrank Codd）于1993年提出的概念。顾名思义，它指的是通过多种不同的维度审视数据，进行深层次分析。
+维度可以看作观察数据的一种视角，例如人类能看到的世界是三维的，它包含长、宽、高三个维度。直接一点理解，维度就好比是一张数据表的字段，而多维分析则是基于这些字段进行聚合查询。
+如上图，多维分析包含以下几种操作：
+ 下钻： 从高层次向低层次明细数据穿透，例如从省下钻到市。 上卷： 和下钻相反，从低层次向高层次汇聚，例如从市汇聚成省。 切片： 观察立方体的一层，将一个或多个维度设为单个固定值，然后观察剩余的维度，例如将商品维度固定为足球。 切块： 与切片类似，只是将单个固定值变成多个值。例如将商品维度固定成足球、篮球。 旋转： 旋转立方体的一面，如果要将数据映射到一张二维表，那么就要进行旋转，这就等同于行列置换。  OLAP与OLTP OLTP（on-line transaction processing）翻译为联机事务处理， OLAP（On-Line Analytical Processing）翻译为联机分析处理。
+  从字面上来看OLTP是做事务处理，OLAP是做分析处理。
+  从对数据库操作来看，OLTP主要是对数据的增删改，OLAP是对数据的查询。
+  因为OLTP所产生的业务数据分散在不同的业务系统中，而OLAP往往需要将不同的业务数据集中到一起进行统一综合的分析，这时候就需要根据业务分析需求做对应的数据清洗后存储在数据仓库中，然后由数据仓库来统一提供OLAP分析。
+  OLTP是数据库的应用，OLAP是数据仓库的应用
+  下面用一张图来简要对比。
+列式存储 列式存储与行式存储 在传统的行式数据库系统中，处于同一行中的数据总是被物理的存储在一起，存储方式如下图
+在列式数据库系统中，来自不同列的值被单独存储，来自同一列的数据被存储在一起，数据按如下的顺序存储：
+不同的数据存储方式适用不同的业务场景，而对于OLAP来说，列式存储是最适合的选择。
+列式存储与OLAP 为什么列式数据库更适合于OLAP场景呢？下面这两张图就可以给你答案
+ 行式数据库     列式数据库      下面分别从两个I/O和CPU两个角度来分析为什么他们有如此之大的差别
+ I/O  针对分析类查询，通常只需要读取表的一小部分列。在列式数据库中你可以只读取你需要的数据。 由于数据总是打包成批量读取的，所以压缩是非常容易的。同时数据按列分别存储这也更容易压缩。这进一步降低了I/O的体积。 由于I/O的降低，这将帮助更多的数据被系统缓存,进一步降低了数据传输的成本。   CPU  由于执行一个查询需要处理大量的行，因此在整个向量上执行所有操作将比在每一行上执行所有操作更加高效。同时这将有助于实现一个几乎没有调用成本的查询引擎。如果你不这样做，使用任何一个机械硬盘，查询引擎都不可避免的停止CPU进行等待。所以，在数据按列存储并且按列执行是很有意义的。    列式存储与数据压缩 如果你想让查询变得更快，最简单且有效的方法是减少数据扫描范围和数据传输时的大小，而列式存储和数据压缩就可以帮助我们实现上述两点。"><meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content='https://HONGYU-LEE.github.io/p/clickhouse/clickhouse.jpeg' />
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E9%93%BE%E6%8E%A5/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-link" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M10 14a3.5 3.5 0 0 0 5 0l4 -4a3.5 3.5 0 0 0 -5 -5l-.5 .5" />
+  <path d="M14 10a3.5 3.5 0 0 0 -5 0l-4 4a3.5 3.5 0 0 0 5 5l.5 -.5" />
+</svg>
+
+
+
+                
+                <span>链接</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="has-image main-article">
+    <header class="article-header">
+        <div class="article-image">
+            <a href="/p/clickhouse/">
+                <img src="/p/clickhouse/clickhouse_hu6b4c9c43bb79654c91846545b9da15d3_12179_800x0_resize_q75_box.jpeg"
+                        srcset="/p/clickhouse/clickhouse_hu6b4c9c43bb79654c91846545b9da15d3_12179_800x0_resize_q75_box.jpeg 800w, /p/clickhouse/clickhouse_hu6b4c9c43bb79654c91846545b9da15d3_12179_1600x0_resize_q75_box.jpeg 1600w"
+                        width="800" 
+                        height="222" 
+                        loading="lazy"
+                        alt="Featured image of post ClickHouse" />
+                
+            </a>
+        </div>
+    
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/clickhouse/" style="background-color: #2a9d8f; color: #fff;">
+                ClickHouse
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/clickhouse/">ClickHouse</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 22, 2022</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-time--reading">
+                    阅读时长: 3 分钟
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h2 id="什么是clickhouse">什么是Clickhouse？</h2>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch.jpeg"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<p><strong>ClickHouse是一个用于联机分析(OLAP)的列式数据库管理系统(DBMS)。</strong></p>
+<h3 id="olap">OLAP</h3>
+<h4 id="什么是olap">什么是OLAP?</h4>
+<p><strong>OLAP名为联机分析，又可以称为多维分析</strong>，是由关系型数据库之父埃德加·科德（EdgarFrank Codd）于1993年提出的概念。顾名思义，它指的是<strong>通过多种不同的维度审视数据，进行深层次分析</strong>。</p>
+<p>维度可以看作观察数据的一种视角，例如人类能看到的世界是三维的，它包含长、宽、高三个维度。直接一点理解，<strong>维度就好比是一张数据表的字段，而多维分析则是基于这些字段进行聚合查询。</strong></p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch32.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如上图，多维分析包含以下几种操作：</p>
+<ul>
+<li><strong>下钻：</strong> 从高层次向低层次明细数据穿透，例如从省下钻到市。</li>
+<li><strong>上卷：</strong> 和下钻相反，从低层次向高层次汇聚，例如从市汇聚成省。</li>
+<li><strong>切片：</strong> 观察立方体的一层，将一个或多个维度设为单个固定值，然后观察剩余的维度，例如将商品维度固定为足球。</li>
+<li><strong>切块：</strong> 与切片类似，只是将单个固定值变成多个值。例如将商品维度固定成足球、篮球。</li>
+<li><strong>旋转：</strong> 旋转立方体的一面，如果要将数据映射到一张二维表，那么就要进行旋转，这就等同于行列置换。</li>
+</ul>
+<h4 id="olap与oltp">OLAP与OLTP</h4>
+<p>OLTP（on-line transaction processing）翻译为联机事务处理， OLAP（On-Line Analytical Processing）翻译为联机分析处理。</p>
+<ul>
+<li>
+<p>从字面上来看OLTP是做事务处理，OLAP是做分析处理。</p>
+</li>
+<li>
+<p>从对数据库操作来看，OLTP主要是对数据的增删改，OLAP是对数据的查询。</p>
+</li>
+<li>
+<p>因为OLTP所产生的业务数据分散在不同的业务系统中，而OLAP往往需要将不同的业务数据集中到一起进行统一综合的分析，这时候就需要根据业务分析需求做对应的数据清洗后存储在数据仓库中，然后由数据仓库来统一提供OLAP分析。</p>
+</li>
+<li>
+<p>OLTP是数据库的应用，OLAP是数据仓库的应用</p>
+</li>
+</ul>
+<p>下面用一张图来简要对比。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch33.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="列式存储">列式存储</h3>
+<h4 id="列式存储与行式存储">列式存储与行式存储</h4>
+<p>在传统的行式数据库系统中，处于同一行中的数据总是被物理的存储在一起，存储方式如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch34.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>在列式数据库系统中，来自不同列的值被单独存储，来自同一列的数据被存储在一起，数据按如下的顺序存储：</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch35.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch13.jpg"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>不同的数据存储方式适用不同的业务场景，而对于OLAP来说，列式存储是最适合的选择。</p>
+<h4 id="列式存储与olap">列式存储与OLAP</h4>
+<p>为什么列式数据库更适合于OLAP场景呢？下面这两张图就可以给你答案</p>
+<ul>
+<li>行式数据库
+<ul>
+<li><img src="http://img.orekilee.top//imgbed/clickhouse/ch15.gif"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+<li>列式数据库
+<ul>
+<li><img src="http://img.orekilee.top//imgbed/clickhouse/ch12.gif"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+</ul>
+<p>下面分别从两个I/O和CPU两个角度来分析为什么他们有如此之大的差别</p>
+<ul>
+<li><strong>I/O</strong>
+<ul>
+<li>针对分析类查询，通常只需要读取表的一小部分列。在列式数据库中你可以只读取你需要的数据。</li>
+<li>由于数据总是打包成批量读取的，所以压缩是非常容易的。同时数据按列分别存储这也更容易压缩。这进一步降低了I/O的体积。</li>
+<li>由于I/O的降低，这将帮助更多的数据被系统缓存,进一步降低了数据传输的成本。</li>
+</ul>
+</li>
+<li><strong>CPU</strong>
+<ul>
+<li>由于执行一个查询需要处理大量的行，因此在整个向量上执行所有操作将比在每一行上执行所有操作更加高效。同时这将有助于实现一个几乎没有调用成本的查询引擎。如果你不这样做，使用任何一个机械硬盘，查询引擎都不可避免的停止CPU进行等待。所以，在数据按列存储并且按列执行是很有意义的。</li>
+</ul>
+</li>
+</ul>
+<h4 id="列式存储与数据压缩">列式存储与数据压缩</h4>
+<p>如果你想让查询变得更快，最简单且有效的方法是减少数据扫描范围和数据传输时的大小，而列式存储和数据压缩就可以帮助我们实现上述两点。</p>
+<p>列式存储和数据压缩通常是伴生的。数据按列存储。而具体到每个列字段，数据也是独立存储的，每个列字段都拥有一个与之对应的.bin数据文件，相同类型的数据放在同一个文件中，对压缩更加友好。数据默认使用LZ4算法压缩，在Yandex.Metrica的生产环境中，数据总体的压缩比可以达到8:1（未压缩前17PB，压缩后2PB）。</p>
+<h3 id="核心特点">核心特点</h3>
+<h4 id="完备的dbms功能">完备的DBMS功能</h4>
+<p>ClickHouse拥有完备的管理功能，所以它称得上是一个DBMS（Database Management System，数据库管理系统），而不仅是一个数据库。作为一个DBMS，它具备了一些基本功能，</p>
+<p>如下所示。</p>
+<ul>
+<li><strong>DDL（数据定义语言）</strong>：可以动态地创建、修改或删除数据库、表和视图，而无须重启服务。</li>
+<li><strong>DML（数据操作语言）</strong>：可以动态查询、插入、修改或删除数据。</li>
+<li><strong>权限控制</strong>：可以按照用户粒度设置数据库或者表的操作权限，保障数据的安全性。</li>
+<li><strong>数据备份与恢复</strong>：提供了数据备份导出与导入恢复机制，满足生产环境的要求。</li>
+<li><strong>分布式管理</strong>：提供集群模式，能够自动管理多个数据库节点。</li>
+</ul>
+<h4 id="关系模型与sql查询">关系模型与SQL查询</h4>
+<p>相比HBase和Redis这类NoSQL数据库，ClickHouse使用<strong>关系模型</strong>描述数据并提供了传统数据库的概念（数据库、表、视图和函数等）。与此同时，ClickHouse完全使用<strong>SQL</strong>作为查询语言（支持GROUP BY、ORDER BY、JOIN、IN等大部分标准SQL），这使得它平易近人，容易理解和学习。</p>
+<h4 id="向量化表引擎">向量化表引擎</h4>
+<p>向量化执行，可以简单地看作从<strong>硬件</strong>的角度上消除程序中循环的优化。</p>
+<p>为了实现向量化执行，需要利用CPU的<strong>SIMD</strong>指令。SIMD的全称是Single Instruction MultipleData，即用<strong>单条指令操作多条数据</strong>。现代计算机系统概念中，它是通过数据并行以提高性能的一种实现方式，它的原理是在CPU寄存器层面实现数据的并行操作。例如有8个32位整形数据都需要进行移位运行，则由一条对32位整形数据进行移位的指令重复执行8次完成。SIMD引入了一组大容量的寄存器，一个寄存器包含8 * 32位，可以将这8个数据按次序同时放到一个寄存器。同时，CPU新增了处理这种8 * 32位寄存器的指令，可以在一个指令周期内完成8个数据的位移运算。（本质就是将每次处理的数据从一条变为一批）</p>
+<h4 id="多样化的表引擎">多样化的表引擎</h4>
+<p>与MySQL类似，ClickHouse也将存储部分进行了抽象，把存储引擎作为一层独立的接口。ClickHouse共拥有合并树、内存、文件、接口和其他6大类20多种表引擎。其中每一种表引擎都有着各自的特点，用户可以根据实际业务场景的要求，选择合适的表引擎使用。</p>
+<h4 id="多主架构">多主架构</h4>
+<p>ClickHouse则采用<strong>Multi-Master多主架构</strong>，集群中的每个节点角色对等，客户端访问任意一个节点都能得到相同的效果。这种多主的架构有许多优势，例如对等的角色使系统架构变得更加简单，不用再区分主控节点、数据节点和计算节点，集群中的所有节点功能相同。所以它天然规避了单点故障的问题，非常适合用于多数据中心、异地多活的场景。</p>
+<h4 id="多线程与分布式">多线程与分布式</h4>
+<p>在各服务器之间，通过网络传输数据的成本是高昂的，所以相比移动数据，更为聪明的做法是预先将数据分布到各台服务器，将数据的计算查询直接下推到数据所在的服务器。ClickHouse在数据存取方面，既支持分区（纵向扩展，利用多线程原理），也支持分片（横向扩展，利用分布式原理），可以说是将多线程和分布式的技术应用到了极致。</p>
+<h4 id="分片与分布式查询">分片与分布式查询</h4>
+<p>数据分片是将数据进行横向切分，这是一种在面对海量数据的场景下，解决存储和查询瓶颈的有效手段，是一种<strong>分治思想</strong>的体现。ClickHouse支持分片，而分片则依赖集群。每个集群由1到多个分片组成，而每个分片则对应了ClickHouse的1个服务节点。分片的数量上限取决于节点数量（1个分片只能对应1个服务节点）。</p>
+<p>ClickHouse并不像其他分布式系统那样，拥有高度自动化的分片功能。ClickHouse提供了**本地表（Local Table）<strong>与</strong>分布式表（Distributed Table）**的概念。一张本地表等同于一份数据的分片，而分布式表本身不存储任何数据，它是本地表的访问代理，其作用类似分库中间件。借助分布式表，能够代理访问多个数据分片，从而实现分布式查询。</p>
+<h3 id="应用场景">应用场景</h3>
+<h4 id="擅长的场景">擅长的场景</h4>
+<ul>
+<li>绝大多数是读请求</li>
+<li>数据以相当大的批次(&gt; 1000行)更新，而不是单行更新;或者根本没有更新。</li>
+<li>已添加到数据库的数据不能修改。</li>
+<li>对于读取，从数据库中提取相当多的行，但只提取列的一小部分。</li>
+<li>宽表，即每个表包含着大量的列</li>
+<li>查询相对较少(通常每台服务器每秒查询数百次或更少)</li>
+<li>对于简单查询，允许延迟大约50毫秒</li>
+<li>列中的数据相对较小：数字和短字符串(例如，每个URL 60个字节)</li>
+<li>处理单个查询时需要高吞吐量(每台服务器每秒可达数十亿行)</li>
+<li>事务不是必须的</li>
+<li>对数据一致性要求低</li>
+<li>每个查询有一个大表。除了他以外，其他的都很小。</li>
+<li>查询结果明显小于源数据。换句话说，数据经过过滤或聚合，因此结果适合于单个服务器的RAM中</li>
+</ul>
+<h4 id="不擅长的场景">不擅长的场景</h4>
+<ul>
+<li>OLTP事务性操作（不支持事务，不支持真正的更新/删除）</li>
+<li>不擅长根据主键按行粒度进行查询（如select * from table where user_id in (xxx, xxx, xxx, &hellip;)）</li>
+<li>不擅长存储和查询 blob 或者大量文本类数据（按列存储）</li>
+<li>不擅长执行有大量join的查询（Distributed引擎局限）</li>
+<li>不支持高并发，官方建议QPS &lt;= 100</li>
+</ul>
+<h3 id="clickhouse为什么会这么快">Clickhouse为什么会这么快？</h3>
+<p>首先亮出官方的测试报告：<a class="link" href="https://clickhouse.tech/benchmark/dbms/"  target="_blank" rel="noopener"
+    >Clickhouse性能对比报告</a></p>
+<p>所有用于对比的数据库都使用了相同配置的服务器，在单个节点的情况下，对一张拥有133个字段的数据表分别在1000万、1亿和10亿三种数据体量下执行基准测试，基准测试的范围涵盖43项SQL查询。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch36.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>市面上有很多与Clickhouse采用了同样技术(如列式存储、向量化引擎等)的数据库，但为什么ClickHouse的性能能够将其他数据库远远甩在身后呢？这主要依赖于下面几个方面</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch1.jpg"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li><strong>着眼硬件，先想后做</strong>
+<ul>
+<li>ClickHouse会在内存中进行GROUP BY，并且使用HashTable装载数据。</li>
+<li>ClickHouse非常在意CPU L3级别的缓存，因为一次L3的缓存失效会带来70～100ns的延迟。这意味着在单核CPU上，它会浪费4000万次/秒的运算；而在一个32线程的CPU上，则可能会浪费5亿次/秒的运算。</li>
+</ul>
+</li>
+<li><strong>算法在前，抽象在后</strong>
+<ul>
+<li>对于常量，使用Volnitsky算法；</li>
+<li>对于非常量，使用CPU的向量化执行SIMD（用于文本转换、数据过滤、数据解压和JSON转换等），暴力优化；</li>
+<li>正则匹配使用re2和hyperscan算法。性能是算法选择的首要考量指标。</li>
+</ul>
+</li>
+<li><strong>勇于尝鲜，不行就换</strong>
+<ul>
+<li>除了字符串之外，其余的场景也与它类似，ClickHouse会使用最合适、最快的算法。如果世面上出现了号称性能强大的新算法，ClickHouse团队会立即将其纳入并进行验证。如果效果不错，就保留使用；如果性能不尽人意，就将其抛弃。</li>
+</ul>
+</li>
+<li><strong>特定场景，特殊优化</strong>
+<ul>
+<li>针对同一个场景的不同状况，选择使用不同的实现方式，尽可能将性能最大化。</li>
+<li>例如去重计数uniqCombined函数，会根据数据量的不同选择不同的算法：当数据量较小的时候，会选择Array保存；当数据量中等的时候，会选择HashSet；而当数据量很大的时候，则使用HyperLogLog算法。</li>
+<li>针对不同的场景，Clickhouse提供了MergeTree引擎家族，如MergeTree、ReplacingMergeTree、SummingMergeTree、AggregatingMergeTree、CollapsingMergeTree和VersionedCollapsingMergeTree等。</li>
+</ul>
+</li>
+<li><strong>持续测试，持续改进</strong>
+<ul>
+<li>由于Yandex的天然优势，ClickHouse经常会使用真实的数据进行测试，这一点很好地保证了测试场景的真实性。</li>
+<li>ClickHouse差不多每个月都能发布一个版本，正因为拥有这样的发版频率，ClickHouse才能够快速迭代、快速改进。</li>
+</ul>
+</li>
+</ul>
+<h3 id="clickhouse的架构">ClickHouse的架构</h3>
+<p>目前ClickHouse公开的资料相对匮乏，比如在架构设计层面就很难找到完整的资料，甚至连一张整体的架构图都没有，根据官网提供的信息，我们能够得出一个大概的架构，如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch3.jpg"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch2.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li>
+<p>**Parser：**Parser分析器可以将一条SQL语句以递归下降的方法解析成AST语法树的形式。不同的SQL语句，会经由不同的Parser实现类解析。</p>
+</li>
+<li>
+<p><strong>Interpreter</strong>：Interpreter解释器的作用就像Service服务层一样，起到串联整个查询过程的作用，它会根据解释器的类型，聚合它所需要的资源。首先它会解析AST对象；然后执行“业务逻辑”（例如分支判断、设置参数、调用接口等）；最终返回<code>IBlock</code>对象，以线程的形式建立起一个查询执行管道。</p>
+</li>
+<li>
+<p><strong>Tables</strong>：Tables由 <code>IStorage</code> 接口表示。该接口的不同实现对应不同的表引擎。比如 <code>StorageMergeTree</code>、<code>StorageMemory</code> 等。这些类的实例就是表。</p>
+<ul>
+<li>IStorage接口定义了DDL（如ALTER、RENAME、OPTIMIZE和DROP等）、read和write方法，它们分别负责数据的定义、查询与写入。在数据查询时，IStorage负责根据AST查询语句的指示要求，返回指定列的原始数据。</li>
+<li>后续对数据的进一步加工、计算和过滤，则会统一交由Interpreter解释器对象处理。对Table发起的一次操作通常都会经历这样的过程，接收AST查询语句，根据AST返回指定列的数据，之后再将数据交由Interpreter做进一步处理。</li>
+</ul>
+</li>
+<li>
+<p><strong>Block与Block Streams</strong>：ClickHouse内部的数据操作是面向Block对象进行的，并且采用了流的形式。</p>
+<ul>
+<li><strong>Block</strong>：虽然Column和Filed组成了数据的基本映射单元，但对应到实际操作，它们还缺少了一些必要的信息，比如数据的类型及列的名称。于是ClickHouse设计了Block对象，Block对象可以看作数据表的子集。Block对象的本质是由数据对象、数据类型和列名称组成的三元组，即Column、DataType及列名称字符串。Column提供了数据的读取能力，而DataType知道如何正反序列化，所以Block在这些对象的基础之上实现了进一步的抽象和封装，从而简化了整个使用的过程，仅通过Block对象就能完成一系列的数据操作。在具体的实现过程中，Block并没有直接聚合Column和DataType对象，而是通过<code>ColumnWithTypeAndName</code>对象进行间接引用。</li>
+<li><strong>Block Streams</strong>：Block Streams用于处理数据。我们可以使用Block Streams从某个地方读取数据，执行数据转换，或将数据写到某个地方。<code>IBlockInputStream</code> 具有 <code>read</code> 方法，其能够在数据可用时获取下一个块。<code>IBlockOutputStream</code> 具有 <code>write</code> 方法，其能够将块写到某处。</li>
+</ul>
+</li>
+<li>
+<p><strong>Functions</strong>：ClickHouse主要提供两类函数——普通函数和聚合函数。</p>
+<ul>
+<li><strong>Function</strong>：普通函数由<code>IFunction</code>接口定义，其是没有状态的，函数效果作用于每行数据之上。当然，在函数具体执行的过程中，并不会一行一行地运算，而是采用向量化的方式直接作用于一整列数据。</li>
+<li><strong>AggregateFunction</strong>：聚合函数由<code>IAggregateFunction</code>接口定义，相比无状态的普通函数，聚合函数是有状态的，并且聚合函数的状态支持序列化与反序列化，所以能够在分布式节点之间进行传输，以实现增量计算。</li>
+</ul>
+</li>
+<li>
+<p><strong>DataType</strong>：数据的序列化和反序列化工作由DataType负责。根据不同的数据类型，<code>IDataType</code>接口会有不同的实现类。DataType虽然会对数据进行正反序列化，但是它不会直接和内存或者磁盘做交互，而是转交给Column和Filed处理。</p>
+</li>
+<li>
+<p><strong>Column与Field</strong>：Column和Field是ClickHouse数据最基础的映射单元。</p>
+<ul>
+<li><strong>Column</strong>：内存中的一列数据由一个Column对象表示。Column对象分为接口和实现两个部分，在<code>IColumn</code>接口对象中，定义了对数据进行各种关系运算的方法，例如插入数据的<code>insertRangeFrom</code>和<code>insertFrom</code>方法、用于分页的<code>cut</code>，以及用于过滤的<code>filter</code>方法等。而这些方法的具体实现对象则根据数据类型的不同，由相应的对象实现。</li>
+<li><strong>Field</strong>：在大多数场合，ClickHouse都会以整列的方式操作数据，但凡事也有例外。如果需要操作单个具体的数值（也就是单列中的一行数据），则需要使用Field对象，Field对象代表一个单值。与Column对象的泛化设计思路不同，Field对象使用了聚合的设计模式。在Field对象内部聚合了Null、UInt64、String和Array等13种数据类型及相应的处理逻辑。</li>
+</ul>
+</li>
+</ul>
+<h2 id="mergetree引擎">MergeTree引擎</h2>
+<h3 id="存储结构">存储结构</h3>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch47.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li><strong>partition</strong>：<strong>分区目录</strong>，余下各类数据文件（primary.idx、[Column].mrk、[Column]. bin等）都是以分区目录的形式被组织存放的，属于相同分区的数据，最终会被合并到同一个分区目录，而不同分区的数据，永远不会被合并在一起。</li>
+<li><strong>checksums</strong>：<strong>校验文件</strong>，使用二进制格式存储。它保存了余下各类文件(primary. idx、count.txt等)的size大小及size的哈希值，用于快速校验文件的完整性和正确性。</li>
+<li><strong>columns.txt</strong>：<strong>列信息文件</strong>，使用明文格式存储，用于保存此数据分区下的列字段信息。</li>
+<li><strong>count.txt</strong>：<strong>计数文件</strong>，使用明文格式存储，用于记录当前数据分区目录下数据的总行数。</li>
+<li><strong>primary.idx</strong>：<strong>一级索引文件</strong>，使用二进制格式存储。用于存放稀疏索引，一张MergeTree表只能声明一次一级索引。借助稀疏索引，在数据查询的时能够排除主键条件范围之外的数据文件，从而有效减少数据扫描范围，加速查询速度。</li>
+<li><strong>[Column].bin</strong>：<strong>数据文件</strong>，使用压缩格式存储，用于存储某一列的数据。由于MergeTree采用列式存储，所以每一个列字段都拥有独立的.bin数据文件，并以列字段名称命名。</li>
+<li><strong>[Column].mrk</strong>：<strong>使用二进制格式存储</strong>。标记文件中保存了.bin文件中数据的偏移量信息。标记文件与稀疏索引对齐，又与.bin文件一一对应，所以MergeTree通过标记文件建立了primary.idx稀疏索引与.bin数据文件之间的映射关系。即首先通过稀疏索引（primary.idx）找到对应数据的偏移量信息（.mrk），再通过偏移量直接从.bin文件中读取数据。由于.mrk标记文件与.bin文件一一对应，所以MergeTree中的每个列字段都会拥有与其对应的.mrk标记文件</li>
+<li><strong>[Column].mrk2</strong>：如果使用了自适应大小的索引间隔，则标记文件会以．mrk2命名。它的工作原理和作用与．mrk标记文件相同。</li>
+<li><strong>partition.dat与minmax_[Column].idx</strong>：如果使用了分区键，例如PARTITION BY EventTime，则会额外生成partition.dat与minmax索引文件，它们均使用二进制格式存储。partition.dat用于保存当前分区下分区表达式最终生成的值；而minmax索引用于记录当前分区下分区字段对应原始数据的最小和最大值。</li>
+<li><strong>skp_idx_[Column].idx与skp_idx_[Column].mrk</strong>：如果在建表语句中声明了二级索引，则会额外生成相应的二级索引与标记文件，它们同样也使用二进制存储。二级索引在ClickHouse中又称跳数索引。</li>
+</ul>
+<h3 id="一级索引">一级索引</h3>
+<h4 id="稀疏索引">稀疏索引</h4>
+<p>当我们定义主键之后，MergeTree会依据<code>index_granularity</code>间隔（默认8192行），为数据表生成一级索引并保存至<code>primary.idx</code>文件内，索引数据按照主键排序。相比使用主键定义，更为常见的简化形式是通过ORDER BY指代主键。在此种情形下，主键与ORDER BY定义相同，所以索引（primary.idx）和数据（.bin）会按照完全相同的规则排序。</p>
+<p>一级索引底层采用了<strong>稀疏索引</strong>来实现，从下图我们可以看出它和稠密索引的区别。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch46.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><strong>对于稠密索引而言，每一行索引标记都会对应到具体的一行记录上。而在稀疏索引中，每一行索引标记对应的一大段数据，而不是具体的一行</strong>（他们之间的区别就有点类似mysql中innodb的聚集索引与非聚集索引）。</p>
+<p>稀疏索引的优势是显而易见的，它只需要使用少量的索引标记就能够记录大量数据的区间位置信息，并且数据量越大优势愈发明显。例如我们使用默认的索引粒度（8192）时，MergeTree只需要12208行索引标记就能为1亿行数据记录提供索引。由于稀疏索引占用空间小，所以primary.idx内的索引数据能够常驻内存，取用速度自然极快。</p>
+<h4 id="索引粒度index_granularity">索引粒度index_granularity</h4>
+<p><strong>索引粒度就如同标尺一般，会丈量整个数据的长度，并依照刻度对数据进行标注，最终将数据标记成多个间隔的小段</strong>。数据以<strong>index_granularity</strong>的粒度(老版本默认8192，新版本实现了自适应粒度)被标记成多个小的区间，其中每个区间最多8192行数据，MergeTree使用<strong>MarkRange</strong>表示一个具体的区间，并通过<strong>start</strong>和<strong>end</strong>表示其具体的范围。</p>
+<p>如下图所示。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch4.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>index_granularity的命名虽然取了索引二字，但它不单只作用于一级索引(.idx)，同时也会影响数据标记(.mrk)和数据文件(.bin)。因为仅有一级索引自身是无法完成查询工作的，它需要借助数据标记才能定位数据，所以一级索引和数据标记的间隔粒度相同(同为index_granularity行)，彼此对齐。而数据文件也会依照index_granularity的间隔粒度生成压缩数据块。</p>
+<h4 id="索引的查询过程">索引的查询过程</h4>
+<p><strong>索引查询其实就是两个数值区间的交集判断</strong>。其中，一个区间是由基于主键的查询条件转换而来的条件区间；而另一个区间是刚才所讲述的与MarkRange对应的数值区间。</p>
+<p>整个索引的查询过程可以分为三大步骤</p>
+<ol>
+<li>
+<p><strong>生成查询条件区间：</strong> 将查询条件转换为条件区间。即便是单个值的查询条件，也会被转换成区间的形式。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="c1">--举例--
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">WHERE</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">[</span><span class="s1">&#39;A000&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="s1">&#39;A000&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;+inf&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="s1">&#39;-inf&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;A000%&#39;</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">[</span><span class="s1">&#39;A000&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;A001&#39;</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>递归交集判断：</strong> 以递归的形式，依次对MarkRange的数值区间与条件区间做交集判断。从最大的区间[A000 , +inf)开始。</p>
+<ul>
+<li><strong>如果不存在交集</strong>，则直接通过剪枝算法优化此整段MarkRange</li>
+<li><strong>如果存在交集，且MarkRange步长大于N</strong>，则将这个区间进一步拆分为N个子区间，并重复此规则，继续做递归交集判断（N由merge_tree_coarse_index_granularity指定，默认值为8）</li>
+<li><strong>如果存在交集，且MarkRange不可再分解</strong>，则记录MarkRange并返回</li>
+</ul>
+</li>
+<li>
+<p><strong>合并MarkRange区间：</strong> 将最终匹配的MarkRange聚在一起，合并它们的范围。</p>
+</li>
+</ol>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch5.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>MergeTree通过递归的形式持续向下拆分区间，最终将MarkRange定位到最细的粒度，以帮助在后续读取数据的时候，能够最小化扫描数据的范围。</p>
+<h4 id="联合主键">联合主键</h4>
+<p>当我们以需要以多个字段为主键时，此时数据的查询和存储就涉及到另外一种规则。</p>
+<p>例如以 <code>(CounterID, Date)</code> 以主键，片段中数据首先按 <code>CounterID</code> 排序，具有相同 <code>CounterID</code> 的部分按 <code>Date</code> 排序。排序好的索引的图示会是下面这样：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">全部数据</span><span class="w">  </span><span class="p">:</span><span class="w">     </span><span class="p">[</span><span class="c1">-------------------------------------------------------------------------]
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">CounterID</span><span class="p">:</span><span class="w">      </span><span class="p">[</span><span class="n">aaaaaaaaaaaaaaaaaabbbbcdeeeeeeeeeeeeefgggggggghhhhhhhhhiiiiiiiiikllllllll</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nb">Date</span><span class="p">:</span><span class="w">           </span><span class="p">[</span><span class="mi">1111111222222233331233211111222222333211111112122222223111112223311122333</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">标记</span><span class="p">:</span><span class="w">            </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">a</span><span class="p">,</span><span class="mi">1</span><span class="w">    </span><span class="n">a</span><span class="p">,</span><span class="mi">2</span><span class="w">    </span><span class="n">a</span><span class="p">,</span><span class="mi">3</span><span class="w">    </span><span class="n">b</span><span class="p">,</span><span class="mi">3</span><span class="w">    </span><span class="n">e</span><span class="p">,</span><span class="mi">2</span><span class="w">    </span><span class="n">e</span><span class="p">,</span><span class="mi">3</span><span class="w">    </span><span class="k">g</span><span class="p">,</span><span class="mi">1</span><span class="w">    </span><span class="n">h</span><span class="p">,</span><span class="mi">2</span><span class="w">    </span><span class="n">i</span><span class="p">,</span><span class="mi">1</span><span class="w">    </span><span class="n">i</span><span class="p">,</span><span class="mi">3</span><span class="w">    </span><span class="n">l</span><span class="p">,</span><span class="mi">3</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">标记号</span><span class="p">:</span><span class="w">          </span><span class="mi">0</span><span class="w">      </span><span class="mi">1</span><span class="w">      </span><span class="mi">2</span><span class="w">      </span><span class="mi">3</span><span class="w">      </span><span class="mi">4</span><span class="w">      </span><span class="mi">5</span><span class="w">      </span><span class="mi">6</span><span class="w">      </span><span class="mi">7</span><span class="w">      </span><span class="mi">8</span><span class="w">      </span><span class="mi">9</span><span class="w">      </span><span class="mi">10</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果指定查询如下：</p>
+<ul>
+<li><code>CounterID in ('a', 'h')</code>，服务器会读取标记号在 <code>[0, 3)</code> 和 <code>[6, 8)</code> 区间中的数据。</li>
+<li><code>CounterID IN ('a', 'h') AND Date = 3</code>，服务器会读取标记号在 <code>[1, 3)</code> 和 <code>[7, 8)</code> 区间中的数据。</li>
+<li><code>Date = 3</code>，服务器会读取标记号在 <code>[1, 10]</code> 区间中的数据。</li>
+</ul>
+<p>上面例子可以看出使用索引通常会比全表描述要高效。</p>
+<ul>
+<li>
+<p>稀疏索引会引起额外的数据读取。当读取主键单个区间范围的数据时，每个数据块中最多会多读 <code>index_granularity * 2</code> 行额外的数据。</p>
+</li>
+<li>
+<p>稀疏索引使得你可以处理极大量的行，因为大多数情况下，这些索引常驻与内存（RAM）中。</p>
+</li>
+</ul>
+<p>从上面可以看出，ClickHouse的联合主键在某种程度上与我们熟知的最左前缀规则有点类似，通常在以下几种场景下我们才会考虑使用联合索引</p>
+<ul>
+<li>查询会使用 <code>b</code> 列作为条件</li>
+<li>很长的数据范围（ <code>index_granularity</code> 的数倍）里 <code>a</code> 都是相同的值，并且这样的情况很普遍。换言之，就是加入另一列后，可以让你的查询略过很长的数据范围。</li>
+<li>数据量大，需要改善数据压缩（以主键排序片段数据，数据的一致性越高，压缩越好）</li>
+</ul>
+<p>长的主键会对插入性能和内存消耗有负面影响，但主键中额外的列并不影响 <code>SELECT</code> 查询的性能。</p>
+<h3 id="二级索引">二级索引</h3>
+<p>除了一级索引之外，MergeTree同样支持二级索引。二级索引又称<strong>跳数索引</strong>，由数据的聚合信息构建而成。根据索引类型的不同，其聚合信息的内容也不同。跳数索引的目的与一级索引一样，也是帮助查询时减少数据扫描的范围。</p>
+<p><strong>（二级索引目前还处于测试阶段，官方不建议大量使用）</strong></p>
+<h4 id="跳数索引">跳数索引</h4>
+<p>目前，MergeTree共支持4种跳数索引，分别是<strong>minmax（最值）、set（集合行数）、ngrambf_v1（N-Gram布隆过滤器）和tokenbf_v1（Token布隆过滤器</strong>）。一张数据表支持同时声明多个跳数索引。</p>
+<ul>
+<li>
+<p><strong>minmax（最值索引）</strong>：minmax索引记录了一段数据内的<strong>最小和最大极值</strong>，其索引的作用类似分区目录的minmax索引，能够快速跳过无用的数据区间。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">示例：</span><span class="k">INDEX</span><span class="w"> </span><span class="p">[</span><span class="n">index_name</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="k">column</span><span class="p">]</span><span class="w"> </span><span class="k">TYPE</span><span class="w"> </span><span class="n">minmax</span><span class="w"> </span><span class="n">GRANULARITY</span><span class="w"> </span><span class="p">[</span><span class="n">GRANULARITY</span><span class="w"> </span><span class="k">SIZE</span><span class="p">]</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>set（集合行数索引）</strong>：set索引直接记录了声明字段或表达式的<strong>不重复值</strong>，用于检测数据块是否满足<code>WHERE</code>条件。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">示例：</span><span class="k">INDEX</span><span class="w"> </span><span class="p">[</span><span class="n">index_name</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="k">column</span><span class="p">]</span><span class="w"> </span><span class="k">TYPE</span><span class="w"> </span><span class="k">set</span><span class="p">(</span><span class="n">max_rows</span><span class="p">)</span><span class="w"> </span><span class="n">GRANULARITY</span><span class="w"> </span><span class="p">[</span><span class="n">index_granularity</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- max_rows是一个阈值，表示在一个index_granularity内，索引最多记录的数据行数。(如果max_rows=0，则表示无限制)
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>ngrambf_v1（N-Gram布隆过滤器）</strong>：ngrambf_v1索引记录的是<strong>指定长度的数据短语的布隆表过滤器</strong>，只支持String和FixedString数据类型，同时只能够提升<code>in</code>、<code>notIn</code>、<code>like</code>、<code>equals</code>和<code>notEquals</code>查询的性能。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">示例：</span><span class="k">INDEX</span><span class="w"> </span><span class="p">[</span><span class="n">index_name</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="k">column</span><span class="p">]</span><span class="w"> </span><span class="k">TYPE</span><span class="w"> </span><span class="n">ngrambf_v1</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">size_of_bloom_filter_in_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">number_of_hash_functions</span><span class="p">,</span><span class="w"> </span><span class="n">random_seed</span><span class="p">)</span><span class="w"> </span><span class="n">GRANULARITY</span><span class="w"> </span><span class="p">[</span><span class="n">index_granularity</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="cm">/*
+</span></span></span><span class="line"><span class="cl"><span class="cm">n:token长度，依据n的长度将数据切割为token短语。
+</span></span></span><span class="line"><span class="cl"><span class="cm">size_of_bloom_filter_in_bytes：布隆过滤器的大小。
+</span></span></span><span class="line"><span class="cl"><span class="cm">number_of_hash_functions：布隆过滤器中使用Hash函数的个数。
+</span></span></span><span class="line"><span class="cl"><span class="cm">random_seed: Hash函数的随机种子。
+</span></span></span><span class="line"><span class="cl"><span class="cm">*/</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">布隆过滤器可能会包含不符合条件的匹配，所以</span><span class="w"> </span><span class="n">ngrambf_v1</span><span class="p">,</span><span class="w"> </span><span class="n">tokenbf_v1</span><span class="w"> </span><span class="err">和</span><span class="w"> </span><span class="n">bloom_filter</span><span class="w"> </span><span class="err">索引不能用于负向的函数，例如：</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">--可以用来优化的场景
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">s</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;%test%&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">NOT</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;%test%&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">NOT</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">startsWith</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;test&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">i</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">--不能用来优化的场景
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">NOT</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;%test%&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">s</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;%test%&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">NOT</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">s</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">NOT</span><span class="w"> </span><span class="n">startsWith</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;test&#39;</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>tokenbf_v1（Token布隆过滤器）</strong>：tokenbf_v1索引是ngrambf_v1的变种，同样也是一种布隆过滤器索引。tokenbf_v1除了短语token的处理方法外，其他与ngrambf_v1是完全一样的。tokenbf_v1会自动按照<strong>非字符的、数字的字符串</strong>分割token。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">示例：</span><span class="k">INDEX</span><span class="w"> </span><span class="n">d</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="k">TYPE</span><span class="w"> </span><span class="n">tokenbf_v1</span><span class="p">(</span><span class="n">size_of_bloom_filter_in_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">number_of_hash_functions</span><span class="p">,</span><span class="w"> </span><span class="n">random_seed</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+<h4 id="granularity">granularity</h4>
+<p>对于跳数索引而言，<strong>index_granularity定义了数据的粒度</strong>，而<strong>granularity定义了聚合信息汇总的粒度</strong>。换言之，<strong>granularity定义了一行跳数索引能够跳过多少个index_granularity区间的数据。</strong></p>
+<p><strong>作用规则如下</strong>：首先，按照index_granularity粒度间隔将数据划分成n段，总共有[0 , n-1]个区间（n = total_rows /index_granularity，向上取整）。接着，根据索引定义时声明的表达式，从0区间开始，依次按index_granularity粒度从数据中获取聚合信息，每次向前移动1步(n+1)，聚合信息逐步累加。最后，当移动granularity次区间时，则汇总并生成一行跳数索引数据。</p>
+<p>以minmax索引为例，假设index_granularity=8192且granularity=3，则数据会按照index_granularity划分为n等份，MergeTree从第0段分区开始，依次获取聚合信息。当获取到第3个分区时（granularity=3），则汇总并会生成第一行minmax索引（前3段minmax极值汇总后取值为[1 , 9]），如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch8.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="数据标记">数据标记</h3>
+<p>如果把MergeTree比作一本书，primary.idx一级索引好比这本书的一级章节目录，.bin文件中的数据好比这本书中的文字，那么数据标记(.mrk)就好比书签一样，会为一级章节目录和具体的文字之间建立关联。</p>
+<p>对于数据标记而言，它记录了两点重要信息：</p>
+<ul>
+<li>一级章节对应的页码信息。</li>
+<li>一段文字在某一页中的起始位置信息。</li>
+</ul>
+<p>这样一来，通过数据标记就能够很快地从一本书中立即翻到关注内容所在的那一页，并知道从第几行开始阅读。</p>
+<p>标记数据与一级索引数据不同，它并不能常驻内存，而是使用<strong>LRU（最近最少使用）缓存策略</strong>加快其取用速度。</p>
+<h4 id="生成规则">生成规则</h4>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch29.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>从上图可以看出，数据标记和索引区间是对齐的，均按照<code>index_granularity</code>的粒度间隔。如此一来，只需简单通过索引区间的下标编号就可以直接找到对应的数据标记。</p>
+<p>为了能够与数据衔接，数据标记文件也与.bin文件一一对应。即每一个列字段[Column].bin文件都有一个与之对应的[Column].mrk数据标记文件，用于记录数据在.bin文件中的偏移量信息。同时，.mrk包含了.bin压缩和解压缩这两种不同状态的偏移量，如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch30.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h4 id="工作方式">工作方式</h4>
+<p>MergeTree在读取数据时，必须通过标记数据的位置信息才能够找到所需要的数据。整个查找过程大致可以分为<strong>读取压缩数据块</strong>和<strong>读取数据</strong>两个步骤。</p>
+<p>对于下图来说，表的<code>index_granularity</code>粒度为8192，所以一个索引片段的数据大小恰好是8192B。按照压缩数据块的生成规则，如果单个批次数据小于64KB，则继续获取下一批数据，直至累积到size&gt;=64KB时，生成下一个压缩数据块。因此在JavaEnable的标记文件中，每8行标记数据对应1个压缩数据块（1B * 8192 = 8192B, 64KB = 65536B, 65536 / 8192 =8）。</p>
+<p>从图能够看到，其左侧的标记数据中，8行数据的压缩文件偏移量都是相同的，因为这8行标记都指向了同一个压缩数据块。而在这8行的标记数据中，它们的解压缩数据块中的偏移量，则依次按照8192B（每行数据1B，每一个批次8192行数据）累加，当累加达到65536(64KB)时则置0。因为根据规则，此时会生成下一个压缩数据块。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch31.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ol>
+<li>
+<p><strong>读取压缩数据块：</strong> 在查询某一列数据时，MergeTree无须一次性加载整个.bin文件，而是可以根据需要，只加载特定的压缩数据块。而这项特性需要借助标记文件中所保存的压缩文件中的偏移量。</p>
+</li>
+<li>
+<p><strong>读取数据：</strong> 在读取解压后的数据时，MergeTree并不需要一次性扫描整段解压数据，它可以根据需要，以<code>index_granularity</code>的粒度加载特定的一小段。为了实现这项特性，需要借助标记文件中保存的解压数据块中的偏移量。</p>
+</li>
+</ol>
+<h4 id="数据标记与压缩数据块的对应关系">数据标记与压缩数据块的对应关系</h4>
+<p>由于压缩数据块的划分，与一个间隔<code>index_granularity</code>内的数据大小相关，每个压缩数据块的体积都被严格控制在64KB～1MB。而一个间隔<code>index_granularity</code>的数据，又只会产生一行数据标记。那么根据一个间隔内数据的实际字节大小，数据标记和压缩数据块之间会产生三种不同的对应关系。</p>
+<ul>
+<li><strong>一对一</strong>
+<ul>
+<li>一个数据标记对应一个压缩数据块，当一个间隔<code>index_granularity</code>内的数据未压缩大小size大于等于64KB且小于等于1MB时，会出现这种对应关系。</li>
+<li><img src="http://img.orekilee.top//imgbed/clickhouse/ch28.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+<li><strong>一对多</strong>
+<ul>
+<li>一个数据标记对应多个压缩数据块，当一个间隔<code>index_granularity</code>内的数据未压缩大小size直接大于1MB时，会出现这种对应关系。</li>
+<li><img src="http://img.orekilee.top//imgbed/clickhouse/ch26.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+<li><strong>多对一</strong>
+<ul>
+<li>多个数据标记对应一个压缩数据块，当一个间隔<code>index_granularity</code>内的数据未压缩大小size小于64KB时，会出现这种对应关系。</li>
+<li><img src="http://img.orekilee.top//imgbed/clickhouse/ch27.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+</ul>
+<h3 id="工作流程">工作流程</h3>
+<h4 id="存储流程">存储流程</h4>
+<p>数据的存储流程主要有以下几个步骤</p>
+<ul>
+<li>
+<p>首先生成分区目录，伴随着每一批数据的写入，都会生成一个新的分区目录。</p>
+</li>
+<li>
+<p>在后续的某一时刻，属于相同分区的目录会依照规则合并到一起</p>
+</li>
+<li>
+<p>接着，按照<code>index_granularity</code>索引粒度，会分别生成primary.idx一级索引（如果声明了二级索引，还会创建二级索引文件）、每一个列字段的．mrk数据标记和．bin压缩数据文件。</p>
+</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch23.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h4 id="查询流程">查询流程</h4>
+<p>数据查询的本质，可以看作一个不断减小数据范围的过程。在最理想的情况下，MergeTree首先可以依次借助分区索引、一级索引和二级索引，将数据扫描范围缩至最小。然后再借助数据标记，将需要解压与计算的数据范围缩至最小。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch24.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如果一条查询语句没有指定任何WHERE条件，或是指定了WHERE条件，但条件没有匹配到任何索引（分区索引、一级索引和二级索引），那么MergeTree就不能预先减小数据范围。在后续进行数据查询时，它会扫描所有分区目录，以及目录内索引段的最大区间。虽然不能减少数据范围，但是MergeTree仍然能够借助数据标记，以多线程的形式同时读取多个压缩数据块，以提升性能。</p>
+<h2 id="replicatedmergetree引擎">ReplicatedMergeTree引擎</h2>
+<p>ReplicatedMergeTree是MergeTree的派生引擎，它在MergeTree的基础上加入了分布式协同的能力，只有使用了ReplicatedMergeTree复制表系列引擎，才能应用副本的能力。或者用一种更为直接的方式理解，即使用ReplicatedMergeTree的数据表就是副本。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch37.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>在MergeTree中，一个数据分区由开始创建到全部完成，会历经两类存储区域。</p>
+<ul>
+<li><strong>内存</strong>：数据首先会被写入内存缓冲区。</li>
+<li><strong>本地磁盘</strong>：数据接着会被写入tmp临时目录分区，待全部完成后再将临时目录重命名为正式分区。</li>
+</ul>
+<p>ReplicatedMergeTree在上述基础之上增加了ZooKeeper的部分，它会进一步在ZooKeeper内创建一系列的监听节点，并以此实现多个实例之间的通信。在整个通信过程中，ZooKeeper并不会涉及表数据的传输。</p>
+<h3 id="特点">特点</h3>
+<p>作为数据副本的主要实现载体，ReplicatedMergeTree在设计上有一些显著特点。</p>
+<ul>
+<li>
+<p><strong>依赖ZooKeeper</strong>：在执行<code>INSERT</code>和<code>ALTER</code>查询的时候，ReplicatedMergeTree需要借助ZooKeeper的分布式协同能力，以实现多个副本之间的同步。但是在查询副本的时候，并不需要使用ZooKeeper。</p>
+</li>
+<li>
+<p><strong>表级别的副本</strong>：副本是在表级别定义的，所以每张表的副本配置都可以按照它的实际需求进行个性化定义，包括副本的数量，以及副本在集群内的分布位置等。</p>
+</li>
+<li>
+<p><strong>多主架构（Multi Master）</strong>：可以在任意一个副本上执行<code>INSERT</code>和<code>ALTER</code>查询，它们的效果是相同的。这些操作会借助ZooKeeper的协同能力被分发至每个副本以本地形式执行。</p>
+</li>
+<li>
+<p><strong>Block数据块</strong>：在执行<code>INSERT</code>命令写入数据时，会依据<code>max_insert_block_size</code>的大小（默认1048576行）将数据切分成若干个Block数据块。所以Block数据块是数据写入的基本单元，并且具有写入的原子性和唯一性。</p>
+</li>
+<li>
+<p><strong>原子性</strong>：在数据写入时，一个Block块内的数据要么全部写入成功，要么全部失败。</p>
+</li>
+<li>
+<p><strong>唯一性</strong>：在写入一个Block数据块的时候，会按照当前Block数据块的数据顺序、数据行和数据大小等指标，计算Hash信息摘要并记录在案。在此之后，如果某个待写入的Block数据块与先前已被写入的Block数据块拥有相同的Hash摘要（Block数据块内数据顺序、数据大小和数据行均相同），则该Block数据块会被忽略。</p>
+</li>
+</ul>
+<h3 id="数据结构">数据结构</h3>
+<h4 id="zookeeper内的节点结构">ZooKeeper内的节点结构</h4>
+<p>ReplicatedMergeTree需要依靠ZooKeeper的事件监听机制以实现各个副本之间的协同。所以，在每张ReplicatedMergeTree表的创建过程中，它会以zk_path为根路径，在Zoo-Keeper中为这张表创建一组监听节点。按照作用的不同，监听节点可以大致分成如下几类：</p>
+<ul>
+<li><strong>元数据</strong>
+<ul>
+<li><strong>/metadata</strong>：保存元数据信息，包括主键、分区键、采样表达式等。</li>
+<li><strong>/columns</strong>：保存列字段信息，包括列名称和数据类型。</li>
+<li><strong>/replicas</strong>：保存副本名称，对应设置参数中的replica_name。</li>
+</ul>
+</li>
+<li><strong>判断标识</strong>
+<ul>
+<li><strong>/leader_election</strong>：用于主副本的选举工作，主副本会主导MERGE和MUTATION操作（ALTER DELETE和ALTER UPDATE）。这些任务在主副本完成之后再借助ZooKeeper将消息事件分发至其他副本。</li>
+<li><strong>/blocks</strong>：记录Block数据块的Hash信息摘要，以及对应的partition_id。通过Hash摘要能够判断Block数据块是否重复；通过partition_id，则能够找到需要同步的数据分区。</li>
+<li><strong>/block_numbers</strong>：按照分区的写入顺序，以相同的顺序记录partition_id。各个副本在本地进行MERGE时，都会依照相同的block_numbers顺序进行。</li>
+<li><strong>/quorum</strong>：记录quorum的数量，当至少有quorum数量的副本写入成功后，整个写操作才算成功。quorum的数量由insert_quorum参数控制，默认值为0。</li>
+</ul>
+</li>
+<li><strong>操作日志</strong>
+<ul>
+<li><strong>/log</strong>：常规操作日志节点（INSERT、MERGE和DROP PARTITION），它是整个工作机制中最为重要的一环，保存了副本需要执行的任务指令。log使用了ZooKeeper的持久顺序型节点，每条指令的名称以log-为前缀递增，例如log-0000000000、log-0000000001等。每一个副本实例都会监听/log节点，当有新的指令加入时，它们会把指令加入副本各自的任务队列，并执行任务。</li>
+<li><strong>/mutations</strong>：MUTATION操作日志节点，作用与log日志类似，当执行ALERT DELETE和ALERTUPDATE查询时，操作指令会被添加到这个节点。mutations同样使用了ZooKeeper的持久顺序型节点，但是它的命名没有前缀，每条指令直接以递增数字的形式保存，例如0000000000、0000000001等。</li>
+<li><strong>/replicas/{replica_name}/</strong>*：每个副本各自的节点下的一组监听节点，用于指导副本在本地执行具体的任务指令，其中较为重要的节点有如下几个：
+<ul>
+<li><strong>/queue</strong>：任务队列节点，用于执行具体的操作任务。当副本从/log或/mutations节点监听到操作指令时，会将执行任务添加至该节点下，并基于队列执行。</li>
+<li><strong>/log_pointer</strong>：log日志指针节点，记录了最后一次执行的log日志下标信息。</li>
+<li><strong>/mutation_pointer</strong>：mutations日志指针节点，记录了最后一次执行的mutations日志名称。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="entry日志对象的数据结构">Entry日志对象的数据结构</h4>
+<p>ReplicatedMergeTree在ZooKeeper中有两组非常重要的父节点，那就是/log和/mutations。它们的作用犹如一座通信塔，是分发操作指令的信息通道，而发送指令的方式，则是为这些父节点添加子节点。所有的副本实例，都会监听父节点的变化，当有子节点被添加时，它们能实时感知。这些被添加的子节点在ClickHouse中被统一抽象为Entry对象，而具体实现则由LogEntry和MutationEntry对象承载，分别对应/log和/mutations节点</p>
+<ul>
+<li><strong>LogEntry</strong>
+<ul>
+<li><strong>source replica</strong>：发送这条Log指令的副本来源，对应replica_name。</li>
+<li><strong>type</strong>：操作指令类型，主要有get、merge和mutate三种，分别对应从远程副本下载分区、合并分区和<code>MUTATION</code>操作。</li>
+<li><strong>block_id</strong>：当前分区的BlockID，对应/blocks路径下子节点的名称。</li>
+<li><strong>partition_name</strong>：当前分区目录的名称。</li>
+</ul>
+</li>
+<li><strong>MutationEntry</strong>
+<ul>
+<li><strong>source replica</strong>：发送这条<code>MUTATION</code>指令的副本来源，对应replica_name。</li>
+<li><strong>commands</strong>：操作指令，主要有<code>ALTER DELETE</code>和<code>ALTER UPDATE</code>。</li>
+<li><strong>mutation_id</strong>：MUTATION操作的版本号。</li>
+<li><strong>partition_id</strong>：当前分区目录的ID。</li>
+</ul>
+</li>
+</ul>
+<h3 id="副本协同的核心流程">副本协同的核心流程</h3>
+<p>副本协同的核心流程主要有<code>INSERT</code>、<code>MERGE</code>、<code>MUTATION</code>和<code>ALTER</code>四种，分别对应了数据写入、分区合并、数据修改和元数据修改。<code>INSERT</code>和<code>ALTER</code>是分布式执行的，借助ZooKeeper的事件通知机制，多个副本之间会自动进行有效协同，但是它们不会使用ZooKeeper存储任何分区数据。而其他操作并不支持分布式执行，包括<code>SELECT</code>、<code>CREATE</code>、<code>DROP</code>、<code>RENAME</code>和<code>ATTACH</code>。</p>
+<p>在下列例子中，使用ReplicatedMergeTree实现一张拥有1分片、1副本的数据表来分别执行<code>INSERT</code>、<code>MERGE</code>、<code>MUTATION</code>和<code>ALTER</code>操作，演示执行流程。</p>
+<h4 id="insert">INSERT</h4>
+<p>当需要在ReplicatedMergeTree中执行INSERT查询以写入数据时，即会进入INSERT核心流程，它的核心流程如下图所示</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch45.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ol>
+<li><strong>向副本A写入数据</strong></li>
+<li><strong>由副本A推送Log日志</strong></li>
+<li><strong>各个副本拉取Log日志</strong></li>
+<li><strong>各个副本向远端副本发起下载请求</strong>
+<ul>
+<li>选择一个远端的其他副本作为数据的下载来源。远端副本的选择算法大致是这样的：
+<ul>
+<li>从/replicas节点拿到所有的副本节点。</li>
+<li>遍历这些副本，选取其中一个。选取的副本需要拥有最大的<code>log_pointer</code>下标，并且<code>/queue</code>子节点数量最少。<code>log_pointer</code>下标最大，意味着该副本执行的日志最多，数据应该更加完整；而<code>/queue</code>最小，则意味着该副本目前的任务执行负担较小。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>远端副本响应其它副本的数据下载</strong></li>
+<li><strong>各个副本下载数据并完成本地写入</strong></li>
+</ol>
+<p>在<code>INSERT</code>的写入过程中，ZooKeeper不会进行任何实质性的数据传输。本着谁执行谁负责的原则，在这个案例中由CH5首先在本地写入了分区数据。之后，也由这个副本负责发送Log日志，通知其他副本下载数据。如果设置了<code>insert_quorum</code>并且<code>insert_quorum&gt;=2</code>，则还会由该副本监控完成写入的副本数量。其他副本在接收到Log日志之后，会选择一个最合适的远端副本，点对点地下载分区数据。</p>
+<h4 id="merge">MERGE</h4>
+<p>当ReplicatedMergeTree触发分区合并动作时，即会进入这个部分的流程，它的核心流程如下图所示</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch39.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>无论MERGE操作从哪个副本发起，其合并计划都会交由主副本来制定。</p>
+<ol>
+<li><strong>创建远程连接，尝试与主副本通信</strong></li>
+<li><strong>主副本接收通信</strong></li>
+<li><strong>由主副本制定MERGE计划并推送Log日志</strong></li>
+<li><strong>各个副本分别拉取Log日志</strong></li>
+<li><strong>各个副本分别在本地执行MERGE</strong></li>
+</ol>
+<p>可以看到，在MERGE的合并过程中，ZooKeeper也不会进行任何实质性的数据传输，所有的合并操作，最终都是由各个副本在本地完成的。而无论合并动作在哪个副本被触发，都会首先被转交至主副本，再由主副本负责合并计划的制定、消息日志的推送以及对日志接收情况的监控。</p>
+<h4 id="mutation">MUTATION</h4>
+<p>当对ReplicatedMergeTree执行<code>ALTER DELETE</code>或者<code>ALTER UPDATE</code>操作的时候（ClickHouse把delete和update操作也加入到了alter table的范畴中，它并不支持裸的delete或者update操作），即会进入MUTATION部分的逻辑</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch41.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>与MERGE类似，无论MUTATION操作从哪个副本发起，首先都会由主副本进行响应。</p>
+<ol>
+<li><strong>推送MUTATION日志</strong></li>
+<li><strong>所有副本实例各自监听MUTATION日志</strong></li>
+<li><strong>由主副本实例响应MUTATION日志并推送Log日志</strong></li>
+<li><strong>各个副本实例分别拉取Log日志</strong></li>
+<li><strong>各个副本实例分别在本地执行MUTATION</strong></li>
+</ol>
+<p>在MUTATION的整个执行过程中，ZooKeeper同样不会进行任何实质性的数据传输。所有的MUTATION操作，最终都是由各个副本在本地完成的。而MUTATION操作是经过/mutations节点实现分发的。CH6负责了消息的推送。但是无论MUTATION动作从哪个副本被触发，之后都会被转交至主副本，再由主副本负责推送Log日志，以通知各个副本执行最终的MUTATION逻辑。同时也由主副本对日志接收的情况实行监控。</p>
+<h4 id="alter">ALTER</h4>
+<p>当对ReplicatedMergeTree执行<code>ALTER</code>操作进行元数据修改的时候，即会进入ALTER部分的逻辑，例如增加、删除表字段等，核心流程如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch43.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>ALTER的流程与前几个相比简单很多，其执行过程中并不会涉及/log日志的分发，整个流程大致分成3个步骤</p>
+<ol>
+<li><strong>修改共享元数据</strong></li>
+<li><strong>监听共享元数据变更并各自执行本地修改</strong></li>
+<li><strong>确认所有副本完成修改</strong></li>
+</ol>
+<p>在ALTER整个的执行过程中，ZooKeeper不会进行任何实质性的数据传输。所有的ALTER操作，最终都是由各个副本在本地完成的。本着谁执行谁负责的原则，在这个案例中由CH6负责对共享元数据的修改以及对各个副本修改进度的监控。</p>
+<h2 id="distributed引擎">Distributed引擎</h2>
+<p>Distributed表引擎是分布式表的代名词，<strong>它自身不存储任何数据，而是作为数据分片的透明代理，能够自动路由数据至集群中的各个节点</strong>，所以Distributed表引擎需要和其他数据表引擎一起协同工作。</p>
+<p>ClickHouse并不像其他分布式系统那样，拥有高度自动化的分片功能。ClickHouse提供了**本地表（Local Table）<strong>与</strong>分布式表（Distributed Table）**的概念</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch14.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li><strong>本地表</strong>：通常以_local为后缀进行命名。本地表是承接数据的载体，可以使用非Distributed的任意表引擎，一张本地表对应了一个数据分片。</li>
+<li><strong>分布式表</strong>：通常以_all为后缀进行命名。分布式表只能使用Distributed表引擎，它与本地表形成一对多的映射关系，日后将通过分布式表代理操作多张本地表。</li>
+</ul>
+<h3 id="分布式写入流程">分布式写入流程</h3>
+<p>在向集群内的分片写入数据时，通常有两种思路</p>
+<ul>
+<li>
+<p><strong>借助外部计算系统，事先将数据均匀分片，再借由计算系统直接将数据写入ClickHouse集群的各个本地表。</strong></p>
+</li>
+<li>
+<p><strong>通过Distributed表引擎代理写入分片数据。</strong></p>
+</li>
+</ul>
+<p>第一种方案通常拥有更好的写入性能，因为分片数据是被并行点对点写入的。但是这种方案的实现主要依赖于外部系统，而不在于ClickHouse自身，所以这里主要会介绍第二种思路。为了便于理解整个过程，这里会将分片写入、副本复制拆分成两个部分进行讲解。</p>
+<h4 id="数据写入分片">数据写入分片</h4>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch21.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ol>
+<li>
+<p><strong>在第一个分片节点写入本地分片数据</strong>：首先在CH5节点，对分布式表test_shard_2_all执行INSERT查询，尝试写入10、30、200和55四行数据。执行之后分布式表主要会做两件事情：</p>
+<ul>
+<li>
+<p>根据分片规则划分数据</p>
+</li>
+<li>
+<p>将属于当前分片的数据直接写入本地表test_shard_2_local。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>第一个分片建立远端连接，准备发送远端分片数据</strong>：将归至远端分片的数据以分区为单位，分别写入/test_shard_2_all存储目录下的临时bin文件，接着，会尝试与远端分片节点建立连接。</p>
+</li>
+<li>
+<p><strong>第一个分片向远端分片发送数据</strong>：此时，会有另一组监听任务负责监听/test_shard_2_all目录下的文件变化，这些任务负责将目录数据发送至远端分片，其中，每份目录将会由独立的线程负责发送，数据在传输之前会被压缩。</p>
+</li>
+<li>
+<p><strong>第二个分片接收数据并写入本地</strong>：CH6分片节点确认建立与CH5的连接，在接收到来自CH5发送的数据后，将它们写入本地表。</p>
+</li>
+<li>
+<p><strong>由第一个分片确认完成写入</strong>：最后，还是由CH5分片确认所有的数据发送完毕。</p>
+</li>
+</ol>
+<p>可以看到，在整个过程中，Distributed表负责所有分片的写入工作。本着谁执行谁负责的原则，在这个示例中，由CH5节点的分布式表负责切分数据，并向所有其他分片节点发送数据。</p>
+<p>在由Distributed表负责向远端分片发送数据时，有异步写和同步写两种模式：如果是异步写，则在Distributed表写完本地分片之后，INSERT查询就会返回成功写入的信息；如果是同步写，则在执行INSERT查询之后，会等待所有分片完成写入。</p>
+<h4 id="副本复制数据">副本复制数据</h4>
+<p>如果在集群的配置中包含了副本，那么除了刚才的分片写入流程之外，还会触发副本数据的复制流程。数据在多个副本之间，有两种复制实现方式：</p>
+<ul>
+<li>
+<p><strong>Distributed表引擎</strong>：副本数据的写入流程与分片逻辑相同，所以Distributed会同时负责分片和副本的数据写入工作。但在这种实现方案下，它很有可能会成为写入的单点瓶颈，所以就有了接下来将要说明的第二种方案。</p>
+</li>
+<li>
+<p><strong>ReplicatedMergeTree表引擎</strong>：如果使用ReplicatedMergeTree作为本地表的引擎，则在该分片内，多个副本之间的数据复制会交由ReplicatedMergeTree自己处理，不再由Distributed负责，从而为其减负。</p>
+</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch22.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="分布式查询流程">分布式查询流程</h3>
+<p>与数据写入有所不同，在面向集群查询数据的时候，<strong>只能</strong>通过Distributed表引擎实现。当Distributed表接收到<code>SELECT</code>查询的时候，它会依次查询每个分片的数据，再合并汇总返回，流程如下：</p>
+<h4 id="多副本的路由规则">多副本的路由规则</h4>
+<p>在查询数据的时候，如果集群中的某一个分片有多个副本，此时Distributed引擎就会通过负载均衡算法从众多的副本中选取一个，负载均衡算法有以下四种。</p>
+<p>在ClickHouse的服务节点中，拥有一个全局计数器<code>errors_count</code>，当服务发生任何异常时，该计数累积加1。</p>
+<ol>
+<li><strong>random（默认）</strong>：random算法会选择<code>errors_coun</code>t错误数量最少的副本，如果多个副本的<code>errors_count</code>计数相同，则在它们之中<strong>随机</strong>选择一个。</li>
+<li><strong>nearest_hostname</strong>：nearest_hostname可以看作random算法的变种，首先它会选择<code>errors_count</code>错误数量最少的副本，如果多个replica的<code>errors_count</code>计数相同，<strong>则选择集群配置中host名称与当前host最相似的一个。而相似的规则是以当前host名称为基准按字节逐位比较，找出不同字节数最少的一个</strong>。</li>
+<li><strong>in_order</strong>：in_order同样可以看作random算法的变种，首先它会选择<code>errors_count</code>错误数量最少的副本，如果多个副本的<code>errors_count</code>计数相同，则<strong>按照集群配置中replica的定义顺序逐个选择</strong>。</li>
+<li><strong>first_or_random</strong>：first_or_random可以看作in_order算法的变种，首先它会选择<code>errors_count</code>错误数量最少的副本，如果多个副本的<code>errors_count</code>计数相同，<strong>它首先会选择集群配置中第一个定义的副本，如果该副本不可用，则进一步随机选择一个其他的副本</strong>。</li>
+</ol>
+<h4 id="多分片查询的流程">多分片查询的流程</h4>
+<p>分布式查询与分布式写入类似，同样本着谁执行谁负责的原则，它会由接收<code>SELECT</code>查询的Distributed表，并负责串联起整个过程。首先它会将针对分布式表的SQL语句，按照分片数量将查询拆分成若干个针对本地表的子查询，然后向各个分片发起查询，最后再汇总各个分片的返回结果。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="c1">--查询分布式表
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">distributor_table</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">--转换为查询本地表，并将该命令推送到各个分片节点上执行
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">local_table</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch9.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ol>
+<li><strong>查询各个分片数据</strong>：One和Remote步骤是并行执行的，它们分别负责了本地和远端分片的查询动作。</li>
+<li><strong>合并返回结果</strong>：多个分片数据均查询返回后，在执行节点将所有数据<code>union</code>合并</li>
+</ol>
+<h4 id="使用global优化分布式子查询">使用Global优化分布式子查询</h4>
+<p>如果现在有一项查询需求，例如要求找到同时拥有两个仓库的用户，应该如何实现？对于这类交集查询的需求，可以使用IN子查询，此时你会面临两难的选择：<strong>IN查询的子句应该使用本地表还是分布式表？（使用JOIN面临的情形与IN类似）。</strong></p>
+<p><!-- raw HTML omitted --><strong>使用本地表的问题（可能查询不到结果）</strong><!-- raw HTML omitted --></p>
+<p>如果在IN查询中使用本地表时，如下列语句</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w"> </span><span class="n">uniq</span><span class="p">(</span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">distributed_table</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">repo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">local_table</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">repo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>在实际执行时，分布式表在接收到查询后会将上述SQL替换成本地表的形式，再发送到每个分片进行执行，此时，每个分片上实际执行的是以下语句</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w"> </span><span class="n">uniq</span><span class="p">(</span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">local_table</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">repo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">local_table</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">repo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong>那么此时查询的最终结果就有可能是错误的，因为在单个分片上只保存了部分的数据，这就导致该SQL语句可能没有匹配到任何数据</strong>，如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch17.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><strong>使用分布式表的问题（查询请求被放大N^2倍，N为节点数量</strong></p>
+<p>如果在IN查询中使用本地表时，如下列语句</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w"> </span><span class="n">uniq</span><span class="p">(</span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">distributed_table</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">repo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">distributed_table</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">repo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>对于此次查询，每个分片节点不仅需要查询本地表，还需要再次向其他的分片节点再次发起远端查询，如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch18.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>因此可以得出结论，<strong>在IN查询子句使用分布式表的时候，虽然查询的结果得到了保证，但是查询请求会被放大N的平方倍</strong>，其中N等于集群内分片节点的数量，假如集群内有10个分片节点，则在一次查询的过程中，会最终导致100次的查询请求，这显然是不可接受的。</p>
+<p><!-- raw HTML omitted --><strong>使用GLOBAL优化查询</strong><!-- raw HTML omitted --></p>
+<p>为了解决查询放大的问题，我们可以使用GLOBAL IN或GLOBAL JOIN进行优化，下面就简单介绍一下GLOBAL的执行流程</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w"> </span><span class="n">uniq</span><span class="p">(</span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">distributed_table</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">repo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">GLOBAL</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">distributed_table</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">repo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/clickhouse/ch19.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如上图，主要有以下五个步骤</p>
+<ol>
+<li>将IN子句单独提出，发起了一次分布式查询。</li>
+<li>将分布式表转local本地表后，分别在本地和远端分片执行查询。</li>
+<li>将IN子句查询的结果进行汇总，并放入一张临时的内存表进行保存。</li>
+<li>将内存表发送到远端分片节点。</li>
+<li>将分布式表转为本地表后，开始执行完整的SQL语句，IN子句直接使用临时内存表的数据。</li>
+</ol>
+<p><strong>在使用GLOBAL修饰符之后，ClickHouse使用内存表临时保存了IN子句查询到的数据，并将其发送到远端分片节点，以此到达了数据共享的目的，从而避免了查询放大的问题</strong>。由于数据会在网络间分发，所以需要特别注意临时表的大小，IN或者JOIN子句返回的数据不宜过大。如果表内存在重复数据，也可以事先在子句SQL中增加DISTINCT以实现去重。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E5%88%97%E5%BC%8F%E5%AD%98%E5%82%A8/">列式存储</a>
+        
+            <a href="/tags/clickhouse/">ClickHouse</a>
+        
+            <a href="/tags/olap/">OLAP</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    </footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    <div class="disqus-container">
+    <div id="disqus_thread"></div>
+<script type="application/javascript">
+    window.disqus_config = function () {
+    
+    
+    
+    };
+    (function() {
+        if (["localhost", "127.0.0.1"].indexOf(window.location.hostname) != -1) {
+            document.getElementById('disqus_thread').innerHTML = 'Disqus comments not available by default when the website is previewed locally.';
+            return;
+        }
+        var d = document, s = d.createElement('script'); s.async = true;
+        s.src = '//' + "hugo-theme-stack" + '.disqus.com/embed.js';
+        s.setAttribute('data-timestamp', +new Date());
+        (d.head || d.body).appendChild(s);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="https://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</div>
+
+<style>
+    .disqus-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+</style>
+
+<script>
+    window.addEventListener('onColorSchemeChange', (e) => {
+        if (DISQUS) {
+            DISQUS.reset({
+                reload: true
+            });
+        }
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#什么是clickhouse">什么是Clickhouse？</a>
+      <ol>
+        <li><a href="#olap">OLAP</a>
+          <ol>
+            <li><a href="#什么是olap">什么是OLAP?</a></li>
+            <li><a href="#olap与oltp">OLAP与OLTP</a></li>
+          </ol>
+        </li>
+        <li><a href="#列式存储">列式存储</a>
+          <ol>
+            <li><a href="#列式存储与行式存储">列式存储与行式存储</a></li>
+            <li><a href="#列式存储与olap">列式存储与OLAP</a></li>
+            <li><a href="#列式存储与数据压缩">列式存储与数据压缩</a></li>
+          </ol>
+        </li>
+        <li><a href="#核心特点">核心特点</a>
+          <ol>
+            <li><a href="#完备的dbms功能">完备的DBMS功能</a></li>
+            <li><a href="#关系模型与sql查询">关系模型与SQL查询</a></li>
+            <li><a href="#向量化表引擎">向量化表引擎</a></li>
+            <li><a href="#多样化的表引擎">多样化的表引擎</a></li>
+            <li><a href="#多主架构">多主架构</a></li>
+            <li><a href="#多线程与分布式">多线程与分布式</a></li>
+            <li><a href="#分片与分布式查询">分片与分布式查询</a></li>
+          </ol>
+        </li>
+        <li><a href="#应用场景">应用场景</a>
+          <ol>
+            <li><a href="#擅长的场景">擅长的场景</a></li>
+            <li><a href="#不擅长的场景">不擅长的场景</a></li>
+          </ol>
+        </li>
+        <li><a href="#clickhouse为什么会这么快">Clickhouse为什么会这么快？</a></li>
+        <li><a href="#clickhouse的架构">ClickHouse的架构</a></li>
+      </ol>
+    </li>
+    <li><a href="#mergetree引擎">MergeTree引擎</a>
+      <ol>
+        <li><a href="#存储结构">存储结构</a></li>
+        <li><a href="#一级索引">一级索引</a>
+          <ol>
+            <li><a href="#稀疏索引">稀疏索引</a></li>
+            <li><a href="#索引粒度index_granularity">索引粒度index_granularity</a></li>
+            <li><a href="#索引的查询过程">索引的查询过程</a></li>
+            <li><a href="#联合主键">联合主键</a></li>
+          </ol>
+        </li>
+        <li><a href="#二级索引">二级索引</a>
+          <ol>
+            <li><a href="#跳数索引">跳数索引</a></li>
+            <li><a href="#granularity">granularity</a></li>
+          </ol>
+        </li>
+        <li><a href="#数据标记">数据标记</a>
+          <ol>
+            <li><a href="#生成规则">生成规则</a></li>
+            <li><a href="#工作方式">工作方式</a></li>
+            <li><a href="#数据标记与压缩数据块的对应关系">数据标记与压缩数据块的对应关系</a></li>
+          </ol>
+        </li>
+        <li><a href="#工作流程">工作流程</a>
+          <ol>
+            <li><a href="#存储流程">存储流程</a></li>
+            <li><a href="#查询流程">查询流程</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#replicatedmergetree引擎">ReplicatedMergeTree引擎</a>
+      <ol>
+        <li><a href="#特点">特点</a></li>
+        <li><a href="#数据结构">数据结构</a>
+          <ol>
+            <li><a href="#zookeeper内的节点结构">ZooKeeper内的节点结构</a></li>
+            <li><a href="#entry日志对象的数据结构">Entry日志对象的数据结构</a></li>
+          </ol>
+        </li>
+        <li><a href="#副本协同的核心流程">副本协同的核心流程</a>
+          <ol>
+            <li><a href="#insert">INSERT</a></li>
+            <li><a href="#merge">MERGE</a></li>
+            <li><a href="#mutation">MUTATION</a></li>
+            <li><a href="#alter">ALTER</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#distributed引擎">Distributed引擎</a>
+      <ol>
+        <li><a href="#分布式写入流程">分布式写入流程</a>
+          <ol>
+            <li><a href="#数据写入分片">数据写入分片</a></li>
+            <li><a href="#副本复制数据">副本复制数据</a></li>
+          </ol>
+        </li>
+        <li><a href="#分布式查询流程">分布式查询流程</a>
+          <ol>
+            <li><a href="#多副本的路由规则">多副本的路由规则</a></li>
+            <li><a href="#多分片查询的流程">多分片查询的流程</a></li>
+            <li><a href="#使用global优化分布式子查询">使用Global优化分布式子查询</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
