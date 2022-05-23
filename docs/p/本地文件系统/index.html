@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='本地文件系统 关键技术 虚拟文件系统 虚拟文件系统（Virtual File System，VFS） 是具体文件系统（如 Ext2、Ext4 和 XFS 等）与应用程序之间的一个接口层，它对 Linux 的每个文件系统的所有细节进行抽象，使得不同的文件系统在 Linux 核心以及系统中运行的其他进程看来都是相同的。以此达到使操作系统能够适配多种文件系统的目的。
+VFS 提供了一个文件系统框架，本地文件系统可以基于 VFS 实现，其主要做了如下几方面的工作：
+ 作为抽象层为应用层提供了统一的接口（ read、write 和 chmod 等）。 实现了一些公共的功能，如 Inode 缓存（Inode Cache）和页缓存（Page Cache）等。 规范了具体文件系统应该实现的接口。  基于上述设定，其他具体的文件系统只需要按照 VFS 的约定实现相应的接口及内部逻辑，并注册在系统中，就可以完成文件系统的功能了。当用户调用操作系统提供的文件系统 API 时，会通过软中断的方式调用内核 VFS 实现的函数。
+磁盘空间布局 文件系统的核心功能是实现对磁盘空间的管理。对磁盘空间的管理是指要知道哪些空间被使用了，哪些空间没有被使用。这样，在用户层需要使用磁盘空间时，文件系统就可以从未使用的区域分配磁盘空间。
+为了对磁盘空间进行管理，文件系统往往将磁盘空间通常被划分为元数据区与数据区两个区域。数据区就是存储数据的地方，用户在文件中的数据都会存储在该区域；而元数据区则是对数据区进行管理的地方。
+基于固定功能区的磁盘空间布局 基于固定功能区的磁盘空间布局是指将磁盘的空间按照功能划分为不同的子空间，每种子空间有具体的功能。 以 Linux 中的 Ext 文件系统为例，其空间被划分为数据区和元数据区，而元数据区又被划分为数据块位图、inode 位图和 inode 表等区域。如下图：
+基于功能分区的磁盘空间布局空间职能清晰，便于手动进行丢失数据的恢复。但是由于元数据功能区大小固定，因此容易出现资源不足的情况==（位图长度有限）==。比如，在海量小文件的应用场景下，有可能会出现磁盘剩余空间充足，但 inode 不够用的情况
+基于非固定功能区的磁盘空间布局 在磁盘空间管理中有一种非固定功能区的磁盘空间管理方法。这种方法也分为元数据和数据，但是元数据和数据的区域并非固定的，而是随着文件系统对资源的需求而动态分配的。
+例如比较经典的实现 XFS，其它不是通过固定的位图区域来管理磁盘空间的，而是通过 B&#43; 树管理磁盘空间。这样做就可以动态的去分配元数据空间，而不是像位图一样具有限制。但是这也带来了新的问题，就是 B&#43; 树无法根据 inode 的偏移量来确定编号，因此 XFS 又引入复杂的编号机制来解决这个问题。
+基于数据追加的磁盘空间布局 前文介绍的磁盘空间布局方式对于数据的变化都是原地修改的，也就是对于已经分配的逻辑块，当对应的文件数据改动时都是在该逻辑块进行修改的。在文件随机 I/O 比较多的情况下，不太适合使用 SSD 设备，这主要由 SSD 设备的修改和擦写特性所决定。'><title>本地文件系统</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E6%9C%AC%E5%9C%B0%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='本地文件系统'>
+<meta property='og:description' content='本地文件系统 关键技术 虚拟文件系统 虚拟文件系统（Virtual File System，VFS） 是具体文件系统（如 Ext2、Ext4 和 XFS 等）与应用程序之间的一个接口层，它对 Linux 的每个文件系统的所有细节进行抽象，使得不同的文件系统在 Linux 核心以及系统中运行的其他进程看来都是相同的。以此达到使操作系统能够适配多种文件系统的目的。
+VFS 提供了一个文件系统框架，本地文件系统可以基于 VFS 实现，其主要做了如下几方面的工作：
+ 作为抽象层为应用层提供了统一的接口（ read、write 和 chmod 等）。 实现了一些公共的功能，如 Inode 缓存（Inode Cache）和页缓存（Page Cache）等。 规范了具体文件系统应该实现的接口。  基于上述设定，其他具体的文件系统只需要按照 VFS 的约定实现相应的接口及内部逻辑，并注册在系统中，就可以完成文件系统的功能了。当用户调用操作系统提供的文件系统 API 时，会通过软中断的方式调用内核 VFS 实现的函数。
+磁盘空间布局 文件系统的核心功能是实现对磁盘空间的管理。对磁盘空间的管理是指要知道哪些空间被使用了，哪些空间没有被使用。这样，在用户层需要使用磁盘空间时，文件系统就可以从未使用的区域分配磁盘空间。
+为了对磁盘空间进行管理，文件系统往往将磁盘空间通常被划分为元数据区与数据区两个区域。数据区就是存储数据的地方，用户在文件中的数据都会存储在该区域；而元数据区则是对数据区进行管理的地方。
+基于固定功能区的磁盘空间布局 基于固定功能区的磁盘空间布局是指将磁盘的空间按照功能划分为不同的子空间，每种子空间有具体的功能。 以 Linux 中的 Ext 文件系统为例，其空间被划分为数据区和元数据区，而元数据区又被划分为数据块位图、inode 位图和 inode 表等区域。如下图：
+基于功能分区的磁盘空间布局空间职能清晰，便于手动进行丢失数据的恢复。但是由于元数据功能区大小固定，因此容易出现资源不足的情况==（位图长度有限）==。比如，在海量小文件的应用场景下，有可能会出现磁盘剩余空间充足，但 inode 不够用的情况
+基于非固定功能区的磁盘空间布局 在磁盘空间管理中有一种非固定功能区的磁盘空间管理方法。这种方法也分为元数据和数据，但是元数据和数据的区域并非固定的，而是随着文件系统对资源的需求而动态分配的。
+例如比较经典的实现 XFS，其它不是通过固定的位图区域来管理磁盘空间的，而是通过 B&#43; 树管理磁盘空间。这样做就可以动态的去分配元数据空间，而不是像位图一样具有限制。但是这也带来了新的问题，就是 B&#43; 树无法根据 inode 的偏移量来确定编号，因此 XFS 又引入复杂的编号机制来解决这个问题。
+基于数据追加的磁盘空间布局 前文介绍的磁盘空间布局方式对于数据的变化都是原地修改的，也就是对于已经分配的逻辑块，当对应的文件数据改动时都是在该逻辑块进行修改的。在文件随机 I/O 比较多的情况下，不太适合使用 SSD 设备，这主要由 SSD 设备的修改和擦写特性所决定。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E6%9C%AC%E5%9C%B0%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='存储' /><meta property='article:tag' content='文件系统' /><meta property='article:published_time' content='2022-05-23T18:53:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T19:02:14&#43;08:00'/>
+<meta name="twitter:title" content="本地文件系统">
+<meta name="twitter:description" content="本地文件系统 关键技术 虚拟文件系统 虚拟文件系统（Virtual File System，VFS） 是具体文件系统（如 Ext2、Ext4 和 XFS 等）与应用程序之间的一个接口层，它对 Linux 的每个文件系统的所有细节进行抽象，使得不同的文件系统在 Linux 核心以及系统中运行的其他进程看来都是相同的。以此达到使操作系统能够适配多种文件系统的目的。
+VFS 提供了一个文件系统框架，本地文件系统可以基于 VFS 实现，其主要做了如下几方面的工作：
+ 作为抽象层为应用层提供了统一的接口（ read、write 和 chmod 等）。 实现了一些公共的功能，如 Inode 缓存（Inode Cache）和页缓存（Page Cache）等。 规范了具体文件系统应该实现的接口。  基于上述设定，其他具体的文件系统只需要按照 VFS 的约定实现相应的接口及内部逻辑，并注册在系统中，就可以完成文件系统的功能了。当用户调用操作系统提供的文件系统 API 时，会通过软中断的方式调用内核 VFS 实现的函数。
+磁盘空间布局 文件系统的核心功能是实现对磁盘空间的管理。对磁盘空间的管理是指要知道哪些空间被使用了，哪些空间没有被使用。这样，在用户层需要使用磁盘空间时，文件系统就可以从未使用的区域分配磁盘空间。
+为了对磁盘空间进行管理，文件系统往往将磁盘空间通常被划分为元数据区与数据区两个区域。数据区就是存储数据的地方，用户在文件中的数据都会存储在该区域；而元数据区则是对数据区进行管理的地方。
+基于固定功能区的磁盘空间布局 基于固定功能区的磁盘空间布局是指将磁盘的空间按照功能划分为不同的子空间，每种子空间有具体的功能。 以 Linux 中的 Ext 文件系统为例，其空间被划分为数据区和元数据区，而元数据区又被划分为数据块位图、inode 位图和 inode 表等区域。如下图：
+基于功能分区的磁盘空间布局空间职能清晰，便于手动进行丢失数据的恢复。但是由于元数据功能区大小固定，因此容易出现资源不足的情况==（位图长度有限）==。比如，在海量小文件的应用场景下，有可能会出现磁盘剩余空间充足，但 inode 不够用的情况
+基于非固定功能区的磁盘空间布局 在磁盘空间管理中有一种非固定功能区的磁盘空间管理方法。这种方法也分为元数据和数据，但是元数据和数据的区域并非固定的，而是随着文件系统对资源的需求而动态分配的。
+例如比较经典的实现 XFS，其它不是通过固定的位图区域来管理磁盘空间的，而是通过 B&#43; 树管理磁盘空间。这样做就可以动态的去分配元数据空间，而不是像位图一样具有限制。但是这也带来了新的问题，就是 B&#43; 树无法根据 inode 的偏移量来确定编号，因此 XFS 又引入复杂的编号机制来解决这个问题。
+基于数据追加的磁盘空间布局 前文介绍的磁盘空间布局方式对于数据的变化都是原地修改的，也就是对于已经分配的逻辑块，当对应的文件数据改动时都是在该逻辑块进行修改的。在文件随机 I/O 比较多的情况下，不太适合使用 SSD 设备，这主要由 SSD 设备的修改和擦写特性所决定。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/" style="background-color: #2a9d8f; color: #fff;">
+                文件系统
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E6%9C%AC%E5%9C%B0%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">本地文件系统</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="本地文件系统">本地文件系统</h1>
+<h2 id="关键技术">关键技术</h2>
+<h3 id="虚拟文件系统">虚拟文件系统</h3>
+<p><strong>虚拟文件系统（Virtual File System，VFS）</strong> 是具体文件系统（如 Ext2、Ext4 和 XFS 等）与应用程序之间的一个接口层，它对 Linux 的每个文件系统的所有细节进行抽象，使得不同的文件系统在 Linux 核心以及系统中运行的其他进程看来都是相同的。<strong>以此达到使操作系统能够适配多种文件系统的目的。</strong></p>
+<p>VFS 提供了一个文件系统框架，本地文件系统可以基于 VFS 实现，其主要做了如下几方面的工作：</p>
+<ol>
+<li>作为抽象层为应用层提供了统一的接口（ <code>read</code>、<code>write</code> 和 <code>chmod</code> 等）。</li>
+<li>实现了一些公共的功能，如 Inode 缓存（Inode Cache）和页缓存（Page Cache）等。</li>
+<li>规范了具体文件系统应该实现的接口。</li>
+</ol>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem19.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>基于上述设定，其他具体的文件系统只需要按照 VFS 的约定实现相应的接口及内部逻辑，并注册在系统中，就可以完成文件系统的功能了。当用户调用操作系统提供的文件系统 API 时，会通过软中断的方式调用内核 VFS 实现的函数。</p>
+<h3 id="磁盘空间布局">磁盘空间布局</h3>
+<p><strong>文件系统的核心功能是实现对磁盘空间的管理。<strong>对磁盘空间的管理是指</strong>要知道哪些空间被使用了，哪些空间没有被使用</strong>。这样，在用户层需要使用磁盘空间时，文件系统就可以从未使用的区域分配磁盘空间。</p>
+<p>为了对磁盘空间进行管理，文件系统往往将磁盘空间通常被划分为<strong>元数据区</strong>与<strong>数据区</strong>两个区域。数据区就是存储数据的地方，用户在文件中的数据都会存储在该区域；而元数据区则是对数据区进行管理的地方。</p>
+<h4 id="基于固定功能区的磁盘空间布局">基于固定功能区的磁盘空间布局</h4>
+<p><strong>基于固定功能区的磁盘空间布局是指将磁盘的空间按照功能划分为不同的子空间，每种子空间有具体的功能。</strong> 以 Linux 中的 Ext 文件系统为例，其空间被划分为数据区和元数据区，而元数据区又被划分为数据块位图、inode 位图和 inode 表等区域。如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem5.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>基于功能分区的磁盘空间布局空间职能清晰，便于手动进行丢失数据的恢复。但是由于元数据功能区大小固定，因此容易出现资源不足的情况==（位图长度有限）==。比如，在海量小文件的应用场景下，有可能会出现磁盘剩余空间充足，但 inode 不够用的情况</p>
+<h4 id="基于非固定功能区的磁盘空间布局">基于非固定功能区的磁盘空间布局</h4>
+<p><strong>在磁盘空间管理中有一种非固定功能区的磁盘空间管理方法。这种方法也分为元数据和数据，但是元数据和数据的区域并非固定的，而是随着文件系统对资源的需求而动态分配的。</strong></p>
+<p>例如比较经典的实现 XFS，其它不是通过固定的位图区域来管理磁盘空间的，而是通过 B+ 树管理磁盘空间。这样做就可以动态的去分配元数据空间，而不是像位图一样具有限制。但是这也带来了新的问题，就是 B+ 树无法根据 inode 的偏移量来确定编号，因此 XFS 又引入复杂的编号机制来解决这个问题。</p>
+<h4 id="基于数据追加的磁盘空间布局">基于数据追加的磁盘空间布局</h4>
+<p>前文介绍的磁盘空间布局方式对于数据的变化都是原地修改的，也就是对于已经分配的逻辑块，当对应的文件数据改动时都是在该逻辑块进行修改的。在文件随机 I/O 比较多的情况下，不太适合使用 SSD 设备，这主要由 SSD 设备的修改和擦写特性所决定。</p>
+<p>有一种基于数据追加的磁盘空间布局方式，也被称为基于日志（Log structured）的磁盘空间布局方式。这种磁盘空间布局方式对数据的变更并非在原地修改，而是以追加写的方式写到后面的剩余空间。这样，所有的随机写都转化为顺序写，非常适合用于 SSD 设备。</p>
+<h3 id="文件数据管理">文件数据管理</h3>
+<p>对于文件系统来说，无论文件是什么格式，存储的是什么内容，它都不关心。文件就是一个线性空间，类似一个大数组。而且文件的空间被文件系统划分为与文件系统块一样大小的若干个逻辑块。文件系统要做的事情就是将文件的逻辑块与磁盘的物理块建立关系。这样当应用访问文件的数据时，文件系统可以找到具体的位置，进行相应的操作。</p>
+<h4 id="基于连续区域的文件数据管理">基于连续区域的文件数据管理</h4>
+<p><strong>基于连续区域的文件数据管理方式是一次性为文件分配其所需要的空间，且空间在磁盘上是连续的。</strong> 由于文件数据在磁盘上是连续存储的，因此只要知道文件的起始位置所对应的磁盘位置和文件的长度就可以知道文件数据在磁盘上是如何存储的。如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem6.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>这种文件数据管理方式的最大缺点是不够灵活，特别是<strong>对文件进行追加写操作非常困难</strong>。如果该文件后面没有剩余磁盘空间，那么需要先将该文件移动到新的位置，然后才能追加写操作。如果整个磁盘的可用空间没有能够满足要求的空间，那么会导致写入失败。</p>
+<p>除了追加写操作不够灵活，该文件数据管理方式还有另一个缺点就是<strong>容易形成碎片空间</strong>。由于文件需要占用连续的空间，因此很多小的可用空间就可能无法被使用，从而降低磁盘空间利用率。</p>
+<h4 id="基于链表的文件数据管理">基于链表的文件数据管理</h4>
+<p><strong>基于链表的文件数据管理方式将磁盘空间划分为大小相等的逻辑块。</strong> 在目录项中包含文件名、数据的起始位置和终止位置。在每个数据块的后面用一个指针来指向下一个数据块。如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem7.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>这种方式可以有效地解决连续区域的碎片问题，但是对文件的随机读/写却无能为力。这主要是因为在文件的元数据中没有足够的信息描述每块数据的位置。为了实现随机读写，还需要在实现时附加一些额外的机制。</p>
+<h4 id="基于索引的文件数据管理">基于索引的文件数据管理</h4>
+<p><strong>索引方式的数据管理是指通过索引项来实现对文件内数据的管理。</strong> 如下图所示，与文件名称对应的是索引块在磁盘的位置，索引块中存储的并非用户数据，而是索引列表。当读/写数据时，根据文件名可以找到索引块的位置，然后根据索引块中记录的索引项可以找到数据块的位置，并访问数据。</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem8.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>常见的索引方式有以下两种：</p>
+<ul>
+<li><strong>基于间接块的文件数据管理</strong>：在索引方式中，最为直观、简单的就是对文件的每个逻辑块都有一个对应的索引项，并将索引项用一个数组进行管理。当想要访问文件某个位置的数据时，就可以根据该文件逻辑偏移计算出数组的索引值，然后根据数组的索引值找到索引项，进而找到磁盘上的数据。</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem9_1.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<ul>
+<li>
+<p><strong>基于 Extent 的文件数据管理</strong>：在 Extent 文件数据管理方式中，每一个索引项记录的值不是一个数据块的地址，而是数据块的起始地址和长度。</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem10.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+</li>
+</ul>
+<h3 id="缓存">缓存</h3>
+<p>文件系统的缓存（Cache）的作用主要用来解决磁盘访问速度慢的问题。缓存技术是指在内存中存储文件系统的部分数据和元数据而提升文件系统性能的技术。由于内存的访问延时是机械硬盘访问延时的十万分之一，因此采用缓存技术可以大幅提升文件系统的性能。</p>
+<p>文件系统缓存的原理主要还是基于数据访问的<strong>时间局部性</strong>和<strong>空间局部性</strong>特性。时间局部性就是如果一块数据之前被访问过，那么最近很有可能会被再次访问。空间局部性则是指在访问某一个区域之后，通常会访问临近的区域。</p>
+<h4 id="缓存置换算法">缓存置换算法</h4>
+<p>由于内存的容量要比磁盘的容量小得多，当用户持续写入数据时就会面临缓存不足的情况，此时就涉及如何将缓存数据刷写到磁盘，然后存储新数据的问题。而将缓存数据落盘，并置换新数据的这一过程被称为<strong>缓存置换</strong>。</p>
+<p>在文件系统中通常会采取以下这些缓存置换算法：</p>
+<ul>
+<li><strong>LRU（Least Recently Used）</strong>：LRU 基于时间局部性原理。将最久没有使用的数据淘汰出缓存。因此，当空间满时，最久没有使用的数据即被淘汰。</li>
+<li><strong>LFU（Least Frequently Used）</strong>：LFU 基于缓存命中频次作为置换依据。如果一个数据在最近一段时间很少被访问到，那么可以认为在将来它被访问的可能性也很小。因此，当空间满时，将命中频次最少的数据淘汰掉。</li>
+</ul>
+<h4 id="预读算法">预读算法</h4>
+<p>预读算法是针对读数据的一种缓存算法。预读算法通过识别 I/O 模式方式来提前将数据从磁盘读到缓存中。这样，应用读取数据时就可以直接从缓存读取数据，从而极大地提高读数据的性能。</p>
+<p>通常有两种情况会触发预读操作：</p>
+<ol>
+<li><strong>当有多个地址连续地读请求时会触发预读操作。</strong></li>
+<li><strong>应用访问到有预读标记的缓存时会触发预读操作</strong>。这里，预读标记的缓存是在预读操作完成时在缓存页做的标记，当应用读到有该标记的缓存时会触发下一次的预读，从而省略对 I/O 模式的识别。</li>
+</ol>
+<h3 id="快照与克隆">快照与克隆</h3>
+<p>快照（Snapshot）和克隆（Clone）技术可以应用于整个文件系统或单个文件。快照技术可以实现文件的可读备份，而克隆技术则可以实现文件的可写备份。针对文件，用的更多的是克隆技术。</p>
+<h4 id="快照">快照</h4>
+<p>目前快照技术有两种实现方式：</p>
+<ul>
+<li><strong>写时拷贝（Copy-On-Write，COW）</strong>：刚开始创建快照时原始文件和快照文件指向相同的存储区域。当原始文件被修改时，就需要将该位置的原始数据拷贝到新的位置，并且更新快照文件中的地址信息。</li>
+<li><strong>写时重定向（Redirect-On-Write，ROW）</strong>：当原始文件写数据时并不在原始位置写入数据，而是分配一个新的位置写入。在读取时，创建快照前的数据从源卷读，创建快照后产生的数据，从快照卷读。</li>
+</ul>
+<p>可以看出 COW 在写入时需要拷贝一份数据到快照卷的动作，而 ROW 是直接重定向到快照卷写入，所以 ROW 适合写密集型；相反，由于 ROW 不断进行指针重定向，读性能会有较大影响，而 COW 不会，所以 COW 适合读密集型。对文件系统而言，用得最多的是 ROW 方式。</p>
+<h4 id="克隆">克隆</h4>
+<p>克隆技术的原理与快照技术的原理类似，其相同点在于其实现方式依然是 ROW 或 COW，而差异点则主要表现在两个方面：一个方面，克隆生成的克隆文件是可以写的；另一个方面，克隆的数据最终会与原始文件的数据完全隔离。</p>
+<h3 id="日志">日志</h3>
+<p>在文件系统中，一个简单的写操作在底层可能会分解为多个步骤的修改。如果不能保证操作的原子性，那么倘若出现宕机、断电的情况，此时就会导致数据的丢失、不一致，甚至是文件系统的不可用。为了解决这个问题，在文件系统中引入了日志机制。</p>
+<p>日志通常是一块独立的空间，其采用环形缓冲区的结构，当进行文件修改操作时，相关数据块会被打包成一组操作写入日志空间，再更新实际数据。这里的一组操作被称为一个事务。</p>
+<p>由于实际数据的更新在写入日志之后，如果在数据更新过程中出现了系统崩溃，那么通过读取日志来更新。这样就能保证数据是我们所期望的数据。还有一种异常场景是日志数据刷写过程中。由于此时日志完成标记还没有置位，而且实际数据还没有更新，那么只需要放弃该条日志即可。</p>
+<h3 id="权限管理">权限管理</h3>
+<p>在多用户操作系统中，由于多个用户的存在，就必须实现用户之间资源访问的隔离。这种管理用户可访问资源的特性就是权限管理。</p>
+<h4 id="rwx-权限管理">RWX 权限管理</h4>
+<p>Linux最常用的权限管理就是 RWX-UGO 权限管理。其中，RWX 是 Read、Write 和 eXecute 的缩写。而 UGO 则是 User、Group 和 Other 的缩写。通过该机制建立用户和组实现对文件的不同的访问权限。</p>
+<p>如下图所示：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem2.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>当我们对文件进行操作时，首先会调用 <code>inode_permission()</code> 函数来判断执行用户的访问权限，如果权限不足则阻止对应操作的执行。</p>
+<h4 id="acl-权限管理">ACL 权限管理</h4>
+<p>ACL（Access Control List，访问控制列表），是一个针对文件/目录的访问控制列表。它在 RWX-UGO 权限管理的基础上为文件系统提供一个额外的、更灵活的权限管理机制。ACL 允许给任何用户或用户组设置任何文件/目录的访问权限，这样就能形成网状的交叉访问关系。</p>
+<p>根据是否继承父目录的 ACL 属性，ACL 分为以下两类：</p>
+<ul>
+<li><strong>access ACL</strong>：每一个对象（文件/目录）都可以关联一个 ACL 来控制其访问权限，这样的 ACL 被称为 access ACL。</li>
+<li><strong>default ACL</strong>：目录关联的一种 ACL。当目录具备该属性时，在该目录中创建的对象（文件或子目录）默认具有相同的 ACL。</li>
+</ul>
+<p><strong>ACL 在操作系统内部是通过文件的扩展属性实现的。</strong> 当用户为文件添加一个 ACL 规则时，其实就是为该文件添加一个扩展属性。如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem3.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><strong>需要注意的是，ACL 的数据与文件的普通扩展属性数据存储在相同的位置，只不过通过特殊的标记进行了区分，这样就可以屏蔽普通用户对 ACL 的访问。</strong></p>
+<h4 id="selinux-权限管理">SELinux 权限管理</h4>
+<p>SELinux（Security-Enhanced Linux）是一个在内核中实现的强制存取控制（MAC）安全性机制。SELinux 与 RWX、ACL 最大的区别是<strong>基于访问者（应用程序）与资源的规则，而不是用户与资源的规则</strong>，因此其安全性更高。这里基于应用程序与资源的规则是指规定了哪些应用程序可以访问哪些资源，而与运行该应用程序的用户无关。</p>
+<p>SELinux 通过将权限从用户收缩到应用，即使应用被攻破，黑客也只能访问应用程序所限定的资源，而不会扩散到其他地方。</p>
+<p>其原理图如下：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem4.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>当访问者访问被访问者（资源）时，需要调用内核的接口，此时会经过 SELinux 内核的判断逻辑，该判断逻辑根据策略数据库的内容确定访问者是否有权访问被访问者，如果允许访问则放行，否则拒绝该请求并记录审计日志</p>
+<h3 id="配额管理">配额管理</h3>
+<p>在多用户环境中，不仅要防止用户对其他用户数据的非法访问，还要确保某些用户所使用的存储空间不能太多。在这种情况下，就需要一种配额 （Quota）管理技术。</p>
+<p>配额管理是一种对使用空间进行限制的技术，其主要包括<strong>针对用户（或组）的限制</strong>和<strong>针对目录的限制</strong>两种方式。针对用户（或组）的限制是指某一个用户（或组）对该文件系统的空间使用不能超过设置的上限，如果超过上限则无法写入新的数据。针对目录的限制是指该目录中的内容总量不能超过设置的上限。</p>
+<p>在配额管理中，通常涉及三个基本概念：</p>
+<ul>
+<li><strong>软上限（Soft Limit）</strong>：指数据总量可以超过该上限。如果超过该上限则会有一个告警信息。</li>
+<li><strong>硬上限（Hard Limit）</strong>：指数据总量不可以超过该上限，如果超过该上限则无法写入新的数据。</li>
+<li><strong>宽限期（Grace Period）</strong>：宽限期通常是针对软上限而言的。如果设置了该值（如 3 天），则在 3 天内允许数据量超过软上限，当超过3天后，无法写入新的数据。</li>
+</ul>
+<p>其实现的原理非常简单，当有新的写入请求时，配额模块就会去分析该请求。如果需要计入配额管理中，则进行配额上限的检查，在小于上限的情况下会更新配额管理数据，否则将阻止新的数据写入，并发出告警信息。</p>
+<h3 id="文件锁">文件锁</h3>
+<p>文件锁的基本作用就是保证多个进程对某个文件并发访问时数据的一致性。如果没有文件锁，就有可能出现多个进程同时访问文件相同位置数据的问题，从而导致文件数据的不一致性。</p>
+<p>文件锁分为以下两种类型：</p>
+<ul>
+<li><strong>劝告锁（Advisory Lock）</strong>：劝告锁是一种建议性的锁，通过该锁告诉访问者现在该文件被其他进程访问，但不强制阻止访问。</li>
+<li><strong>强制锁（Mandatory Lock）</strong>：强制锁则是在有进程对文件锁定的情况下，其他进程是无法访问该文件的。</li>
+</ul>
+<p>为了提高性能，减少等待锁时间，以上两种锁都引入了共享锁、排他锁机制。</p>
+<ul>
+<li><strong>共享锁（Shared Lock）</strong>：在任意时间内，一个文件的共享锁可以被多个进程拥有，共享锁不会导致系统进程的阻塞。</li>
+<li><strong>排他锁（Exclusive Lock）</strong>：在任意时间内，一个文件的排他锁只能被一个进程拥有。</li>
+</ul>
+<p>当有新的加锁请求到来时，其会与已有的锁信息逐一比对，判断是否存在锁冲突。如果存在，则将该进程置为休眠状态（阻塞，如果为非阻塞则返回直接错误码）。如果不存在，则将锁信息记录下来后允许用户访问。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E5%AD%98%E5%82%A8/">存储</a>
+        
+            <a href="/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 19:02 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E5%88%86%E5%B8%83%E5%BC%8F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">分布式文件系统</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E7%BD%91%E7%BB%9C%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">网络文件系统</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F-%E5%9F%BA%E7%A1%80/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">文件系统 基础</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/%E6%9C%AC%E5%9C%B0%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: '本地文件系统',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#关键技术">关键技术</a>
+      <ol>
+        <li><a href="#虚拟文件系统">虚拟文件系统</a></li>
+        <li><a href="#磁盘空间布局">磁盘空间布局</a>
+          <ol>
+            <li><a href="#基于固定功能区的磁盘空间布局">基于固定功能区的磁盘空间布局</a></li>
+            <li><a href="#基于非固定功能区的磁盘空间布局">基于非固定功能区的磁盘空间布局</a></li>
+            <li><a href="#基于数据追加的磁盘空间布局">基于数据追加的磁盘空间布局</a></li>
+          </ol>
+        </li>
+        <li><a href="#文件数据管理">文件数据管理</a>
+          <ol>
+            <li><a href="#基于连续区域的文件数据管理">基于连续区域的文件数据管理</a></li>
+            <li><a href="#基于链表的文件数据管理">基于链表的文件数据管理</a></li>
+            <li><a href="#基于索引的文件数据管理">基于索引的文件数据管理</a></li>
+          </ol>
+        </li>
+        <li><a href="#缓存">缓存</a>
+          <ol>
+            <li><a href="#缓存置换算法">缓存置换算法</a></li>
+            <li><a href="#预读算法">预读算法</a></li>
+          </ol>
+        </li>
+        <li><a href="#快照与克隆">快照与克隆</a>
+          <ol>
+            <li><a href="#快照">快照</a></li>
+            <li><a href="#克隆">克隆</a></li>
+          </ol>
+        </li>
+        <li><a href="#日志">日志</a></li>
+        <li><a href="#权限管理">权限管理</a>
+          <ol>
+            <li><a href="#rwx-权限管理">RWX 权限管理</a></li>
+            <li><a href="#acl-权限管理">ACL 权限管理</a></li>
+            <li><a href="#selinux-权限管理">SELinux 权限管理</a></li>
+          </ol>
+        </li>
+        <li><a href="#配额管理">配额管理</a></li>
+        <li><a href="#文件锁">文件锁</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

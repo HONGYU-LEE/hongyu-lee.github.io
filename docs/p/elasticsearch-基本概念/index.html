@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='ElasticSearch 基本概念 Elasticsearch是一个分布式的免费开源搜索和分析引擎，适用于包括文本、数字、地理空间、结构化和非结构化数据等在内的所有类型的数据。
+Elasticsearch在Apache Lucene的基础上开发而成。然而，Elasticsearch不仅仅是Lucene，并且也不仅仅只是一个全文搜索引擎。 它可以被下面这样准确的形容：
+ 一个分布式的实时文档存储，每个字段都可以被索引与搜索 一个分布式实时分析搜索引擎 能胜任上百个服务节点的扩展，并支持PB级别的结构化或者非结构化数据  Lucene Lucene是一套用于全文索引和搜索的开源程式库，由Apache软件基金会支持和提供。Lucene提供了一个简单却强大的应用程式接口，能够做全文索引和搜索。但它不是一个完整的全文检索引擎，而是一个全文检索引擎的架构，提供了完整的查询引擎和索引引擎，部分文本分析引擎（英文与德文两种西方语言）。
+Lucene的目的是为软件开发人员提供一个简单易用的工具包，以方便的在目标系统中实现全文检索的功能，或者是以此为基础建立起完整的全文检索引擎。
+在Java开发环境里Lucene是一个成熟的免费开源工具。就其本身而言，Lucene是当前以及最近几年最受欢迎的免费Java信息检索程序库。人们经常提到信息检索程序库，虽然与搜索引擎有关，但不应该将信息检索程序库与搜索引擎相混淆。
+ELK Elastic Stack是一套适用于数据采集、扩充、存储、分析和可视化的免费开源工具。人们通常将Elastic Stack称为ELK Stack（代指 Elasticsearch、Logstash 和 Kibana）。
+ Logstash是什么？
+ Logstash 是 Elastic Stack 的核心产品之一，可用来对数据进行聚合和处理，并将数据发送到 Elasticsearch。Logstash 是一个开源的服务器端数据处理管道，允许您在将数据索引到 Elasticsearch 之前同时从多个来源采集数据，并对数据进行充实和转换。
+ Kibana是什么？
+ Kibana 是一款适用于Elasticsearch的数据可视化和管理工具，可以提供实时的直方图、线形图、饼状图和地图。Kibana同时还包括诸如 Canvas和Elastic Maps等高级应用程序
+ Canvas允许用户基于自身数据创建定制的动态信息图表， Elastic Maps用来对地理空间数据进行可视化。  Elasticsearch的特点   Elasticsearch 很快。 由于Elasticsearch是在Lucene基础上构建而成的，所以在全文本搜索方面表现十分出色。Elasticsearch同时还是一个近实时的搜索平台，这意味着从文档索引操作到文档变为可搜索状态之间的延时很短，一般只有一秒。因此，Elasticsearch 非常适用于对时间有严苛要求的用例，例如安全分析和基础设施监测。
+  Elasticsearch 具有分布式的本质特征。 Elasticsearch中存储的文档分布在不同的容器中，这些容器称为分片，可以进行复制以提供数据冗余副本，以防发生硬件故障。Elasticsearch的分布式特性使得它可以扩展至数百台（甚至数千台）服务器，并处理 PB 量级的数据。
+  Elasticsearch 包含一系列广泛的功能。 除了速度、可扩展性和弹性等优势以外，Elasticsearch 还有大量强大的内置功能（例如数据汇总和索引生命周期管理），可以方便用户更加高效地存储和搜索数据。
+  Elastic Stack 简化了数据采集、可视化和报告过程。 通过与 Beats 和 Logstash 进行集成，用户能够在向 Elasticsearch 中索引数据之前轻松地处理数据。同时，Kibana 不仅可针对 Elasticsearch 数据提供实时可视化，同时还提供 UI 以便用户快速访问应用程序性能监测 (APM)、日志和基础设施指标等数据。'><title>ElasticSearch 基本概念</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='ElasticSearch 基本概念'>
+<meta property='og:description' content='ElasticSearch 基本概念 Elasticsearch是一个分布式的免费开源搜索和分析引擎，适用于包括文本、数字、地理空间、结构化和非结构化数据等在内的所有类型的数据。
+Elasticsearch在Apache Lucene的基础上开发而成。然而，Elasticsearch不仅仅是Lucene，并且也不仅仅只是一个全文搜索引擎。 它可以被下面这样准确的形容：
+ 一个分布式的实时文档存储，每个字段都可以被索引与搜索 一个分布式实时分析搜索引擎 能胜任上百个服务节点的扩展，并支持PB级别的结构化或者非结构化数据  Lucene Lucene是一套用于全文索引和搜索的开源程式库，由Apache软件基金会支持和提供。Lucene提供了一个简单却强大的应用程式接口，能够做全文索引和搜索。但它不是一个完整的全文检索引擎，而是一个全文检索引擎的架构，提供了完整的查询引擎和索引引擎，部分文本分析引擎（英文与德文两种西方语言）。
+Lucene的目的是为软件开发人员提供一个简单易用的工具包，以方便的在目标系统中实现全文检索的功能，或者是以此为基础建立起完整的全文检索引擎。
+在Java开发环境里Lucene是一个成熟的免费开源工具。就其本身而言，Lucene是当前以及最近几年最受欢迎的免费Java信息检索程序库。人们经常提到信息检索程序库，虽然与搜索引擎有关，但不应该将信息检索程序库与搜索引擎相混淆。
+ELK Elastic Stack是一套适用于数据采集、扩充、存储、分析和可视化的免费开源工具。人们通常将Elastic Stack称为ELK Stack（代指 Elasticsearch、Logstash 和 Kibana）。
+ Logstash是什么？
+ Logstash 是 Elastic Stack 的核心产品之一，可用来对数据进行聚合和处理，并将数据发送到 Elasticsearch。Logstash 是一个开源的服务器端数据处理管道，允许您在将数据索引到 Elasticsearch 之前同时从多个来源采集数据，并对数据进行充实和转换。
+ Kibana是什么？
+ Kibana 是一款适用于Elasticsearch的数据可视化和管理工具，可以提供实时的直方图、线形图、饼状图和地图。Kibana同时还包括诸如 Canvas和Elastic Maps等高级应用程序
+ Canvas允许用户基于自身数据创建定制的动态信息图表， Elastic Maps用来对地理空间数据进行可视化。  Elasticsearch的特点   Elasticsearch 很快。 由于Elasticsearch是在Lucene基础上构建而成的，所以在全文本搜索方面表现十分出色。Elasticsearch同时还是一个近实时的搜索平台，这意味着从文档索引操作到文档变为可搜索状态之间的延时很短，一般只有一秒。因此，Elasticsearch 非常适用于对时间有严苛要求的用例，例如安全分析和基础设施监测。
+  Elasticsearch 具有分布式的本质特征。 Elasticsearch中存储的文档分布在不同的容器中，这些容器称为分片，可以进行复制以提供数据冗余副本，以防发生硬件故障。Elasticsearch的分布式特性使得它可以扩展至数百台（甚至数千台）服务器，并处理 PB 量级的数据。
+  Elasticsearch 包含一系列广泛的功能。 除了速度、可扩展性和弹性等优势以外，Elasticsearch 还有大量强大的内置功能（例如数据汇总和索引生命周期管理），可以方便用户更加高效地存储和搜索数据。
+  Elastic Stack 简化了数据采集、可视化和报告过程。 通过与 Beats 和 Logstash 进行集成，用户能够在向 Elasticsearch 中索引数据之前轻松地处理数据。同时，Kibana 不仅可针对 Elasticsearch 数据提供实时可视化，同时还提供 UI 以便用户快速访问应用程序性能监测 (APM)、日志和基础设施指标等数据。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='ElasticSearch' /><meta property='article:tag' content='搜索引擎' /><meta property='article:published_time' content='2022-05-23T22:16:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T22:24:18&#43;08:00'/>
+<meta name="twitter:title" content="ElasticSearch 基本概念">
+<meta name="twitter:description" content="ElasticSearch 基本概念 Elasticsearch是一个分布式的免费开源搜索和分析引擎，适用于包括文本、数字、地理空间、结构化和非结构化数据等在内的所有类型的数据。
+Elasticsearch在Apache Lucene的基础上开发而成。然而，Elasticsearch不仅仅是Lucene，并且也不仅仅只是一个全文搜索引擎。 它可以被下面这样准确的形容：
+ 一个分布式的实时文档存储，每个字段都可以被索引与搜索 一个分布式实时分析搜索引擎 能胜任上百个服务节点的扩展，并支持PB级别的结构化或者非结构化数据  Lucene Lucene是一套用于全文索引和搜索的开源程式库，由Apache软件基金会支持和提供。Lucene提供了一个简单却强大的应用程式接口，能够做全文索引和搜索。但它不是一个完整的全文检索引擎，而是一个全文检索引擎的架构，提供了完整的查询引擎和索引引擎，部分文本分析引擎（英文与德文两种西方语言）。
+Lucene的目的是为软件开发人员提供一个简单易用的工具包，以方便的在目标系统中实现全文检索的功能，或者是以此为基础建立起完整的全文检索引擎。
+在Java开发环境里Lucene是一个成熟的免费开源工具。就其本身而言，Lucene是当前以及最近几年最受欢迎的免费Java信息检索程序库。人们经常提到信息检索程序库，虽然与搜索引擎有关，但不应该将信息检索程序库与搜索引擎相混淆。
+ELK Elastic Stack是一套适用于数据采集、扩充、存储、分析和可视化的免费开源工具。人们通常将Elastic Stack称为ELK Stack（代指 Elasticsearch、Logstash 和 Kibana）。
+ Logstash是什么？
+ Logstash 是 Elastic Stack 的核心产品之一，可用来对数据进行聚合和处理，并将数据发送到 Elasticsearch。Logstash 是一个开源的服务器端数据处理管道，允许您在将数据索引到 Elasticsearch 之前同时从多个来源采集数据，并对数据进行充实和转换。
+ Kibana是什么？
+ Kibana 是一款适用于Elasticsearch的数据可视化和管理工具，可以提供实时的直方图、线形图、饼状图和地图。Kibana同时还包括诸如 Canvas和Elastic Maps等高级应用程序
+ Canvas允许用户基于自身数据创建定制的动态信息图表， Elastic Maps用来对地理空间数据进行可视化。  Elasticsearch的特点   Elasticsearch 很快。 由于Elasticsearch是在Lucene基础上构建而成的，所以在全文本搜索方面表现十分出色。Elasticsearch同时还是一个近实时的搜索平台，这意味着从文档索引操作到文档变为可搜索状态之间的延时很短，一般只有一秒。因此，Elasticsearch 非常适用于对时间有严苛要求的用例，例如安全分析和基础设施监测。
+  Elasticsearch 具有分布式的本质特征。 Elasticsearch中存储的文档分布在不同的容器中，这些容器称为分片，可以进行复制以提供数据冗余副本，以防发生硬件故障。Elasticsearch的分布式特性使得它可以扩展至数百台（甚至数千台）服务器，并处理 PB 量级的数据。
+  Elasticsearch 包含一系列广泛的功能。 除了速度、可扩展性和弹性等优势以外，Elasticsearch 还有大量强大的内置功能（例如数据汇总和索引生命周期管理），可以方便用户更加高效地存储和搜索数据。
+  Elastic Stack 简化了数据采集、可视化和报告过程。 通过与 Beats 和 Logstash 进行集成，用户能够在向 Elasticsearch 中索引数据之前轻松地处理数据。同时，Kibana 不仅可针对 Elasticsearch 数据提供实时可视化，同时还提供 UI 以便用户快速访问应用程序性能监测 (APM)、日志和基础设施指标等数据。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/elasticsearch/" style="background-color: #2a9d8f; color: #fff;">
+                ElasticSearch
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/">ElasticSearch 基本概念</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="elasticsearch-基本概念">ElasticSearch 基本概念</h1>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es.jpeg"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<p>Elasticsearch是一个分布式的免费开源搜索和分析引擎，适用于包括文本、数字、地理空间、结构化和非结构化数据等在内的所有类型的数据。</p>
+<p>Elasticsearch在Apache Lucene的基础上开发而成。然而，Elasticsearch不仅仅是Lucene，并且也不仅仅只是一个全文搜索引擎。 它可以被下面这样准确的形容：</p>
+<ul>
+<li>一个分布式的实时文档存储，每个字段都可以被索引与搜索</li>
+<li>一个分布式实时分析搜索引擎</li>
+<li>能胜任上百个服务节点的扩展，并支持PB级别的结构化或者非结构化数据</li>
+</ul>
+<h2 id="lucene">Lucene</h2>
+<p><strong>Lucene是一套用于全文索引和搜索的开源程式库</strong>，由Apache软件基金会支持和提供。Lucene提供了一个简单却强大的应用程式接口，能够做全文索引和搜索。但<strong>它不是一个完整的全文检索引擎，而是一个全文检索引擎的架构</strong>，提供了完整的查询引擎和索引引擎，部分文本分析引擎（英文与德文两种西方语言）。</p>
+<p>Lucene的目的是为软件开发人员提供一个简单易用的工具包，以方便的在目标系统中实现全文检索的功能，或者是以此为基础建立起完整的全文检索引擎。</p>
+<p>在Java开发环境里Lucene是一个成熟的免费开源工具。就其本身而言，Lucene是当前以及最近几年最受欢迎的免费Java信息检索程序库。人们经常提到信息检索程序库，虽然与搜索引擎有关，但不应该将<strong>信息检索程序库</strong>与<strong>搜索引擎</strong>相混淆。</p>
+<h2 id="elk">ELK</h2>
+<p>Elastic Stack是一套适用于数据采集、扩充、存储、分析和可视化的免费开源工具。人们通常将Elastic Stack称为ELK Stack（代指 Elasticsearch、Logstash 和 Kibana）。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es53.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<blockquote>
+<p>Logstash是什么？</p>
+</blockquote>
+<p>Logstash 是 Elastic Stack 的核心产品之一，可用来对数据进行聚合和处理，并将数据发送到 Elasticsearch。Logstash 是一个开源的服务器端数据处理管道，允许您在将数据索引到 Elasticsearch 之前同时从多个来源采集数据，并对数据进行充实和转换。</p>
+<blockquote>
+<p>Kibana是什么？</p>
+</blockquote>
+<p>Kibana 是一款适用于Elasticsearch的数据可视化和管理工具，可以提供实时的直方图、线形图、饼状图和地图。Kibana同时还包括诸如 Canvas和Elastic Maps等高级应用程序</p>
+<ul>
+<li>Canvas允许用户基于自身数据创建定制的动态信息图表，</li>
+<li>Elastic Maps用来对地理空间数据进行可视化。</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es54.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h2 id="elasticsearch的特点">Elasticsearch的特点</h2>
+<ul>
+<li>
+<p><strong>Elasticsearch 很快。</strong> 由于Elasticsearch是在Lucene基础上构建而成的，所以在全文本搜索方面表现十分出色。Elasticsearch同时还是一个近实时的搜索平台，这意味着从文档索引操作到文档变为可搜索状态之间的延时很短，一般只有一秒。因此，Elasticsearch 非常适用于对时间有严苛要求的用例，例如安全分析和基础设施监测。</p>
+</li>
+<li>
+<p><strong>Elasticsearch 具有分布式的本质特征。</strong> Elasticsearch中存储的文档分布在不同的容器中，这些容器称为<strong>分片</strong>，可以进行复制以提供数据冗余副本，以防发生硬件故障。Elasticsearch的分布式特性使得它可以扩展至数百台（甚至数千台）服务器，并处理 PB 量级的数据。</p>
+</li>
+<li>
+<p><strong>Elasticsearch 包含一系列广泛的功能。</strong> 除了速度、可扩展性和弹性等优势以外，Elasticsearch 还有大量强大的内置功能（例如数据汇总和索引生命周期管理），可以方便用户更加高效地存储和搜索数据。</p>
+</li>
+<li>
+<p><strong>Elastic Stack 简化了数据采集、可视化和报告过程。</strong> 通过与 Beats 和 Logstash 进行集成，用户能够在向 Elasticsearch 中索引数据之前轻松地处理数据。同时，Kibana 不仅可针对 Elasticsearch 数据提供实时可视化，同时还提供 UI 以便用户快速访问应用程序性能监测 (APM)、日志和基础设施指标等数据。</p>
+</li>
+</ul>
+<h2 id="应用场景">应用场景</h2>
+<p>Elasticsearch在速度和可扩展性方面都表现出色，而且还能够索引多种类型的内容，这意味着其可用于多种用例：</p>
+<ul>
+<li>应用程序搜索</li>
+<li>网站搜索</li>
+<li>企业搜索</li>
+<li>日志处理和分析</li>
+<li>基础设施指标和容器监测</li>
+<li>应用程序性能监测</li>
+<li>地理空间数据分析和可视化</li>
+<li>安全分析</li>
+<li>业务分析</li>
+</ul>
+<h2 id="架构设计">架构设计</h2>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es2.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li><strong>Gateway</strong>：Elasticsearch用来存储索引的文件系统，支持多种类型。ElasticSearch默认先把索引存储在内存中，然后当内存满的时候，再持久化到Gateway里。当ES集群关闭或重启的时候，它就会从Gateway里去读取索引数据。比如LocalFileSystem和HDFS、AS3等。</li>
+<li><strong>DistributedLucene Directory</strong>：Lucene里的一些列索引文件组成的目录。它负责管理这些索引文件。包括数据的读取、写入，以及索引的添加和合并等。</li>
+<li><strong>Mapping</strong>：映射解析模块。</li>
+<li><strong>Search Moudle</strong>：搜索模块。</li>
+<li><strong>Index Moudle</strong>：索引模块。</li>
+<li><strong>Disvcovery</strong>：节点发现模块。不同机器上的节点要组成集群需要进行消息通信，集群内部需要选举master节点，这些工作都是由Discovery模块完成。支持多种发现机制，如 Zen 、EC2、gce、Azure。</li>
+<li><strong>Scripting</strong>：Scripting用来支持在查询语句中插入javascript、python等脚本语言。</li>
+<li><strong>3rd plugins</strong>：第三方插件。</li>
+<li><strong>Transport</strong>：传输模块，支持多种传输协议，如 Thrift、memecached、http，默认使用http。</li>
+<li><strong>JMX</strong>：JMX是java的管理框架，用来管理ES应用。</li>
+<li><strong>Java(Netty)</strong>：java的通信框架。</li>
+<li><strong>RESTful Style API</strong>：提供给用户的接口，通过RESTful方式来实现API编程。</li>
+</ul>
+<h2 id="基本概念">基本概念</h2>
+<p>Elasticsearch是一个<strong>文档型</strong>数据库，为了方便理解，下面给出其与传统的关系型数据库的对比</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center"><strong>Relational DB</strong></th>
+<th style="text-align:center"><strong>Elasticsearch</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">数据库 Database</td>
+<td style="text-align:center">索引 Index</td>
+</tr>
+<tr>
+<td style="text-align:center">表 Table</td>
+<td style="text-align:center">类型 Type</td>
+</tr>
+<tr>
+<td style="text-align:center">行 Rows</td>
+<td style="text-align:center">文档 Document</td>
+</tr>
+<tr>
+<td style="text-align:center">列 columns</td>
+<td style="text-align:center">字段 fields</td>
+</tr>
+<tr>
+<td style="text-align:center">表结构 schema</td>
+<td style="text-align:center">映射 mapping</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="文档">文档</h3>
+<p>Elasticsearch是<strong>面向文档</strong>的，<strong>索引和搜索数据的最小单位是文档</strong>，并且使用<strong>JSON</strong>来作为文档的序列化格式。每个文档可以由一个或多个字段组成，类似于关系型数据库中的一行记录，在Elasticsearch中，文档有几个重要属性</p>
+<ul>
+<li><strong>自我包含</strong>：一篇文档同时包含字段和对应的值。</li>
+<li><strong>层次型</strong>：文档中还可以包含新的文档，一个字段的取值也可以包含其他字段和取值。</li>
+<li><strong>结构灵活</strong>：文档不依赖预先定义的模式。在关系型数据库中，要提前定义字段才能使用，在Elasticsearch中，对于字段是非常灵活的，有时候，我们可以忽略该字段，或者动态的添加一个新的字段。</li>
+</ul>
+<p>尽管我们可以随意的新增或者忽略某个字段，但是，每个字段的类型非常重要，比如一个年龄字段类型，可以是字 串也可以是整形。因为Elasticsearch会保存字段和类型之间的映射及其他的设置。这种映射具体到每个映射的每种类型，这也是为什么在Elasticsearch中，类型有时候也称为映射类型。</p>
+<h3 id="类型">类型</h3>
+<p><strong>类型是文档的逻辑容器</strong>，类似于表格是行的容器。在不同的类型中，最好放入不同结构的文档。（有点类似于关系型数据库中的表的概念）。</p>
+<p>每个类型中对于字段的定义称为<strong>映射</strong>。比如<code>name</code>字段映射为<code>string</code>类型。 我们说文档是<strong>无模式</strong>的，它们不需要拥有映射中所定义的所有字段，例如我们可能会新增一个映射中不存在的字段，那么Elasticsearch是怎么做的呢?</p>
+<p>Elasticsearch会自动的将新字段加入映射，由于不确定这个字段是什么类型，Elasticsearch就会根据字段的值来推导它的类型，如果这个值是10，那么Elasticsearch会认为它是整形。 但是这种推导也可能会存在问题，如果这里的10实际上是字符串“10”，如果后续在索引字符串“hello world”，就会因为类型不一致而导致索引失败。 所以最安全的方式就是在索引数据之前，就定义好所需要的映射，这点跟关系型数据库殊途同归了，先定义好字段，然后再使用。</p>
+<p>映射类型只是将文档进行逻辑划分。从物理角度来看，同一索引的文档都是写入磁盘，而不考虑它们所属的映射类型。</p>
+<blockquote>
+<p>注意⚠️：为什么ElasticSearch要在7.X版本去掉type?</p>
+</blockquote>
+<p>在Elasticsearch设计初期，是直接查考了关系型数据库的设计模式，存在了类型（表）的概念。 但是，其搜索引擎是基于Lucene的，这种<strong>基因</strong>决定了类型是多余的。Lucene的全文检索功能之所以快，是因为<strong>倒序索引</strong>的存在。 而这种倒序索引的生成是基于<strong>索引</strong>的，而并非 类型。多个类型反而会减慢搜索的速度——两个不同type下的两个user_name，在ES同一个索引下其实被认为是同一个filed，你必须在两个不同的type中定义相同的filed映射。否则，不同type中的相同字段名称就会在处理中出现冲突的情况，导致Lucene处理效率下降。</p>
+<h3 id="索引">索引</h3>
+<p>在Elasticsearch中，索引有两个含义：</p>
+<ul>
+<li>
+<p><strong>名词</strong></p>
+<ul>
+<li><strong>索引是映射类型的容器</strong>，Elasticsearch中的索引是一个非常大的文档集合，非常类似关系型数据库中库的概念。索引存储了所有映射类型的字段。</li>
+</ul>
+</li>
+<li>
+<p><strong>动词</strong></p>
+<ul>
+<li><strong>索引一个文档就是存储一个文档到一个索引 （名词）中以便被检索和查询</strong>。这非常类似于SQL中的<code>INSERT</code>关键词，不同的是文档已存在时，新文档会替换旧文档（<code>UPSERT</code>）。</li>
+</ul>
+</li>
+</ul>
+<p>在Elasticsearch中，索引使用了一种称为<strong>倒排索引</strong>（即通过查询词索引到文档）的结构，它适用于快速的全文搜索。一个倒排索引由文档中所有不重复词的列表构成，对于其中每个词，有一个包含它的文档列表。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/elasticsearch/">ElasticSearch</a>
+        
+            <a href="/tags/%E6%90%9C%E7%B4%A2%E5%BC%95%E6%93%8E/">搜索引擎</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 22:24 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E5%88%86%E5%B8%83%E5%BC%8F%E5%8E%9F%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 分布式原理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E7%B4%A2%E5%BC%95%E5%8E%9F%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 索引原理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E6%9D%83%E9%87%8D%E8%AE%A1%E7%AE%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 权重计算</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 基本操作</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'ElasticSearch 基本概念',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#lucene">Lucene</a></li>
+    <li><a href="#elk">ELK</a></li>
+    <li><a href="#elasticsearch的特点">Elasticsearch的特点</a></li>
+    <li><a href="#应用场景">应用场景</a></li>
+    <li><a href="#架构设计">架构设计</a></li>
+    <li><a href="#基本概念">基本概念</a>
+      <ol>
+        <li><a href="#文档">文档</a></li>
+        <li><a href="#类型">类型</a></li>
+        <li><a href="#索引">索引</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

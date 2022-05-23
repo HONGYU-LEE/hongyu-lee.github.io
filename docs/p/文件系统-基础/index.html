@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='文件系统 基础 什么是文件系统？  文件系统是一种存储和组织计算机数据的方法，它使得对其访问和查找变得容易，文件系统使用文件和树形目录的抽象逻辑概念代替了硬盘和光盘等物理设备使用数据块的概念，用户使用文件系统来保存数据不必关心数据实际保存在硬盘（或者光盘）的地址为多少的数据块上，只需要记住这个文件的所属目录和文件名。在写入新数据之前，用户不必关心硬盘上的那个块地址没有被使用，硬盘上的存储空间管理（分配和释放）功能由文件系统自动完成，用户只需要记住数据被写入到了哪个文件中。
+ 上文是维基百科对于文件系统的描述，我们将其精炼一下，得到以下结论：
+ 文件系统是一套实现了数据的存储、分级组织、访问和获取等操作的抽象数据类型（Abstract data type）。其可以构建在磁盘、内存、甚至是网络上。  用于解决什么问题？  我们为什么要使用文件系统呢？换句话说，文件系统它解决了什么问题呢？
+ 文件系统解决的是对磁盘空间使用的问题。 如果我们不抽象出一个文件系统，而是每个应用程序都独立去访问磁盘空间，那会出现什么样的情况呢？
+ 磁盘空间的访问会存在冲突。 如果没有一个第三方去统一管理磁盘空间，那么此时应用程序的数据访问并不会进行隔离，而是会互相影响，产生冲突。 磁盘空间的管理会非常复杂。 由于文件有不同格式、大小，存储的设备与位置也有所不同（本地磁盘、内存、甚至远端机器）。直接管理磁盘空间将会非常的复杂。  文件系统正是为了解决这两个问题，而在应用程序与磁盘空间之间抽象出的一层。文件系统对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。
+基于文件系统，应用程序只需要创建、删除或读取文件即可，他们并不需要关注磁盘空间的细节，所有磁盘空间管理相关的动作交由文件系统来处理。
+相关概念  目录：在文件系统中目录是一种容器，它可以容纳子目录和普通文件。但同时目录本身也是一种文件。只不过目录中存储的数据是特殊的数据，这些数据就是关于文件名称等元数据（管理数据的数据）的信息。 文件：在文件系统中，最基本的概念是文件，文件是存储数据的实体。从用户的角度来看，文件是文件系统中最小粒度的单元。为了便于用户对文件进行识别和管理，文件系统为每个文件都分配了一个名称，称为文件名。同时为了方便用户辨别文件的类型，每个文件都会有一个拓展名来标识其类型。（但在文件系统中都以字节流存储） 链接：Linux 中的链接分为软链接（Soft Link）和硬链接（Hard Link）两种。其中，软链接又被称为符号链接（Symbolic Link），它是文件的另外一种形态，其内容指向另外一个文件路径（相对路径或绝对路径）。硬链接则不同，它是一个已经存在文件的附加名称，也就是同一个文件的第 2 个或第 N 个名称。  基本原理  文件系统的主要核心就是对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。
+ 在文件系统中，为了简化用户对数据的访问，向用户屏蔽数据的存储方式，其会对磁盘空间进行规划、组织和编号处理。
+以 Ext4 文件系统为例，它会将磁盘空间进行划分。 首先将磁盘空间划分为若干个子空间，这些子空间称为块组。然后将每个子空间划分为等份的逻辑块，逻辑块是最小的管理单元。
+为了管理这些逻辑块，需要一些区域来记录哪些逻辑块已经被使用了，哪些还没有被使用。记录这些数据的数据通常在磁盘的特殊区域，我们称这些数据为文件系统的元数据（Metadata）。通过元数据，文件系统实现了对磁盘空间的管理，最终为用户提供了简单易用的接口。
+当我们调用这些接口时，用户对文件的操作就转化为文件系统对磁盘空间的操作。 比如，当用户向某个文件写入数据时，文件系统会将该请求转换为对磁盘的操作，包括分配磁盘空间、写入数据等。而对文件的读操作则转换为定位到磁盘的某个位置、从磁盘读取数据等。
+分类 目前，常见的文件系统有几十种。虽然文件系统的具体实现形式纷繁复杂，具体特性也各不相同，但是有一定规律可循。下面将介绍一下常见的文件系统都有哪些。
+本地文件系统 本地文件系统是对磁盘空间进行管理的文件系统，也是最常见的文件系统形态。从呈现形态上来看，本地文件系统就是一个树形的目录结构。本地文件系统本质上就是实现对磁盘空间的管理，实现磁盘线性空间与目录层级结构的转换。
+从普通用户的角度来说，本地文件系统主要方便了对磁盘空间的使用，降低了使用难度，提高了利用效率。常见的本地文件系统有 ExtX、Btrfs、XFS 和 ZFS 等。
+伪文件系统 伪文件系统是 Linux 中的概念，它是对传统文件系统的延伸。伪文件系统存在于内存，不占用硬盘。它以文件系统的形态实现用户与内核数据交互的接口，其通过文件的形式向用户提供一些系统信息，用户通过读写这些文件就可以读取、修改系统的一些信息。 常见的伪文件系统有 proc、sysfs 和 configfs 等。'><title>文件系统 基础</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F-%E5%9F%BA%E7%A1%80/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='文件系统 基础'>
+<meta property='og:description' content='文件系统 基础 什么是文件系统？  文件系统是一种存储和组织计算机数据的方法，它使得对其访问和查找变得容易，文件系统使用文件和树形目录的抽象逻辑概念代替了硬盘和光盘等物理设备使用数据块的概念，用户使用文件系统来保存数据不必关心数据实际保存在硬盘（或者光盘）的地址为多少的数据块上，只需要记住这个文件的所属目录和文件名。在写入新数据之前，用户不必关心硬盘上的那个块地址没有被使用，硬盘上的存储空间管理（分配和释放）功能由文件系统自动完成，用户只需要记住数据被写入到了哪个文件中。
+ 上文是维基百科对于文件系统的描述，我们将其精炼一下，得到以下结论：
+ 文件系统是一套实现了数据的存储、分级组织、访问和获取等操作的抽象数据类型（Abstract data type）。其可以构建在磁盘、内存、甚至是网络上。  用于解决什么问题？  我们为什么要使用文件系统呢？换句话说，文件系统它解决了什么问题呢？
+ 文件系统解决的是对磁盘空间使用的问题。 如果我们不抽象出一个文件系统，而是每个应用程序都独立去访问磁盘空间，那会出现什么样的情况呢？
+ 磁盘空间的访问会存在冲突。 如果没有一个第三方去统一管理磁盘空间，那么此时应用程序的数据访问并不会进行隔离，而是会互相影响，产生冲突。 磁盘空间的管理会非常复杂。 由于文件有不同格式、大小，存储的设备与位置也有所不同（本地磁盘、内存、甚至远端机器）。直接管理磁盘空间将会非常的复杂。  文件系统正是为了解决这两个问题，而在应用程序与磁盘空间之间抽象出的一层。文件系统对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。
+基于文件系统，应用程序只需要创建、删除或读取文件即可，他们并不需要关注磁盘空间的细节，所有磁盘空间管理相关的动作交由文件系统来处理。
+相关概念  目录：在文件系统中目录是一种容器，它可以容纳子目录和普通文件。但同时目录本身也是一种文件。只不过目录中存储的数据是特殊的数据，这些数据就是关于文件名称等元数据（管理数据的数据）的信息。 文件：在文件系统中，最基本的概念是文件，文件是存储数据的实体。从用户的角度来看，文件是文件系统中最小粒度的单元。为了便于用户对文件进行识别和管理，文件系统为每个文件都分配了一个名称，称为文件名。同时为了方便用户辨别文件的类型，每个文件都会有一个拓展名来标识其类型。（但在文件系统中都以字节流存储） 链接：Linux 中的链接分为软链接（Soft Link）和硬链接（Hard Link）两种。其中，软链接又被称为符号链接（Symbolic Link），它是文件的另外一种形态，其内容指向另外一个文件路径（相对路径或绝对路径）。硬链接则不同，它是一个已经存在文件的附加名称，也就是同一个文件的第 2 个或第 N 个名称。  基本原理  文件系统的主要核心就是对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。
+ 在文件系统中，为了简化用户对数据的访问，向用户屏蔽数据的存储方式，其会对磁盘空间进行规划、组织和编号处理。
+以 Ext4 文件系统为例，它会将磁盘空间进行划分。 首先将磁盘空间划分为若干个子空间，这些子空间称为块组。然后将每个子空间划分为等份的逻辑块，逻辑块是最小的管理单元。
+为了管理这些逻辑块，需要一些区域来记录哪些逻辑块已经被使用了，哪些还没有被使用。记录这些数据的数据通常在磁盘的特殊区域，我们称这些数据为文件系统的元数据（Metadata）。通过元数据，文件系统实现了对磁盘空间的管理，最终为用户提供了简单易用的接口。
+当我们调用这些接口时，用户对文件的操作就转化为文件系统对磁盘空间的操作。 比如，当用户向某个文件写入数据时，文件系统会将该请求转换为对磁盘的操作，包括分配磁盘空间、写入数据等。而对文件的读操作则转换为定位到磁盘的某个位置、从磁盘读取数据等。
+分类 目前，常见的文件系统有几十种。虽然文件系统的具体实现形式纷繁复杂，具体特性也各不相同，但是有一定规律可循。下面将介绍一下常见的文件系统都有哪些。
+本地文件系统 本地文件系统是对磁盘空间进行管理的文件系统，也是最常见的文件系统形态。从呈现形态上来看，本地文件系统就是一个树形的目录结构。本地文件系统本质上就是实现对磁盘空间的管理，实现磁盘线性空间与目录层级结构的转换。
+从普通用户的角度来说，本地文件系统主要方便了对磁盘空间的使用，降低了使用难度，提高了利用效率。常见的本地文件系统有 ExtX、Btrfs、XFS 和 ZFS 等。
+伪文件系统 伪文件系统是 Linux 中的概念，它是对传统文件系统的延伸。伪文件系统存在于内存，不占用硬盘。它以文件系统的形态实现用户与内核数据交互的接口，其通过文件的形式向用户提供一些系统信息，用户通过读写这些文件就可以读取、修改系统的一些信息。 常见的伪文件系统有 proc、sysfs 和 configfs 等。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F-%E5%9F%BA%E7%A1%80/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='存储' /><meta property='article:tag' content='文件系统' /><meta property='article:published_time' content='2022-05-23T18:52:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T19:04:06&#43;08:00'/>
+<meta name="twitter:title" content="文件系统 基础">
+<meta name="twitter:description" content="文件系统 基础 什么是文件系统？  文件系统是一种存储和组织计算机数据的方法，它使得对其访问和查找变得容易，文件系统使用文件和树形目录的抽象逻辑概念代替了硬盘和光盘等物理设备使用数据块的概念，用户使用文件系统来保存数据不必关心数据实际保存在硬盘（或者光盘）的地址为多少的数据块上，只需要记住这个文件的所属目录和文件名。在写入新数据之前，用户不必关心硬盘上的那个块地址没有被使用，硬盘上的存储空间管理（分配和释放）功能由文件系统自动完成，用户只需要记住数据被写入到了哪个文件中。
+ 上文是维基百科对于文件系统的描述，我们将其精炼一下，得到以下结论：
+ 文件系统是一套实现了数据的存储、分级组织、访问和获取等操作的抽象数据类型（Abstract data type）。其可以构建在磁盘、内存、甚至是网络上。  用于解决什么问题？  我们为什么要使用文件系统呢？换句话说，文件系统它解决了什么问题呢？
+ 文件系统解决的是对磁盘空间使用的问题。 如果我们不抽象出一个文件系统，而是每个应用程序都独立去访问磁盘空间，那会出现什么样的情况呢？
+ 磁盘空间的访问会存在冲突。 如果没有一个第三方去统一管理磁盘空间，那么此时应用程序的数据访问并不会进行隔离，而是会互相影响，产生冲突。 磁盘空间的管理会非常复杂。 由于文件有不同格式、大小，存储的设备与位置也有所不同（本地磁盘、内存、甚至远端机器）。直接管理磁盘空间将会非常的复杂。  文件系统正是为了解决这两个问题，而在应用程序与磁盘空间之间抽象出的一层。文件系统对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。
+基于文件系统，应用程序只需要创建、删除或读取文件即可，他们并不需要关注磁盘空间的细节，所有磁盘空间管理相关的动作交由文件系统来处理。
+相关概念  目录：在文件系统中目录是一种容器，它可以容纳子目录和普通文件。但同时目录本身也是一种文件。只不过目录中存储的数据是特殊的数据，这些数据就是关于文件名称等元数据（管理数据的数据）的信息。 文件：在文件系统中，最基本的概念是文件，文件是存储数据的实体。从用户的角度来看，文件是文件系统中最小粒度的单元。为了便于用户对文件进行识别和管理，文件系统为每个文件都分配了一个名称，称为文件名。同时为了方便用户辨别文件的类型，每个文件都会有一个拓展名来标识其类型。（但在文件系统中都以字节流存储） 链接：Linux 中的链接分为软链接（Soft Link）和硬链接（Hard Link）两种。其中，软链接又被称为符号链接（Symbolic Link），它是文件的另外一种形态，其内容指向另外一个文件路径（相对路径或绝对路径）。硬链接则不同，它是一个已经存在文件的附加名称，也就是同一个文件的第 2 个或第 N 个名称。  基本原理  文件系统的主要核心就是对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。
+ 在文件系统中，为了简化用户对数据的访问，向用户屏蔽数据的存储方式，其会对磁盘空间进行规划、组织和编号处理。
+以 Ext4 文件系统为例，它会将磁盘空间进行划分。 首先将磁盘空间划分为若干个子空间，这些子空间称为块组。然后将每个子空间划分为等份的逻辑块，逻辑块是最小的管理单元。
+为了管理这些逻辑块，需要一些区域来记录哪些逻辑块已经被使用了，哪些还没有被使用。记录这些数据的数据通常在磁盘的特殊区域，我们称这些数据为文件系统的元数据（Metadata）。通过元数据，文件系统实现了对磁盘空间的管理，最终为用户提供了简单易用的接口。
+当我们调用这些接口时，用户对文件的操作就转化为文件系统对磁盘空间的操作。 比如，当用户向某个文件写入数据时，文件系统会将该请求转换为对磁盘的操作，包括分配磁盘空间、写入数据等。而对文件的读操作则转换为定位到磁盘的某个位置、从磁盘读取数据等。
+分类 目前，常见的文件系统有几十种。虽然文件系统的具体实现形式纷繁复杂，具体特性也各不相同，但是有一定规律可循。下面将介绍一下常见的文件系统都有哪些。
+本地文件系统 本地文件系统是对磁盘空间进行管理的文件系统，也是最常见的文件系统形态。从呈现形态上来看，本地文件系统就是一个树形的目录结构。本地文件系统本质上就是实现对磁盘空间的管理，实现磁盘线性空间与目录层级结构的转换。
+从普通用户的角度来说，本地文件系统主要方便了对磁盘空间的使用，降低了使用难度，提高了利用效率。常见的本地文件系统有 ExtX、Btrfs、XFS 和 ZFS 等。
+伪文件系统 伪文件系统是 Linux 中的概念，它是对传统文件系统的延伸。伪文件系统存在于内存，不占用硬盘。它以文件系统的形态实现用户与内核数据交互的接口，其通过文件的形式向用户提供一些系统信息，用户通过读写这些文件就可以读取、修改系统的一些信息。 常见的伪文件系统有 proc、sysfs 和 configfs 等。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/" style="background-color: #2a9d8f; color: #fff;">
+                文件系统
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F-%E5%9F%BA%E7%A1%80/">文件系统 基础</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="文件系统-基础">文件系统 基础</h1>
+<h2 id="什么是文件系统">什么是文件系统？</h2>
+<blockquote>
+<p>文件系统是一种存储和组织计算机数据的方法，它使得对其访问和查找变得容易，文件系统使用<strong>文件</strong>和<strong>树形目录</strong>的抽象逻辑概念代替了硬盘和光盘等物理设备使用数据块的概念，用户使用文件系统来保存数据不必关心数据实际保存在硬盘（或者光盘）的地址为多少的数据块上，只需要记住这个文件的所属目录和文件名。在写入新数据之前，用户不必关心硬盘上的那个块地址没有被使用，硬盘上的存储空间管理（分配和释放）功能由文件系统自动完成，用户只需要记住数据被写入到了哪个文件中。</p>
+</blockquote>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem11.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>上文是维基百科对于文件系统的描述，我们将其精炼一下，得到以下结论：</p>
+<ul>
+<li>文件系统是一套实现了数据的存储、分级组织、访问和获取等操作的抽象数据类型（Abstract data type）。其可以构建在磁盘、内存、甚至是网络上。</li>
+</ul>
+<h2 id="用于解决什么问题">用于解决什么问题？</h2>
+<blockquote>
+<p>我们为什么要使用文件系统呢？换句话说，文件系统它解决了什么问题呢？</p>
+</blockquote>
+<p><strong>文件系统解决的是对磁盘空间使用的问题。</strong> 如果我们不抽象出一个文件系统，而是每个应用程序都独立去访问磁盘空间，那会出现什么样的情况呢？</p>
+<ol>
+<li><strong>磁盘空间的访问会存在冲突。</strong> 如果没有一个第三方去统一管理磁盘空间，那么此时应用程序的数据访问并不会进行隔离，而是会互相影响，产生冲突。</li>
+<li><strong>磁盘空间的管理会非常复杂。</strong> 由于文件有不同格式、大小，存储的设备与位置也有所不同（本地磁盘、内存、甚至远端机器）。直接管理磁盘空间将会非常的复杂。</li>
+</ol>
+<p>文件系统正是为了解决这两个问题，而在应用程序与磁盘空间之间抽象出的一层。<strong>文件系统对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。</strong></p>
+<p>基于文件系统，应用程序只需要创建、删除或读取文件即可，他们并不需要关注磁盘空间的细节，所有磁盘空间管理相关的动作交由文件系统来处理。</p>
+<h2 id="相关概念">相关概念</h2>
+<ul>
+<li><strong>目录</strong>：在文件系统中目录是一种容器，它可以容纳子目录和普通文件。但同时目录本身也是一种文件。只不过目录中存储的数据是特殊的数据，这些数据就是关于文件名称等元数据（管理数据的数据）的信息。</li>
+<li><strong>文件</strong>：在文件系统中，最基本的概念是文件，文件是存储数据的实体。从用户的角度来看，文件是文件系统中最小粒度的单元。为了便于用户对文件进行识别和管理，文件系统为每个文件都分配了一个名称，称为文件名。同时为了方便用户辨别文件的类型，每个文件都会有一个拓展名来标识其类型。（但在文件系统中都以字节流存储）</li>
+<li><strong>链接</strong>：Linux 中的链接分为软链接（Soft Link）和硬链接（Hard Link）两种。其中，软链接又被称为符号链接（Symbolic Link），它是文件的另外一种形态，其内容指向另外一个文件路径（相对路径或绝对路径）。硬链接则不同，它是一个已经存在文件的附加名称，也就是同一个文件的第 2 个或第 N 个名称。</li>
+</ul>
+<h2 id="基本原理">基本原理</h2>
+<blockquote>
+<p>文件系统的主要核心就是对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。</p>
+</blockquote>
+<p>在文件系统中，为了简化用户对数据的访问，向用户屏蔽数据的存储方式，其会对磁盘空间进行规划、组织和编号处理。</p>
+<p><strong>以 Ext4 文件系统为例，它会将磁盘空间进行划分。</strong> 首先将磁盘空间划分为若干个子空间，这些子空间称为块组。然后将每个子空间划分为等份的逻辑块，<strong>逻辑块是最小的管理单元。</strong></p>
+<p>为了管理这些逻辑块，需要一些区域来记录哪些逻辑块已经被使用了，哪些还没有被使用。记录这些数据的数据通常在磁盘的特殊区域，我们称这些数据为文件系统的<strong>元数据（Metadata）</strong>。通过元数据，文件系统实现了对磁盘空间的管理，最终为用户提供了简单易用的接口。</p>
+<p><strong>当我们调用这些接口时，用户对文件的操作就转化为文件系统对磁盘空间的操作。</strong> 比如，当用户向某个文件写入数据时，文件系统会将该请求转换为对磁盘的操作，包括分配磁盘空间、写入数据等。而对文件的读操作则转换为定位到磁盘的某个位置、从磁盘读取数据等。</p>
+<h2 id="分类">分类</h2>
+<p>目前，常见的文件系统有几十种。虽然文件系统的具体实现形式纷繁复杂，具体特性也各不相同，但是有一定规律可循。下面将介绍一下常见的文件系统都有哪些。</p>
+<h3 id="本地文件系统">本地文件系统</h3>
+<p>本地文件系统是对磁盘空间进行管理的文件系统，也是最常见的文件系统形态。从呈现形态上来看，本地文件系统就是一个树形的目录结构。<strong>本地文件系统本质上就是实现对磁盘空间的管理，实现磁盘线性空间与目录层级结构的转换。</strong></p>
+<p>从普通用户的角度来说，本地文件系统主要方便了对磁盘空间的使用，降低了使用难度，提高了利用效率。常见的本地文件系统有 ExtX、Btrfs、XFS 和 ZFS 等。</p>
+<h3 id="伪文件系统">伪文件系统</h3>
+<p><strong>伪文件系统是 Linux 中的概念，它是对传统文件系统的延伸。伪文件系统存在于内存，不占用硬盘。它以文件系统的形态实现用户与内核数据交互的接口，其通过文件的形式向用户提供一些系统信息，用户通过读写这些文件就可以读取、修改系统的一些信息。</strong> 常见的伪文件系统有 proc、sysfs 和 configfs 等。</p>
+<p>例如我们在 Linux 中通常用来检测性能的一些工具（如 iostat、top 等），其本质上就是通过访问 <code>/proc/cpuinfo</code>、<code>/proc/diskstats</code>、<code>/proc/meminfo</code> 等文件来获取内核信息。</p>
+<h3 id="网络文件系统">网络文件系统</h3>
+<p><strong>网络文件系统（Network File System）是基于 TCP/IP 协议（整个协议可能会跨层）的文件系统，它可以将远端服务器文件系统的目录挂载到本地文件系统的目录上，允许用户或者应用程序像访问本地文件系统的目录结构一样，访问远端服务器文件系统的目录结构，而无需理会远端服务器文件系统和本地文件系统的具体类型，非常方便地实现了目录和文件在不同机器上进行共享。</strong></p>
+<p>网络文件系统通常分为客户端和服务端，其中客户端类似本地文件系统，而服务端则是对数据进行管理的系统。网络文件系统的使用与本地文件系统的使用没有任何差别，只需要执行 <code>mount</code> 命令挂载远端文件系统即可。常见的网络文件系统如 NFS、SMB 等。</p>
+<h3 id="集群文件系统">集群文件系统</h3>
+<p><strong>集群文件系统（Clustered File System）是指运行在多台计算机之上，之间通过某种方式相互通信从而将集群内所有存储空间资源整合、虚拟化并对外提供文件访问服务的文件系统。</strong></p>
+<p>其本质上还是一种本地文件系统，但与 NTFS、EXT 等本地文件系统的目的不同，它通常构建在基于网络的 区域存储网络（SAN） 设备上，且在多个节点中共享 SAN 磁盘。前者是为了扩展性，后者运行在单机环境，纯粹管理块和文件之间的映射以及文件属性。</p>
+<p>集群文件系统最大的特点是<strong>可以实现客户端节点对磁盘介质的共同访问，且视图具有一致性</strong>。其访问模式如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/filesystem1.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>其最大的特点是多个节点可以同时为应用层提供文件系统服务，特别适合用于业务多活的场景，通过集群文件系统提供高可用集群机制，避免因为宕机造成服务失效。</p>
+<h3 id="分布式文件系统">分布式文件系统</h3>
+<p><strong>分布式文件系统（Distributed File System）是指文件系统管理的物理存储资源不一定直接连接在本地节点上，而是通过计算机网络与节点（可简单的理解为一台计算机）相连；或是若干不同的逻辑磁盘分区或卷标组合在一起而形成的完整的有层次的文件系统。</strong></p>
+<p>从本质上来说，分布式文件系统其实也是网络文件系统的一种，其与网络文件系统的差异在于服务端包含多个节点，也就是服务端是可以横向扩展的。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E5%AD%98%E5%82%A8/">存储</a>
+        
+            <a href="/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 19:04 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E5%88%86%E5%B8%83%E5%BC%8F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">分布式文件系统</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E7%BD%91%E7%BB%9C%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">网络文件系统</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%9C%AC%E5%9C%B0%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">本地文件系统</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F-%E5%9F%BA%E7%A1%80\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: '文件系统 基础',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#什么是文件系统">什么是文件系统？</a></li>
+    <li><a href="#用于解决什么问题">用于解决什么问题？</a></li>
+    <li><a href="#相关概念">相关概念</a></li>
+    <li><a href="#基本原理">基本原理</a></li>
+    <li><a href="#分类">分类</a>
+      <ol>
+        <li><a href="#本地文件系统">本地文件系统</a></li>
+        <li><a href="#伪文件系统">伪文件系统</a></li>
+        <li><a href="#网络文件系统">网络文件系统</a></li>
+        <li><a href="#集群文件系统">集群文件系统</a></li>
+        <li><a href="#分布式文件系统">分布式文件系统</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

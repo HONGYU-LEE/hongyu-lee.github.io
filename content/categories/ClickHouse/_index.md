@@ -1,8 +1,6 @@
 ---
 title: "ClickHouse"
-description: "This is an example category"
-slug: "test"
-image: "hutomo-abrianto-l2jk-uxb1BY-unsplash.jpg"
+image: "57f1af5529373beafcd868949c0f532e.jpeg"
 style:
     background: "#2a9d8f"
     color: "#fff"

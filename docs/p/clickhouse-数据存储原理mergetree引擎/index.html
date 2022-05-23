@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='MergeTree 引擎 存储结构  partition：分区目录，余下各类数据文件（primary.idx、[Column].mrk、[Column]. bin等）都是以分区目录的形式被组织存放的，属于相同分区的数据，最终会被合并到同一个分区目录，而不同分区的数据，永远不会被合并在一起。 checksums：校验文件，使用二进制格式存储。它保存了余下各类文件(primary. idx、count.txt等)的size大小及size的哈希值，用于快速校验文件的完整性和正确性。 columns.txt：列信息文件，使用明文格式存储，用于保存此数据分区下的列字段信息。 count.txt：计数文件，使用明文格式存储，用于记录当前数据分区目录下数据的总行数。 primary.idx：一级索引文件，使用二进制格式存储。用于存放稀疏索引，一张MergeTree表只能声明一次一级索引。借助稀疏索引，在数据查询的时能够排除主键条件范围之外的数据文件，从而有效减少数据扫描范围，加速查询速度。 [Column].bin：数据文件，使用压缩格式存储，用于存储某一列的数据。由于MergeTree采用列式存储，所以每一个列字段都拥有独立的.bin数据文件，并以列字段名称命名。 [Column].mrk：使用二进制格式存储。标记文件中保存了.bin文件中数据的偏移量信息。标记文件与稀疏索引对齐，又与.bin文件一一对应，所以MergeTree通过标记文件建立了primary.idx稀疏索引与.bin数据文件之间的映射关系。即首先通过稀疏索引（primary.idx）找到对应数据的偏移量信息（.mrk），再通过偏移量直接从.bin文件中读取数据。由于.mrk标记文件与.bin文件一一对应，所以MergeTree中的每个列字段都会拥有与其对应的.mrk标记文件 [Column].mrk2：如果使用了自适应大小的索引间隔，则标记文件会以．mrk2命名。它的工作原理和作用与．mrk标记文件相同。 partition.dat与minmax_[Column].idx：如果使用了分区键，例如PARTITION BY EventTime，则会额外生成partition.dat与minmax索引文件，它们均使用二进制格式存储。partition.dat用于保存当前分区下分区表达式最终生成的值；而minmax索引用于记录当前分区下分区字段对应原始数据的最小和最大值。 skp_idx_[Column].idx与skp_idx_[Column].mrk：如果在建表语句中声明了二级索引，则会额外生成相应的二级索引与标记文件，它们同样也使用二进制存储。二级索引在ClickHouse中又称跳数索引。  一级索引 稀疏索引 当我们定义主键之后，MergeTree会依据index_granularity间隔（默认8192行），为数据表生成一级索引并保存至primary.idx文件内，索引数据按照主键排序。相比使用主键定义，更为常见的简化形式是通过ORDER BY指代主键。在此种情形下，主键与ORDER BY定义相同，所以索引（primary.idx）和数据（.bin）会按照完全相同的规则排序。
+一级索引底层采用了稀疏索引来实现，从下图我们可以看出它和稠密索引的区别。
+对于稠密索引而言，每一行索引标记都会对应到具体的一行记录上。而在稀疏索引中，每一行索引标记对应的一大段数据，而不是具体的一行（他们之间的区别就有点类似mysql中innodb的聚集索引与非聚集索引）。
+稀疏索引的优势是显而易见的，它只需要使用少量的索引标记就能够记录大量数据的区间位置信息，并且数据量越大优势愈发明显。例如我们使用默认的索引粒度（8192）时，MergeTree只需要12208行索引标记就能为1亿行数据记录提供索引。由于稀疏索引占用空间小，所以primary.idx内的索引数据能够常驻内存，取用速度自然极快。
+索引粒度index_granularity 索引粒度就如同标尺一般，会丈量整个数据的长度，并依照刻度对数据进行标注，最终将数据标记成多个间隔的小段。数据以index_granularity的粒度(老版本默认8192，新版本实现了自适应粒度)被标记成多个小的区间，其中每个区间最多8192行数据，MergeTree使用MarkRange表示一个具体的区间，并通过start和end表示其具体的范围。
+如下图所示。
+index_granularity的命名虽然取了索引二字，但它不单只作用于一级索引(.idx)，同时也会影响数据标记(.mrk)和数据文件(.bin)。因为仅有一级索引自身是无法完成查询工作的，它需要借助数据标记才能定位数据，所以一级索引和数据标记的间隔粒度相同(同为index_granularity行)，彼此对齐。而数据文件也会依照index_granularity的间隔粒度生成压缩数据块。
+索引的查询过程 索引查询其实就是两个数值区间的交集判断。其中，一个区间是由基于主键的查询条件转换而来的条件区间；而另一个区间是刚才所讲述的与MarkRange对应的数值区间。
+整个索引的查询过程可以分为三大步骤
+  生成查询条件区间： 将查询条件转换为条件区间。即便是单个值的查询条件，也会被转换成区间的形式。
+  1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16  --举例-- WHEREID=&amp;#39;A000&amp;#39;=[&amp;#39;A000&amp;#39;,&amp;#39;A000&amp;#39;]WHEREID&amp;gt;&amp;#39;A000&amp;#39;=(&amp;#39;A000&amp;#39;,&amp;#39;&#43;inf&amp;#39;)WHEREID&amp;lt;&amp;#39;A000&amp;#39;=(&amp;#39;-inf&amp;#39;,&amp;#39;A000&amp;#39;)WHEREIDLIKE&amp;#39;A000%&amp;#39;=[&amp;#39;A000&amp;#39;,&amp;#39;A001&amp;#39;)      递归交集判断： 以递归的形式，依次对MarkRange的数值区间与条件区间做交集判断。从最大的区间[A000 , &#43;inf)开始。
+ 如果不存在交集，则直接通过剪枝算法优化此整段MarkRange 如果存在交集，且MarkRange步长大于N，则将这个区间进一步拆分为N个子区间，并重复此规则，继续做递归交集判断（N由merge_tree_coarse_index_granularity指定，默认值为8） 如果存在交集，且MarkRange不可再分解，则记录MarkRange并返回    合并MarkRange区间： 将最终匹配的MarkRange聚在一起，合并它们的范围。'><title>ClickHouse 数据存储原理：MergeTree引擎</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/clickhouse-%E6%95%B0%E6%8D%AE%E5%AD%98%E5%82%A8%E5%8E%9F%E7%90%86mergetree%E5%BC%95%E6%93%8E/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='ClickHouse 数据存储原理：MergeTree引擎'>
+<meta property='og:description' content='MergeTree 引擎 存储结构  partition：分区目录，余下各类数据文件（primary.idx、[Column].mrk、[Column]. bin等）都是以分区目录的形式被组织存放的，属于相同分区的数据，最终会被合并到同一个分区目录，而不同分区的数据，永远不会被合并在一起。 checksums：校验文件，使用二进制格式存储。它保存了余下各类文件(primary. idx、count.txt等)的size大小及size的哈希值，用于快速校验文件的完整性和正确性。 columns.txt：列信息文件，使用明文格式存储，用于保存此数据分区下的列字段信息。 count.txt：计数文件，使用明文格式存储，用于记录当前数据分区目录下数据的总行数。 primary.idx：一级索引文件，使用二进制格式存储。用于存放稀疏索引，一张MergeTree表只能声明一次一级索引。借助稀疏索引，在数据查询的时能够排除主键条件范围之外的数据文件，从而有效减少数据扫描范围，加速查询速度。 [Column].bin：数据文件，使用压缩格式存储，用于存储某一列的数据。由于MergeTree采用列式存储，所以每一个列字段都拥有独立的.bin数据文件，并以列字段名称命名。 [Column].mrk：使用二进制格式存储。标记文件中保存了.bin文件中数据的偏移量信息。标记文件与稀疏索引对齐，又与.bin文件一一对应，所以MergeTree通过标记文件建立了primary.idx稀疏索引与.bin数据文件之间的映射关系。即首先通过稀疏索引（primary.idx）找到对应数据的偏移量信息（.mrk），再通过偏移量直接从.bin文件中读取数据。由于.mrk标记文件与.bin文件一一对应，所以MergeTree中的每个列字段都会拥有与其对应的.mrk标记文件 [Column].mrk2：如果使用了自适应大小的索引间隔，则标记文件会以．mrk2命名。它的工作原理和作用与．mrk标记文件相同。 partition.dat与minmax_[Column].idx：如果使用了分区键，例如PARTITION BY EventTime，则会额外生成partition.dat与minmax索引文件，它们均使用二进制格式存储。partition.dat用于保存当前分区下分区表达式最终生成的值；而minmax索引用于记录当前分区下分区字段对应原始数据的最小和最大值。 skp_idx_[Column].idx与skp_idx_[Column].mrk：如果在建表语句中声明了二级索引，则会额外生成相应的二级索引与标记文件，它们同样也使用二进制存储。二级索引在ClickHouse中又称跳数索引。  一级索引 稀疏索引 当我们定义主键之后，MergeTree会依据index_granularity间隔（默认8192行），为数据表生成一级索引并保存至primary.idx文件内，索引数据按照主键排序。相比使用主键定义，更为常见的简化形式是通过ORDER BY指代主键。在此种情形下，主键与ORDER BY定义相同，所以索引（primary.idx）和数据（.bin）会按照完全相同的规则排序。
+一级索引底层采用了稀疏索引来实现，从下图我们可以看出它和稠密索引的区别。
+对于稠密索引而言，每一行索引标记都会对应到具体的一行记录上。而在稀疏索引中，每一行索引标记对应的一大段数据，而不是具体的一行（他们之间的区别就有点类似mysql中innodb的聚集索引与非聚集索引）。
+稀疏索引的优势是显而易见的，它只需要使用少量的索引标记就能够记录大量数据的区间位置信息，并且数据量越大优势愈发明显。例如我们使用默认的索引粒度（8192）时，MergeTree只需要12208行索引标记就能为1亿行数据记录提供索引。由于稀疏索引占用空间小，所以primary.idx内的索引数据能够常驻内存，取用速度自然极快。
+索引粒度index_granularity 索引粒度就如同标尺一般，会丈量整个数据的长度，并依照刻度对数据进行标注，最终将数据标记成多个间隔的小段。数据以index_granularity的粒度(老版本默认8192，新版本实现了自适应粒度)被标记成多个小的区间，其中每个区间最多8192行数据，MergeTree使用MarkRange表示一个具体的区间，并通过start和end表示其具体的范围。
+如下图所示。
+index_granularity的命名虽然取了索引二字，但它不单只作用于一级索引(.idx)，同时也会影响数据标记(.mrk)和数据文件(.bin)。因为仅有一级索引自身是无法完成查询工作的，它需要借助数据标记才能定位数据，所以一级索引和数据标记的间隔粒度相同(同为index_granularity行)，彼此对齐。而数据文件也会依照index_granularity的间隔粒度生成压缩数据块。
+索引的查询过程 索引查询其实就是两个数值区间的交集判断。其中，一个区间是由基于主键的查询条件转换而来的条件区间；而另一个区间是刚才所讲述的与MarkRange对应的数值区间。
+整个索引的查询过程可以分为三大步骤
+  生成查询条件区间： 将查询条件转换为条件区间。即便是单个值的查询条件，也会被转换成区间的形式。
+  1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16  --举例-- WHEREID=&amp;#39;A000&amp;#39;=[&amp;#39;A000&amp;#39;,&amp;#39;A000&amp;#39;]WHEREID&amp;gt;&amp;#39;A000&amp;#39;=(&amp;#39;A000&amp;#39;,&amp;#39;&#43;inf&amp;#39;)WHEREID&amp;lt;&amp;#39;A000&amp;#39;=(&amp;#39;-inf&amp;#39;,&amp;#39;A000&amp;#39;)WHEREIDLIKE&amp;#39;A000%&amp;#39;=[&amp;#39;A000&amp;#39;,&amp;#39;A001&amp;#39;)      递归交集判断： 以递归的形式，依次对MarkRange的数值区间与条件区间做交集判断。从最大的区间[A000 , &#43;inf)开始。
+ 如果不存在交集，则直接通过剪枝算法优化此整段MarkRange 如果存在交集，且MarkRange步长大于N，则将这个区间进一步拆分为N个子区间，并重复此规则，继续做递归交集判断（N由merge_tree_coarse_index_granularity指定，默认值为8） 如果存在交集，且MarkRange不可再分解，则记录MarkRange并返回    合并MarkRange区间： 将最终匹配的MarkRange聚在一起，合并它们的范围。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/clickhouse-%E6%95%B0%E6%8D%AE%E5%AD%98%E5%82%A8%E5%8E%9F%E7%90%86mergetree%E5%BC%95%E6%93%8E/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='列式存储' /><meta property='article:tag' content='ClickHouse' /><meta property='article:tag' content='OLAP' /><meta property='article:published_time' content='2022-05-23T18:18:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T18:29:41&#43;08:00'/>
+<meta name="twitter:title" content="ClickHouse 数据存储原理：MergeTree引擎">
+<meta name="twitter:description" content="MergeTree 引擎 存储结构  partition：分区目录，余下各类数据文件（primary.idx、[Column].mrk、[Column]. bin等）都是以分区目录的形式被组织存放的，属于相同分区的数据，最终会被合并到同一个分区目录，而不同分区的数据，永远不会被合并在一起。 checksums：校验文件，使用二进制格式存储。它保存了余下各类文件(primary. idx、count.txt等)的size大小及size的哈希值，用于快速校验文件的完整性和正确性。 columns.txt：列信息文件，使用明文格式存储，用于保存此数据分区下的列字段信息。 count.txt：计数文件，使用明文格式存储，用于记录当前数据分区目录下数据的总行数。 primary.idx：一级索引文件，使用二进制格式存储。用于存放稀疏索引，一张MergeTree表只能声明一次一级索引。借助稀疏索引，在数据查询的时能够排除主键条件范围之外的数据文件，从而有效减少数据扫描范围，加速查询速度。 [Column].bin：数据文件，使用压缩格式存储，用于存储某一列的数据。由于MergeTree采用列式存储，所以每一个列字段都拥有独立的.bin数据文件，并以列字段名称命名。 [Column].mrk：使用二进制格式存储。标记文件中保存了.bin文件中数据的偏移量信息。标记文件与稀疏索引对齐，又与.bin文件一一对应，所以MergeTree通过标记文件建立了primary.idx稀疏索引与.bin数据文件之间的映射关系。即首先通过稀疏索引（primary.idx）找到对应数据的偏移量信息（.mrk），再通过偏移量直接从.bin文件中读取数据。由于.mrk标记文件与.bin文件一一对应，所以MergeTree中的每个列字段都会拥有与其对应的.mrk标记文件 [Column].mrk2：如果使用了自适应大小的索引间隔，则标记文件会以．mrk2命名。它的工作原理和作用与．mrk标记文件相同。 partition.dat与minmax_[Column].idx：如果使用了分区键，例如PARTITION BY EventTime，则会额外生成partition.dat与minmax索引文件，它们均使用二进制格式存储。partition.dat用于保存当前分区下分区表达式最终生成的值；而minmax索引用于记录当前分区下分区字段对应原始数据的最小和最大值。 skp_idx_[Column].idx与skp_idx_[Column].mrk：如果在建表语句中声明了二级索引，则会额外生成相应的二级索引与标记文件，它们同样也使用二进制存储。二级索引在ClickHouse中又称跳数索引。  一级索引 稀疏索引 当我们定义主键之后，MergeTree会依据index_granularity间隔（默认8192行），为数据表生成一级索引并保存至primary.idx文件内，索引数据按照主键排序。相比使用主键定义，更为常见的简化形式是通过ORDER BY指代主键。在此种情形下，主键与ORDER BY定义相同，所以索引（primary.idx）和数据（.bin）会按照完全相同的规则排序。
+一级索引底层采用了稀疏索引来实现，从下图我们可以看出它和稠密索引的区别。
+对于稠密索引而言，每一行索引标记都会对应到具体的一行记录上。而在稀疏索引中，每一行索引标记对应的一大段数据，而不是具体的一行（他们之间的区别就有点类似mysql中innodb的聚集索引与非聚集索引）。
+稀疏索引的优势是显而易见的，它只需要使用少量的索引标记就能够记录大量数据的区间位置信息，并且数据量越大优势愈发明显。例如我们使用默认的索引粒度（8192）时，MergeTree只需要12208行索引标记就能为1亿行数据记录提供索引。由于稀疏索引占用空间小，所以primary.idx内的索引数据能够常驻内存，取用速度自然极快。
+索引粒度index_granularity 索引粒度就如同标尺一般，会丈量整个数据的长度，并依照刻度对数据进行标注，最终将数据标记成多个间隔的小段。数据以index_granularity的粒度(老版本默认8192，新版本实现了自适应粒度)被标记成多个小的区间，其中每个区间最多8192行数据，MergeTree使用MarkRange表示一个具体的区间，并通过start和end表示其具体的范围。
+如下图所示。
+index_granularity的命名虽然取了索引二字，但它不单只作用于一级索引(.idx)，同时也会影响数据标记(.mrk)和数据文件(.bin)。因为仅有一级索引自身是无法完成查询工作的，它需要借助数据标记才能定位数据，所以一级索引和数据标记的间隔粒度相同(同为index_granularity行)，彼此对齐。而数据文件也会依照index_granularity的间隔粒度生成压缩数据块。
+索引的查询过程 索引查询其实就是两个数值区间的交集判断。其中，一个区间是由基于主键的查询条件转换而来的条件区间；而另一个区间是刚才所讲述的与MarkRange对应的数值区间。
+整个索引的查询过程可以分为三大步骤
+  生成查询条件区间： 将查询条件转换为条件区间。即便是单个值的查询条件，也会被转换成区间的形式。
+  1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16  --举例-- WHEREID=&amp;#39;A000&amp;#39;=[&amp;#39;A000&amp;#39;,&amp;#39;A000&amp;#39;]WHEREID&amp;gt;&amp;#39;A000&amp;#39;=(&amp;#39;A000&amp;#39;,&amp;#39;&#43;inf&amp;#39;)WHEREID&amp;lt;&amp;#39;A000&amp;#39;=(&amp;#39;-inf&amp;#39;,&amp;#39;A000&amp;#39;)WHEREIDLIKE&amp;#39;A000%&amp;#39;=[&amp;#39;A000&amp;#39;,&amp;#39;A001&amp;#39;)      递归交集判断： 以递归的形式，依次对MarkRange的数值区间与条件区间做交集判断。从最大的区间[A000 , &#43;inf)开始。
+ 如果不存在交集，则直接通过剪枝算法优化此整段MarkRange 如果存在交集，且MarkRange步长大于N，则将这个区间进一步拆分为N个子区间，并重复此规则，继续做递归交集判断（N由merge_tree_coarse_index_granularity指定，默认值为8） 如果存在交集，且MarkRange不可再分解，则记录MarkRange并返回    合并MarkRange区间： 将最终匹配的MarkRange聚在一起，合并它们的范围。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/clickhouse/" style="background-color: #2a9d8f; color: #fff;">
+                ClickHouse
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/clickhouse-%E6%95%B0%E6%8D%AE%E5%AD%98%E5%82%A8%E5%8E%9F%E7%90%86mergetree%E5%BC%95%E6%93%8E/">ClickHouse 数据存储原理：MergeTree引擎</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="mergetree-引擎">MergeTree 引擎</h1>
+<h2 id="存储结构">存储结构</h2>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch47.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li><strong>partition</strong>：<strong>分区目录</strong>，余下各类数据文件（primary.idx、[Column].mrk、[Column]. bin等）都是以分区目录的形式被组织存放的，属于相同分区的数据，最终会被合并到同一个分区目录，而不同分区的数据，永远不会被合并在一起。</li>
+<li><strong>checksums</strong>：<strong>校验文件</strong>，使用二进制格式存储。它保存了余下各类文件(primary. idx、count.txt等)的size大小及size的哈希值，用于快速校验文件的完整性和正确性。</li>
+<li><strong>columns.txt</strong>：<strong>列信息文件</strong>，使用明文格式存储，用于保存此数据分区下的列字段信息。</li>
+<li><strong>count.txt</strong>：<strong>计数文件</strong>，使用明文格式存储，用于记录当前数据分区目录下数据的总行数。</li>
+<li><strong>primary.idx</strong>：<strong>一级索引文件</strong>，使用二进制格式存储。用于存放稀疏索引，一张MergeTree表只能声明一次一级索引。借助稀疏索引，在数据查询的时能够排除主键条件范围之外的数据文件，从而有效减少数据扫描范围，加速查询速度。</li>
+<li><strong>[Column].bin</strong>：<strong>数据文件</strong>，使用压缩格式存储，用于存储某一列的数据。由于MergeTree采用列式存储，所以每一个列字段都拥有独立的.bin数据文件，并以列字段名称命名。</li>
+<li><strong>[Column].mrk</strong>：<strong>使用二进制格式存储</strong>。标记文件中保存了.bin文件中数据的偏移量信息。标记文件与稀疏索引对齐，又与.bin文件一一对应，所以MergeTree通过标记文件建立了primary.idx稀疏索引与.bin数据文件之间的映射关系。即首先通过稀疏索引（primary.idx）找到对应数据的偏移量信息（.mrk），再通过偏移量直接从.bin文件中读取数据。由于.mrk标记文件与.bin文件一一对应，所以MergeTree中的每个列字段都会拥有与其对应的.mrk标记文件</li>
+<li><strong>[Column].mrk2</strong>：如果使用了自适应大小的索引间隔，则标记文件会以．mrk2命名。它的工作原理和作用与．mrk标记文件相同。</li>
+<li><strong>partition.dat与minmax_[Column].idx</strong>：如果使用了分区键，例如PARTITION BY EventTime，则会额外生成partition.dat与minmax索引文件，它们均使用二进制格式存储。partition.dat用于保存当前分区下分区表达式最终生成的值；而minmax索引用于记录当前分区下分区字段对应原始数据的最小和最大值。</li>
+<li><strong>skp_idx_[Column].idx与skp_idx_[Column].mrk</strong>：如果在建表语句中声明了二级索引，则会额外生成相应的二级索引与标记文件，它们同样也使用二进制存储。二级索引在ClickHouse中又称跳数索引。</li>
+</ul>
+<h2 id="一级索引">一级索引</h2>
+<h3 id="稀疏索引">稀疏索引</h3>
+<p>当我们定义主键之后，MergeTree会依据<code>index_granularity</code>间隔（默认8192行），为数据表生成一级索引并保存至<code>primary.idx</code>文件内，索引数据按照主键排序。相比使用主键定义，更为常见的简化形式是通过ORDER BY指代主键。在此种情形下，主键与ORDER BY定义相同，所以索引（primary.idx）和数据（.bin）会按照完全相同的规则排序。</p>
+<p>一级索引底层采用了<strong>稀疏索引</strong>来实现，从下图我们可以看出它和稠密索引的区别。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch46.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><strong>对于稠密索引而言，每一行索引标记都会对应到具体的一行记录上。而在稀疏索引中，每一行索引标记对应的一大段数据，而不是具体的一行</strong>（他们之间的区别就有点类似mysql中innodb的聚集索引与非聚集索引）。</p>
+<p>稀疏索引的优势是显而易见的，它只需要使用少量的索引标记就能够记录大量数据的区间位置信息，并且数据量越大优势愈发明显。例如我们使用默认的索引粒度（8192）时，MergeTree只需要12208行索引标记就能为1亿行数据记录提供索引。由于稀疏索引占用空间小，所以primary.idx内的索引数据能够常驻内存，取用速度自然极快。</p>
+<h3 id="索引粒度index_granularity">索引粒度index_granularity</h3>
+<p><strong>索引粒度就如同标尺一般，会丈量整个数据的长度，并依照刻度对数据进行标注，最终将数据标记成多个间隔的小段</strong>。数据以<strong>index_granularity</strong>的粒度(老版本默认8192，新版本实现了自适应粒度)被标记成多个小的区间，其中每个区间最多8192行数据，MergeTree使用<strong>MarkRange</strong>表示一个具体的区间，并通过<strong>start</strong>和<strong>end</strong>表示其具体的范围。</p>
+<p>如下图所示。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch4.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>index_granularity的命名虽然取了索引二字，但它不单只作用于一级索引(.idx)，同时也会影响数据标记(.mrk)和数据文件(.bin)。因为仅有一级索引自身是无法完成查询工作的，它需要借助数据标记才能定位数据，所以一级索引和数据标记的间隔粒度相同(同为index_granularity行)，彼此对齐。而数据文件也会依照index_granularity的间隔粒度生成压缩数据块。</p>
+<h3 id="索引的查询过程">索引的查询过程</h3>
+<p><strong>索引查询其实就是两个数值区间的交集判断</strong>。其中，一个区间是由基于主键的查询条件转换而来的条件区间；而另一个区间是刚才所讲述的与MarkRange对应的数值区间。</p>
+<p>整个索引的查询过程可以分为三大步骤</p>
+<ol>
+<li>
+<p><strong>生成查询条件区间：</strong> 将查询条件转换为条件区间。即便是单个值的查询条件，也会被转换成区间的形式。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="c1">--举例--
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">WHERE</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">[</span><span class="s1">&#39;A000&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="s1">&#39;A000&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;+inf&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="s1">&#39;-inf&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;A000&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;A000%&#39;</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">[</span><span class="s1">&#39;A000&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;A001&#39;</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>递归交集判断：</strong> 以递归的形式，依次对MarkRange的数值区间与条件区间做交集判断。从最大的区间[A000 , +inf)开始。</p>
+<ul>
+<li><strong>如果不存在交集</strong>，则直接通过剪枝算法优化此整段MarkRange</li>
+<li><strong>如果存在交集，且MarkRange步长大于N</strong>，则将这个区间进一步拆分为N个子区间，并重复此规则，继续做递归交集判断（N由merge_tree_coarse_index_granularity指定，默认值为8）</li>
+<li><strong>如果存在交集，且MarkRange不可再分解</strong>，则记录MarkRange并返回</li>
+</ul>
+</li>
+<li>
+<p><strong>合并MarkRange区间：</strong> 将最终匹配的MarkRange聚在一起，合并它们的范围。</p>
+</li>
+</ol>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch5.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>MergeTree通过递归的形式持续向下拆分区间，最终将MarkRange定位到最细的粒度，以帮助在后续读取数据的时候，能够最小化扫描数据的范围。</p>
+<h3 id="联合主键">联合主键</h3>
+<p>当我们以需要以多个字段为主键时，此时数据的查询和存储就涉及到另外一种规则。</p>
+<p>例如以 <code>(CounterID, Date)</code> 以主键，片段中数据首先按 <code>CounterID</code> 排序，具有相同 <code>CounterID</code> 的部分按 <code>Date</code> 排序。排序好的索引的图示会是下面这样：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">全部数据</span><span class="w">  </span><span class="p">:</span><span class="w">     </span><span class="p">[</span><span class="c1">-------------------------------------------------------------------------]
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">CounterID</span><span class="p">:</span><span class="w">      </span><span class="p">[</span><span class="n">aaaaaaaaaaaaaaaaaabbbbcdeeeeeeeeeeeeefgggggggghhhhhhhhhiiiiiiiiikllllllll</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nb">Date</span><span class="p">:</span><span class="w">           </span><span class="p">[</span><span class="mi">1111111222222233331233211111222222333211111112122222223111112223311122333</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">标记</span><span class="p">:</span><span class="w">            </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">a</span><span class="p">,</span><span class="mi">1</span><span class="w">    </span><span class="n">a</span><span class="p">,</span><span class="mi">2</span><span class="w">    </span><span class="n">a</span><span class="p">,</span><span class="mi">3</span><span class="w">    </span><span class="n">b</span><span class="p">,</span><span class="mi">3</span><span class="w">    </span><span class="n">e</span><span class="p">,</span><span class="mi">2</span><span class="w">    </span><span class="n">e</span><span class="p">,</span><span class="mi">3</span><span class="w">    </span><span class="k">g</span><span class="p">,</span><span class="mi">1</span><span class="w">    </span><span class="n">h</span><span class="p">,</span><span class="mi">2</span><span class="w">    </span><span class="n">i</span><span class="p">,</span><span class="mi">1</span><span class="w">    </span><span class="n">i</span><span class="p">,</span><span class="mi">3</span><span class="w">    </span><span class="n">l</span><span class="p">,</span><span class="mi">3</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">标记号</span><span class="p">:</span><span class="w">          </span><span class="mi">0</span><span class="w">      </span><span class="mi">1</span><span class="w">      </span><span class="mi">2</span><span class="w">      </span><span class="mi">3</span><span class="w">      </span><span class="mi">4</span><span class="w">      </span><span class="mi">5</span><span class="w">      </span><span class="mi">6</span><span class="w">      </span><span class="mi">7</span><span class="w">      </span><span class="mi">8</span><span class="w">      </span><span class="mi">9</span><span class="w">      </span><span class="mi">10</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果指定查询如下：</p>
+<ul>
+<li><code>CounterID in ('a', 'h')</code>，服务器会读取标记号在 <code>[0, 3)</code> 和 <code>[6, 8)</code> 区间中的数据。</li>
+<li><code>CounterID IN ('a', 'h') AND Date = 3</code>，服务器会读取标记号在 <code>[1, 3)</code> 和 <code>[7, 8)</code> 区间中的数据。</li>
+<li><code>Date = 3</code>，服务器会读取标记号在 <code>[1, 10]</code> 区间中的数据。</li>
+</ul>
+<p>上面例子可以看出使用索引通常会比全表描述要高效。</p>
+<ul>
+<li>
+<p>稀疏索引会引起额外的数据读取。当读取主键单个区间范围的数据时，每个数据块中最多会多读 <code>index_granularity * 2</code> 行额外的数据。</p>
+</li>
+<li>
+<p>稀疏索引使得你可以处理极大量的行，因为大多数情况下，这些索引常驻与内存（RAM）中。</p>
+</li>
+</ul>
+<p>从上面可以看出，ClickHouse的联合主键在某种程度上与我们熟知的最左前缀规则有点类似，通常在以下几种场景下我们才会考虑使用联合索引</p>
+<ul>
+<li>查询会使用 <code>b</code> 列作为条件</li>
+<li>很长的数据范围（ <code>index_granularity</code> 的数倍）里 <code>a</code> 都是相同的值，并且这样的情况很普遍。换言之，就是加入另一列后，可以让你的查询略过很长的数据范围。</li>
+<li>数据量大，需要改善数据压缩（以主键排序片段数据，数据的一致性越高，压缩越好）</li>
+</ul>
+<p>长的主键会对插入性能和内存消耗有负面影响，但主键中额外的列并不影响 <code>SELECT</code> 查询的性能。</p>
+<h2 id="二级索引">二级索引</h2>
+<p>除了一级索引之外，MergeTree同样支持二级索引。二级索引又称<strong>跳数索引</strong>，由数据的聚合信息构建而成。根据索引类型的不同，其聚合信息的内容也不同。跳数索引的目的与一级索引一样，也是帮助查询时减少数据扫描的范围。</p>
+<p>==（二级索引目前还处于测试阶段，官方不建议大量使用）==</p>
+<h3 id="跳数索引">跳数索引</h3>
+<p>目前，MergeTree共支持4种跳数索引，分别是<strong>minmax（最值）、set（集合行数）、ngrambf_v1（N-Gram布隆过滤器）和tokenbf_v1（Token布隆过滤器</strong>）。一张数据表支持同时声明多个跳数索引。</p>
+<ul>
+<li>
+<p><strong>minmax（最值索引）</strong>：minmax索引记录了一段数据内的<strong>最小和最大极值</strong>，其索引的作用类似分区目录的minmax索引，能够快速跳过无用的数据区间。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">示例：</span><span class="k">INDEX</span><span class="w"> </span><span class="p">[</span><span class="n">index_name</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="k">column</span><span class="p">]</span><span class="w"> </span><span class="k">TYPE</span><span class="w"> </span><span class="n">minmax</span><span class="w"> </span><span class="n">GRANULARITY</span><span class="w"> </span><span class="p">[</span><span class="n">GRANULARITY</span><span class="w"> </span><span class="k">SIZE</span><span class="p">]</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>set（集合行数索引）</strong>：set索引直接记录了声明字段或表达式的<strong>不重复值</strong>，用于检测数据块是否满足<code>WHERE</code>条件。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">示例：</span><span class="k">INDEX</span><span class="w"> </span><span class="p">[</span><span class="n">index_name</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="k">column</span><span class="p">]</span><span class="w"> </span><span class="k">TYPE</span><span class="w"> </span><span class="k">set</span><span class="p">(</span><span class="n">max_rows</span><span class="p">)</span><span class="w"> </span><span class="n">GRANULARITY</span><span class="w"> </span><span class="p">[</span><span class="n">index_granularity</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- max_rows是一个阈值，表示在一个index_granularity内，索引最多记录的数据行数。(如果max_rows=0，则表示无限制)
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>ngrambf_v1（N-Gram布隆过滤器）</strong>：ngrambf_v1索引记录的是<strong>指定长度的数据短语的布隆表过滤器</strong>，只支持String和FixedString数据类型，同时只能够提升<code>in</code>、<code>notIn</code>、<code>like</code>、<code>equals</code>和<code>notEquals</code>查询的性能。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">示例：</span><span class="k">INDEX</span><span class="w"> </span><span class="p">[</span><span class="n">index_name</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="k">column</span><span class="p">]</span><span class="w"> </span><span class="k">TYPE</span><span class="w"> </span><span class="n">ngrambf_v1</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">size_of_bloom_filter_in_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">number_of_hash_functions</span><span class="p">,</span><span class="w"> </span><span class="n">random_seed</span><span class="p">)</span><span class="w"> </span><span class="n">GRANULARITY</span><span class="w"> </span><span class="p">[</span><span class="n">index_granularity</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="cm">/*
+</span></span></span><span class="line"><span class="cl"><span class="cm">n:token长度，依据n的长度将数据切割为token短语。
+</span></span></span><span class="line"><span class="cl"><span class="cm">size_of_bloom_filter_in_bytes：布隆过滤器的大小。
+</span></span></span><span class="line"><span class="cl"><span class="cm">number_of_hash_functions：布隆过滤器中使用Hash函数的个数。
+</span></span></span><span class="line"><span class="cl"><span class="cm">random_seed: Hash函数的随机种子。
+</span></span></span><span class="line"><span class="cl"><span class="cm">*/</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">布隆过滤器可能会包含不符合条件的匹配，所以</span><span class="w"> </span><span class="n">ngrambf_v1</span><span class="p">,</span><span class="w"> </span><span class="n">tokenbf_v1</span><span class="w"> </span><span class="err">和</span><span class="w"> </span><span class="n">bloom_filter</span><span class="w"> </span><span class="err">索引不能用于负向的函数，例如：</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">--可以用来优化的场景
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">s</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;%test%&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">NOT</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;%test%&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">NOT</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">startsWith</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;test&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">i</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">--不能用来优化的场景
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">NOT</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;%test%&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">s</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">&#39;%test%&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">NOT</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">s</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">NOT</span><span class="w"> </span><span class="n">startsWith</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;test&#39;</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>tokenbf_v1（Token布隆过滤器）</strong>：tokenbf_v1索引是ngrambf_v1的变种，同样也是一种布隆过滤器索引。tokenbf_v1除了短语token的处理方法外，其他与ngrambf_v1是完全一样的。tokenbf_v1会自动按照<strong>非字符的、数字的字符串</strong>分割token。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="err">示例：</span><span class="k">INDEX</span><span class="w"> </span><span class="n">d</span><span class="w"> </span><span class="n">ID</span><span class="w"> </span><span class="k">TYPE</span><span class="w"> </span><span class="n">tokenbf_v1</span><span class="p">(</span><span class="n">size_of_bloom_filter_in_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">number_of_hash_functions</span><span class="p">,</span><span class="w"> </span><span class="n">random_seed</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+<h3 id="granularity">granularity</h3>
+<p>对于跳数索引而言，<strong>index_granularity定义了数据的粒度</strong>，而<strong>granularity定义了聚合信息汇总的粒度</strong>。换言之，<strong>granularity定义了一行跳数索引能够跳过多少个index_granularity区间的数据。</strong></p>
+<p><strong>作用规则如下</strong>：首先，按照index_granularity粒度间隔将数据划分成n段，总共有[0 , n-1]个区间（n = total_rows /index_granularity，向上取整）。接着，根据索引定义时声明的表达式，从0区间开始，依次按index_granularity粒度从数据中获取聚合信息，每次向前移动1步(n+1)，聚合信息逐步累加。最后，当移动granularity次区间时，则汇总并生成一行跳数索引数据。</p>
+<p>以minmax索引为例，假设index_granularity=8192且granularity=3，则数据会按照index_granularity划分为n等份，MergeTree从第0段分区开始，依次获取聚合信息。当获取到第3个分区时（granularity=3），则汇总并会生成第一行minmax索引（前3段minmax极值汇总后取值为[1 , 9]），如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch8.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h2 id="数据标记">数据标记</h2>
+<p>如果把MergeTree比作一本书，primary.idx一级索引好比这本书的一级章节目录，.bin文件中的数据好比这本书中的文字，那么数据标记(.mrk)就好比书签一样，会为一级章节目录和具体的文字之间建立关联。</p>
+<p>对于数据标记而言，它记录了两点重要信息：</p>
+<ul>
+<li>一级章节对应的页码信息。</li>
+<li>一段文字在某一页中的起始位置信息。</li>
+</ul>
+<p>这样一来，通过数据标记就能够很快地从一本书中立即翻到关注内容所在的那一页，并知道从第几行开始阅读。</p>
+<p>标记数据与一级索引数据不同，它并不能常驻内存，而是使用<strong>LRU（最近最少使用）缓存策略</strong>加快其取用速度。</p>
+<h3 id="生成规则">生成规则</h3>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch29.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>从上图可以看出，数据标记和索引区间是对齐的，均按照<code>index_granularity</code>的粒度间隔。如此一来，只需简单通过索引区间的下标编号就可以直接找到对应的数据标记。</p>
+<p>为了能够与数据衔接，数据标记文件也与.bin文件一一对应。即每一个列字段[Column].bin文件都有一个与之对应的[Column].mrk数据标记文件，用于记录数据在.bin文件中的偏移量信息。同时，.mrk包含了.bin压缩和解压缩这两种不同状态的偏移量，如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch30.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="工作方式">工作方式</h3>
+<p>MergeTree在读取数据时，必须通过标记数据的位置信息才能够找到所需要的数据。整个查找过程大致可以分为<strong>读取压缩数据块</strong>和<strong>读取数据</strong>两个步骤。</p>
+<p>对于下图来说，表的<code>index_granularity</code>粒度为8192，所以一个索引片段的数据大小恰好是8192B。按照压缩数据块的生成规则，如果单个批次数据小于64KB，则继续获取下一批数据，直至累积到size&gt;=64KB时，生成下一个压缩数据块。因此在JavaEnable的标记文件中，每8行标记数据对应1个压缩数据块（1B * 8192 = 8192B, 64KB = 65536B, 65536 / 8192 =8）。</p>
+<p>从图能够看到，其左侧的标记数据中，8行数据的压缩文件偏移量都是相同的，因为这8行标记都指向了同一个压缩数据块。而在这8行的标记数据中，它们的解压缩数据块中的偏移量，则依次按照8192B（每行数据1B，每一个批次8192行数据）累加，当累加达到65536(64KB)时则置0。因为根据规则，此时会生成下一个压缩数据块。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch31.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ol>
+<li>
+<p><strong>读取压缩数据块：</strong> 在查询某一列数据时，MergeTree无须一次性加载整个.bin文件，而是可以根据需要，只加载特定的压缩数据块。而这项特性需要借助标记文件中所保存的压缩文件中的偏移量。</p>
+</li>
+<li>
+<p><strong>读取数据：</strong> 在读取解压后的数据时，MergeTree并不需要一次性扫描整段解压数据，它可以根据需要，以<code>index_granularity</code>的粒度加载特定的一小段。为了实现这项特性，需要借助标记文件中保存的解压数据块中的偏移量。</p>
+</li>
+</ol>
+<h3 id="数据标记与压缩数据块的对应关系">数据标记与压缩数据块的对应关系</h3>
+<p>由于压缩数据块的划分，与一个间隔<code>index_granularity</code>内的数据大小相关，每个压缩数据块的体积都被严格控制在64KB～1MB。而一个间隔<code>index_granularity</code>的数据，又只会产生一行数据标记。那么根据一个间隔内数据的实际字节大小，数据标记和压缩数据块之间会产生三种不同的对应关系。</p>
+<ul>
+<li><strong>一对一</strong>
+<ul>
+<li>一个数据标记对应一个压缩数据块，当一个间隔<code>index_granularity</code>内的数据未压缩大小size大于等于64KB且小于等于1MB时，会出现这种对应关系。</li>
+<li><img src="http://img.orekilee.top//imgbed/clickhouse/ch28.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+<li><strong>一对多</strong>
+<ul>
+<li>一个数据标记对应多个压缩数据块，当一个间隔<code>index_granularity</code>内的数据未压缩大小size直接大于1MB时，会出现这种对应关系。</li>
+<li><img src="http://img.orekilee.top//imgbed/clickhouse/ch26.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+<li><strong>多对一</strong>
+<ul>
+<li>多个数据标记对应一个压缩数据块，当一个间隔<code>index_granularity</code>内的数据未压缩大小size小于64KB时，会出现这种对应关系。</li>
+<li><img src="http://img.orekilee.top//imgbed/clickhouse/ch27.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+</ul>
+<h2 id="工作流程">工作流程</h2>
+<h3 id="存储流程">存储流程</h3>
+<p>数据的存储流程主要有以下几个步骤</p>
+<ul>
+<li>
+<p>首先生成分区目录，伴随着每一批数据的写入，都会生成一个新的分区目录。</p>
+</li>
+<li>
+<p>在后续的某一时刻，属于相同分区的目录会依照规则合并到一起</p>
+</li>
+<li>
+<p>接着，按照<code>index_granularity</code>索引粒度，会分别生成primary.idx一级索引（如果声明了二级索引，还会创建二级索引文件）、每一个列字段的．mrk数据标记和．bin压缩数据文件。</p>
+</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch23.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="查询流程">查询流程</h3>
+<p>数据查询的本质，可以看作一个不断减小数据范围的过程。在最理想的情况下，MergeTree首先可以依次借助分区索引、一级索引和二级索引，将数据扫描范围缩至最小。然后再借助数据标记，将需要解压与计算的数据范围缩至最小。</p>
+<p><img src="http://img.orekilee.top//imgbed/clickhouse/ch24.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如果一条查询语句没有指定任何WHERE条件，或是指定了WHERE条件，但条件没有匹配到任何索引（分区索引、一级索引和二级索引），那么MergeTree就不能预先减小数据范围。在后续进行数据查询时，它会扫描所有分区目录，以及目录内索引段的最大区间。虽然不能减少数据范围，但是MergeTree仍然能够借助数据标记，以多线程的形式同时读取多个压缩数据块，以提升性能。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E5%88%97%E5%BC%8F%E5%AD%98%E5%82%A8/">列式存储</a>
+        
+            <a href="/tags/clickhouse/">ClickHouse</a>
+        
+            <a href="/tags/olap/">OLAP</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 18:29 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/clickhouse-%E5%88%86%E5%B8%83%E5%BC%8F%E5%8E%9F%E7%90%86distributed%E5%BC%95%E6%93%8E/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ClickHouse 分布式原理：Distributed引擎</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/clickhouse-%E5%89%AF%E6%9C%AC%E5%8D%8F%E5%90%8C%E5%8E%9F%E7%90%86replicatedmergetree%E5%BC%95%E6%93%8E/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ClickHouse 副本协同原理：ReplicatedMergeTree引擎</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/clickhouse-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ClickHouse 基本概念</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/clickhouse-%E6%95%B0%E6%8D%AE%E5%AD%98%E5%82%A8%E5%8E%9F%E7%90%86mergetree%E5%BC%95%E6%93%8E\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'ClickHouse 数据存储原理：MergeTree引擎',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#存储结构">存储结构</a></li>
+    <li><a href="#一级索引">一级索引</a>
+      <ol>
+        <li><a href="#稀疏索引">稀疏索引</a></li>
+        <li><a href="#索引粒度index_granularity">索引粒度index_granularity</a></li>
+        <li><a href="#索引的查询过程">索引的查询过程</a></li>
+        <li><a href="#联合主键">联合主键</a></li>
+      </ol>
+    </li>
+    <li><a href="#二级索引">二级索引</a>
+      <ol>
+        <li><a href="#跳数索引">跳数索引</a></li>
+        <li><a href="#granularity">granularity</a></li>
+      </ol>
+    </li>
+    <li><a href="#数据标记">数据标记</a>
+      <ol>
+        <li><a href="#生成规则">生成规则</a></li>
+        <li><a href="#工作方式">工作方式</a></li>
+        <li><a href="#数据标记与压缩数据块的对应关系">数据标记与压缩数据块的对应关系</a></li>
+      </ol>
+    </li>
+    <li><a href="#工作流程">工作流程</a>
+      <ol>
+        <li><a href="#存储流程">存储流程</a></li>
+        <li><a href="#查询流程">查询流程</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

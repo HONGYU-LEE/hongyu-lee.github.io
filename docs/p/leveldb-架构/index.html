@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='LevelDB 架构 源码结构 LevelDB 的源码托管在 GitHub 上（https://github.com/google/leveldb），其中与程序实现源码相关的主要有以下几项：
+ db：包含数据库的一些基本接口操作与内部实现。 table：为排序的字符串表 SSTable（Sorted String Table）的主体实现。 helpers：定义了 LevelDB 底层数据部分完全运行于内存环境的实现方法，主要用于相关的测试或某些全内存的运行场景。 util：包含一些通用的基础类函数，如内存管理、布隆过滤器、编码、CRC 等相关函数。 include：包含 LevelDB 库函数、可供外部访问的接口、基本数据结构等。 port：定义了一个通用的底层文件，以及多个进程操作接口，还有基于操作系统移植性实现的各平台的具体接口。  具体的环境搭建流程在前面的实战章节就讲过，这里就不过多介绍了。
+整体架构 LevelDB 总体模块架构主要包括接口 API（DB API 与 POSIX API）、Utility 公用基础类、LSM 树（Log、MemTable、SSTable）3个部分，如下图：
+ 接口 API：接口 API 主要包括客户端调用的 DB API 以及针对操作系统底层的统一接口 POSIX API：  DB API：主要用于封装一些供客户端应用进行调用的接口，即头文件中的相关 API 函数接口，客户端应用可以通过这些接口实现数据引擎的各种操作。 POSIX API：实现了对操作系统底层相关操作的接口封装，主要用于保证 LevelDB 的可移植性，从而实现 LevelDB 在各 POSIX 操作系统的跨平台特性   Utility 公用基础类：主要用于实现主体功能所依赖的各种对象功能，例如内存管理 Arena、布隆过滤器、缓存、CRC 校验、哈希表、测试框架等。 LSM 树：LSM 树是 LevelDB 最重要的组件，也是实现其他功能的核心。一般而言，在常规的物理硬盘存储介质上，顺序写比随机写速度要快，而 LSM 树正是充分利用了这一物理特性，从而实现对频繁、大量数据写操作的支持。  LSM 架构如下：'><title>LevelDB 架构</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/leveldb-%E6%9E%B6%E6%9E%84/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='LevelDB 架构'>
+<meta property='og:description' content='LevelDB 架构 源码结构 LevelDB 的源码托管在 GitHub 上（https://github.com/google/leveldb），其中与程序实现源码相关的主要有以下几项：
+ db：包含数据库的一些基本接口操作与内部实现。 table：为排序的字符串表 SSTable（Sorted String Table）的主体实现。 helpers：定义了 LevelDB 底层数据部分完全运行于内存环境的实现方法，主要用于相关的测试或某些全内存的运行场景。 util：包含一些通用的基础类函数，如内存管理、布隆过滤器、编码、CRC 等相关函数。 include：包含 LevelDB 库函数、可供外部访问的接口、基本数据结构等。 port：定义了一个通用的底层文件，以及多个进程操作接口，还有基于操作系统移植性实现的各平台的具体接口。  具体的环境搭建流程在前面的实战章节就讲过，这里就不过多介绍了。
+整体架构 LevelDB 总体模块架构主要包括接口 API（DB API 与 POSIX API）、Utility 公用基础类、LSM 树（Log、MemTable、SSTable）3个部分，如下图：
+ 接口 API：接口 API 主要包括客户端调用的 DB API 以及针对操作系统底层的统一接口 POSIX API：  DB API：主要用于封装一些供客户端应用进行调用的接口，即头文件中的相关 API 函数接口，客户端应用可以通过这些接口实现数据引擎的各种操作。 POSIX API：实现了对操作系统底层相关操作的接口封装，主要用于保证 LevelDB 的可移植性，从而实现 LevelDB 在各 POSIX 操作系统的跨平台特性   Utility 公用基础类：主要用于实现主体功能所依赖的各种对象功能，例如内存管理 Arena、布隆过滤器、缓存、CRC 校验、哈希表、测试框架等。 LSM 树：LSM 树是 LevelDB 最重要的组件，也是实现其他功能的核心。一般而言，在常规的物理硬盘存储介质上，顺序写比随机写速度要快，而 LSM 树正是充分利用了这一物理特性，从而实现对频繁、大量数据写操作的支持。  LSM 架构如下：'>
+<meta property='og:url' content='https://blog.orekilee.top/p/leveldb-%E6%9E%B6%E6%9E%84/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='LevelDB' /><meta property='article:tag' content='KV存储' /><meta property='article:published_time' content='2022-05-23T23:22:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T23:52:32&#43;08:00'/>
+<meta name="twitter:title" content="LevelDB 架构">
+<meta name="twitter:description" content="LevelDB 架构 源码结构 LevelDB 的源码托管在 GitHub 上（https://github.com/google/leveldb），其中与程序实现源码相关的主要有以下几项：
+ db：包含数据库的一些基本接口操作与内部实现。 table：为排序的字符串表 SSTable（Sorted String Table）的主体实现。 helpers：定义了 LevelDB 底层数据部分完全运行于内存环境的实现方法，主要用于相关的测试或某些全内存的运行场景。 util：包含一些通用的基础类函数，如内存管理、布隆过滤器、编码、CRC 等相关函数。 include：包含 LevelDB 库函数、可供外部访问的接口、基本数据结构等。 port：定义了一个通用的底层文件，以及多个进程操作接口，还有基于操作系统移植性实现的各平台的具体接口。  具体的环境搭建流程在前面的实战章节就讲过，这里就不过多介绍了。
+整体架构 LevelDB 总体模块架构主要包括接口 API（DB API 与 POSIX API）、Utility 公用基础类、LSM 树（Log、MemTable、SSTable）3个部分，如下图：
+ 接口 API：接口 API 主要包括客户端调用的 DB API 以及针对操作系统底层的统一接口 POSIX API：  DB API：主要用于封装一些供客户端应用进行调用的接口，即头文件中的相关 API 函数接口，客户端应用可以通过这些接口实现数据引擎的各种操作。 POSIX API：实现了对操作系统底层相关操作的接口封装，主要用于保证 LevelDB 的可移植性，从而实现 LevelDB 在各 POSIX 操作系统的跨平台特性   Utility 公用基础类：主要用于实现主体功能所依赖的各种对象功能，例如内存管理 Arena、布隆过滤器、缓存、CRC 校验、哈希表、测试框架等。 LSM 树：LSM 树是 LevelDB 最重要的组件，也是实现其他功能的核心。一般而言，在常规的物理硬盘存储介质上，顺序写比随机写速度要快，而 LSM 树正是充分利用了这一物理特性，从而实现对频繁、大量数据写操作的支持。  LSM 架构如下：">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/leveldb/" style="background-color: #2a9d8f; color: #fff;">
+                LevelDB
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/leveldb-%E6%9E%B6%E6%9E%84/">LevelDB 架构</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="leveldb-架构">LevelDB 架构</h1>
+<h2 id="源码结构">源码结构</h2>
+<p>LevelDB 的源码托管在 GitHub 上（https://github.com/google/leveldb），其中与程序实现源码相关的主要有以下几项：</p>
+<ul>
+<li><strong>db</strong>：包含数据库的一些基本接口操作与内部实现。</li>
+<li><strong>table</strong>：为排序的字符串表 SSTable（Sorted String Table）的主体实现。</li>
+<li><strong>helpers</strong>：定义了 LevelDB 底层数据部分完全运行于内存环境的实现方法，主要用于相关的测试或某些全内存的运行场景。</li>
+<li><strong>util</strong>：包含一些通用的基础类函数，如内存管理、布隆过滤器、编码、CRC 等相关函数。</li>
+<li><strong>include</strong>：包含 LevelDB 库函数、可供外部访问的接口、基本数据结构等。</li>
+<li><strong>port</strong>：定义了一个通用的底层文件，以及多个进程操作接口，还有基于操作系统移植性实现的各平台的具体接口。</li>
+</ul>
+<p>具体的环境搭建流程在前面的实战章节就讲过，这里就不过多介绍了。</p>
+<h2 id="整体架构">整体架构</h2>
+<p>LevelDB 总体模块架构主要包括接口 API（DB API 与 POSIX API）、Utility 公用基础类、LSM 树（Log、MemTable、SSTable）3个部分，如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/leveldb/leveldb9.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li><strong>接口 API</strong>：接口 API 主要包括客户端调用的 DB API 以及针对操作系统底层的统一接口 POSIX API：
+<ul>
+<li><strong>DB API</strong>：主要用于封装一些供客户端应用进行调用的接口，即头文件中的相关 API 函数接口，客户端应用可以通过这些接口实现数据引擎的各种操作。</li>
+<li><strong>POSIX API</strong>：实现了对操作系统底层相关操作的接口封装，主要用于保证 LevelDB 的可移植性，从而实现 LevelDB 在各 POSIX 操作系统的跨平台特性</li>
+</ul>
+</li>
+<li><strong>Utility 公用基础类</strong>：主要用于实现主体功能所依赖的各种对象功能，例如内存管理 Arena、布隆过滤器、缓存、CRC 校验、哈希表、测试框架等。</li>
+<li><strong>LSM 树</strong>：LSM 树是 LevelDB 最重要的组件，也是实现其他功能的核心。一般而言，在常规的物理硬盘存储介质上，顺序写比随机写速度要快，而 LSM 树正是充分利用了这一物理特性，从而实现对频繁、大量数据写操作的支持。</li>
+</ul>
+<p>LSM 架构如下：</p>
+<p><img src="http://img.orekilee.top//imgbed/leveldb/leveldb10.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li><strong>MemTable</strong>：内存数据结构，具体实现是 SkipList。接受用户的读写请求，新的数据修改会首先在这里写入。</li>
+<li><strong>Immutable MemTable</strong>：当 MemTable 的大小达到设定的阈值时，会变成 Immutable MemTable，只接受读操作，不再接受写操作，后续由后台线程 <code>Flush</code> 到磁盘上。</li>
+<li><strong>SSTable</strong>：Sorted String Table Files，磁盘数据存储文件。分为 Level0 到 LevelN 多层，每一层包含多个 SST 文件，文件内数据有序。Level0 直接由 Immutable Memtable Flush 得到，其它每一层的数据由上一层进行 Compaction 得到。</li>
+<li><strong>Manifest</strong> ：Manifest 文件中记录 SST 文件在不同 Level 的分布，单个 SST 文件的最大、最小 key，以及其他一些 LevelDB 需要的元信息。由于 LevelDB 支持 snapshot，需要维护多版本，因此可能同时存在多个 Manifest 文件。</li>
+<li><strong>Current</strong> ：由于 Manifest 文件可能存在多个，Current 记录的是当前的 Manifest 文件名。</li>
+<li><strong>Log</strong> ：用于防止 MemTable 丢数据的日志文件。</li>
+</ul>
+<h2 id="基本组件">基本组件</h2>
+<p><img src="http://img.orekilee.top//imgbed/leveldb/leveldb2.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="slice">Slice</h3>
+<p>Slice 是 LevelDB 中的一种基本的、以字节为基础的数据存储单元，既可以存储 key，也可以存储 data。Slice 对数据字节的大小没有限制，其内部采用一个<code>const char*</code> 的常量指针存储数据，具有两个接口 <code>data()</code> 和<code>size()</code>，分别返回其表示的数据及数据的长度。</p>
+<p>此外，为了方便使用，其内部封装了 <code>compare</code> 函数，以及重载了用于比较的运算符 ==、!=，同时其可以与标准库中的 string 相互转换。</p>
+<blockquote>
+<p>为什么 C++ 中已经有 string 了，还需要实现一个 Slice 呢？</p>
+</blockquote>
+<ul>
+<li>string 默认语意为拷贝，传参和返回时会损失性能（在可预期的条件下，指针传递即可）。</li>
+<li>Slice 不以 &rsquo; \0&rsquo; 作为字符的终止符，可以存储值为 &lsquo;\0&rsquo; 的数据。</li>
+<li>string 不支持 remove_prefix 和 starts_with 等前缀操作函数，使用不方便。</li>
+</ul>
+<p>具体实现代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/include/leveldb/slice.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">LEVELDB_EXPORT</span> <span class="n">Slice</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Slice</span><span class="p">()</span> <span class="o">:</span> <span class="n">data_</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">),</span> <span class="n">size_</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">Slice</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">d</span><span class="p">,</span> <span class="n">size_t</span> <span class="n">n</span><span class="p">)</span> <span class="o">:</span> <span class="n">data_</span><span class="p">(</span><span class="n">d</span><span class="p">),</span> <span class="n">size_</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">Slice</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">s</span><span class="p">)</span> <span class="o">:</span> <span class="n">data_</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">data</span><span class="p">()),</span> <span class="n">size_</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">size</span><span class="p">())</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">Slice</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">s</span><span class="p">)</span> <span class="o">:</span> <span class="n">data_</span><span class="p">(</span><span class="n">s</span><span class="p">),</span> <span class="n">size_</span><span class="p">(</span><span class="n">strlen</span><span class="p">(</span><span class="n">s</span><span class="p">))</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">Slice</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Slice</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="nf">data</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">data_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">size_t</span> <span class="nf">size</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">size_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="nf">empty</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">size_</span> <span class="o">==</span> <span class="mi">0</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="k">operator</span><span class="p">[](</span><span class="n">size_t</span> <span class="n">n</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">assert</span><span class="p">(</span><span class="n">n</span> <span class="o">&lt;</span> <span class="n">size</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">data_</span><span class="p">[</span><span class="n">n</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="nf">clear</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">data_</span> <span class="o">=</span> <span class="s">&#34;&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">size_</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="nf">remove_prefix</span><span class="p">(</span><span class="n">size_t</span> <span class="n">n</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">assert</span><span class="p">(</span><span class="n">n</span> <span class="o">&lt;=</span> <span class="n">size</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">        <span class="n">data_</span> <span class="o">+=</span> <span class="n">n</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">size_</span> <span class="o">-=</span> <span class="n">n</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">ToString</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">(</span><span class="n">data_</span><span class="p">,</span> <span class="n">size_</span><span class="p">);</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="nf">compare</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">b</span><span class="p">)</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="nf">starts_with</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">x</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="p">((</span><span class="n">size_</span> <span class="o">&gt;=</span> <span class="n">x</span><span class="p">.</span><span class="n">size_</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">memcmp</span><span class="p">(</span><span class="n">data_</span><span class="p">,</span> <span class="n">x</span><span class="p">.</span><span class="n">data_</span><span class="p">,</span> <span class="n">x</span><span class="p">.</span><span class="n">size_</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">data_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">size_t</span> <span class="n">size_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">inline</span> <span class="kt">bool</span> <span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">x</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">y</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">((</span><span class="n">x</span><span class="p">.</span><span class="n">size</span><span class="p">()</span> <span class="o">==</span> <span class="n">y</span><span class="p">.</span><span class="n">size</span><span class="p">())</span> <span class="o">&amp;&amp;</span>
+</span></span><span class="line"><span class="cl">            <span class="p">(</span><span class="n">memcmp</span><span class="p">(</span><span class="n">x</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span> <span class="n">y</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span> <span class="n">x</span><span class="p">.</span><span class="n">size</span><span class="p">())</span> <span class="o">==</span> <span class="mi">0</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">inline</span> <span class="kt">bool</span> <span class="k">operator</span><span class="o">!=</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">x</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">y</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="o">!</span><span class="p">(</span><span class="n">x</span> <span class="o">==</span> <span class="n">y</span><span class="p">);</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">inline</span> <span class="kt">int</span> <span class="n">Slice</span><span class="o">::</span><span class="n">compare</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">b</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="n">size_t</span> <span class="n">min_len</span> <span class="o">=</span> <span class="p">(</span><span class="n">size_</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">.</span><span class="n">size_</span><span class="p">)</span> <span class="o">?</span> <span class="nl">size_</span> <span class="p">:</span> <span class="n">b</span><span class="p">.</span><span class="n">size_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">r</span> <span class="o">=</span> <span class="n">memcmp</span><span class="p">(</span><span class="n">data_</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">data_</span><span class="p">,</span> <span class="n">min_len</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="p">(</span><span class="n">size_</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">.</span><span class="n">size_</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="n">r</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">size_</span> <span class="o">&gt;</span> <span class="n">b</span><span class="p">.</span><span class="n">size_</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="n">r</span> <span class="o">=</span> <span class="o">+</span><span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">r</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="status">Status</h3>
+<p>在 LevelDB 中，为了便于抛出异常，定义了一个 <code>Status</code> 类。<code>Status</code> 主要用于记录 LevelDB 中的状态信息，保存错误码和对应的字符串错误信息。（写死的，不支持拓展）</p>
+<p>对于错误代码，LevelDB 中定义了 6 种状态码在一个枚举类型 <code>Code</code> 中，如下所示：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/include/leveldb/status.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">LEVELDB_EXPORT</span> <span class="n">Status</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">enum</span> <span class="nc">Code</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">kOk</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">kNotFound</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">kCorruption</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">kNotSupported</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">kInvalidArgument</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">kIOError</span> <span class="o">=</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl">    <span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>其中 <code>KoK</code> 代表正常；<code>kNotFound</code> 代表未找到 ；<code>kCorruption</code> 代表数据异常崩溃；<code>kNotSupported</code> 代表不支持；<code>kInvalidArgument</code> 代表参数非法；<code>kIOError</code> 代表 I/O 错误；</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/include/leveldb/status.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">LEVELDB_EXPORT</span> <span class="n">Status</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// OK status has a null state_.  Otherwise, state_ is a new[] array
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// of the following form:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//    state_[0..3] == length of message
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//    state_[4]    == code
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//    state_[5..]  == message
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">state_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>在 <code>Status</code> 类中，所有状态信息，包括状态码与具体描述，都保存在一个私有的成员变量 <code>const char*state_</code> 中。其具体表示方法如下。</p>
+<ul>
+<li>当状态为 OK 时，<code>state_</code> 为 NULL，说明当前操作一切正常。</li>
+<li>否则，<code>state_</code> 为一个 char 数组，即 <code>state[0...3]</code> 为 msg 的长度，<code>state[4]</code> 为状态码 code，<code>state[5...]</code> 为具体的 msg。</li>
+</ul>
+<p>如下图：<img src="http://img.orekilee.top//imgbed/leveldb/leveldb1.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>具体的处理逻辑如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/util/status.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">Status</span><span class="o">::</span><span class="n">Status</span><span class="p">(</span><span class="n">Code</span> <span class="n">code</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">msg</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">msg2</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">assert</span><span class="p">(</span><span class="n">code</span> <span class="o">!=</span> <span class="n">kOk</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="kt">uint32_t</span> <span class="n">len1</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">msg</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="kt">uint32_t</span> <span class="n">len2</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">msg2</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="kt">uint32_t</span> <span class="n">size</span> <span class="o">=</span> <span class="n">len1</span> <span class="o">+</span> <span class="p">(</span><span class="n">len2</span> <span class="o">?</span> <span class="p">(</span><span class="mi">2</span> <span class="o">+</span> <span class="n">len2</span><span class="p">)</span> <span class="o">:</span> <span class="mi">0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span><span class="o">*</span> <span class="n">result</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">char</span><span class="p">[</span><span class="n">size</span> <span class="o">+</span> <span class="mi">5</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">memcpy</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">size</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">size</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="n">result</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span><span class="p">(</span><span class="n">code</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">memcpy</span><span class="p">(</span><span class="n">result</span> <span class="o">+</span> <span class="mi">5</span><span class="p">,</span> <span class="n">msg</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span> <span class="n">len1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">len2</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">result</span><span class="p">[</span><span class="mi">5</span> <span class="o">+</span> <span class="n">len1</span><span class="p">]</span> <span class="o">=</span> <span class="sc">&#39;:&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">result</span><span class="p">[</span><span class="mi">6</span> <span class="o">+</span> <span class="n">len1</span><span class="p">]</span> <span class="o">=</span> <span class="sc">&#39; &#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">std</span><span class="o">::</span><span class="n">memcpy</span><span class="p">(</span><span class="n">result</span> <span class="o">+</span> <span class="mi">7</span> <span class="o">+</span> <span class="n">len1</span><span class="p">,</span> <span class="n">msg2</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span> <span class="n">len2</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="n">state_</span> <span class="o">=</span> <span class="n">result</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="comparator">Comparator</h3>
+<p>LevelDB 是按 key 排序后进行存储，因无论是插入还是删除，都必然少不了对 key 的比较。于是乎 LevelDB 抽象出了一个纯虚类 <code>Comparator</code>。</p>
+<p>具体定义如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/include/leveldb/comparator.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">LEVELDB_EXPORT</span> <span class="n">Comparator</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="o">~</span><span class="n">Comparator</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">int</span> <span class="nf">Compare</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">b</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="nf">Name</span><span class="p">()</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">FindShortestSeparator</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">start</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                       <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">limit</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">FindShortSuccessor</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">key</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>在 LevelDB 中，有两个实现 Comparator 的类：一个是 BytewiseComparatorImpl，另一个是InternalKeyComparator。</p>
+<ul>
+<li><strong>BytewiseComparatorImpl</strong>：默认比较器，主要采用字典序对两个字符串进行比较。</li>
+<li><strong>InternalKeyComparator</strong>：内部调用的也是 BytewiseComparatorImpl。</li>
+</ul>
+<h3 id="iterate">Iterate</h3>
+<p>LevelDB 具有迭代器遍历功能，设计人员只需要调用相应的接口，就可以实现对容器数据类型的遍历访问。</p>
+<p>迭代器定义了一个纯虚类的接口，LevelDB 中的任何集合类型对象的迭代器均基于这一纯虚类进行实现。具体代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/include/leveldb/iterator.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">LEVELDB_EXPORT</span> <span class="n">Iterator</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Iterator</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">Iterator</span><span class="p">(</span><span class="k">const</span> <span class="n">Iterator</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Iterator</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Iterator</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="o">~</span><span class="n">Iterator</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">bool</span> <span class="nf">Valid</span><span class="p">()</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">SeekToFirst</span><span class="p">()</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">SeekToLast</span><span class="p">()</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">Seek</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">target</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">Next</span><span class="p">()</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">Prev</span><span class="p">()</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="n">Slice</span> <span class="nf">key</span><span class="p">()</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="n">Slice</span> <span class="nf">value</span><span class="p">()</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="n">Status</span> <span class="nf">status</span><span class="p">()</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">using</span> <span class="n">CleanupFunction</span> <span class="o">=</span> <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span> <span class="n">arg1</span><span class="p">,</span> <span class="kt">void</span><span class="o">*</span> <span class="n">arg2</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="nf">RegisterCleanup</span><span class="p">(</span><span class="n">CleanupFunction</span> <span class="n">function</span><span class="p">,</span> <span class="kt">void</span><span class="o">*</span> <span class="n">arg1</span><span class="p">,</span> <span class="kt">void</span><span class="o">*</span> <span class="n">arg2</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">struct</span> <span class="nc">CleanupNode</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="kt">bool</span> <span class="nf">IsEmpty</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">function</span> <span class="o">==</span> <span class="k">nullptr</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="kt">void</span> <span class="nf">Run</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="n">assert</span><span class="p">(</span><span class="n">function</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">            <span class="p">(</span><span class="o">*</span><span class="n">function</span><span class="p">)(</span><span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="n">CleanupFunction</span> <span class="n">function</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="kt">void</span><span class="o">*</span> <span class="n">arg1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="kt">void</span><span class="o">*</span> <span class="n">arg2</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">CleanupNode</span><span class="o">*</span> <span class="n">next</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">};</span>
+</span></span><span class="line"><span class="cl">    <span class="n">CleanupNode</span> <span class="n">cleanup_head_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>从上面的接口可以看出，LevelDB 实现的是双向迭代器，并且支持 <code>Seek</code> 定位功能。同时还嵌套了一个子结构 <code>CleanupNode</code> 用于释放链表，其中的 <code>CleanupFunction</code>  即用户自定义的清除函数。当用户需要释放资源时，就会通过遍历 <code>CleanupNode</code> 中的 <code>next</code> 链表，并对每一个节点调用一次 <code>CleanupFunction</code> 将资源释放。</p>
+<h3 id="option">Option</h3>
+<p>头文件 options.h 中定义了一系列与数据库操作相关的选项参数类型，例如与数据库操作相关的 Options，与读操作相关的 ReadOptions，与写操作相关的 WriteOptions。这几个类型均为结构体，在进行数据库的初始化、数据库的读写等操作时，这些参数直接决定了数据库相关的性能指标。</p>
+<ul>
+<li><strong>Options（DB 参数）</strong>
+<ul>
+<li><strong>Comparator</strong>：被用来表中 key 比较，默认是字典序。</li>
+<li><strong>create_if_missing</strong>：打开数据库，如果数据库不存在，是否创建新的。默认为 false。</li>
+<li><strong>error_if_exists</strong>：打开数据库，如果数据库存在，是否抛出错误。默认为 false。</li>
+<li><strong>paranoid_checks</strong>：默认为 false。如果为 true，则实现将对其正在处理的数据进行积极检查，如果检测到任何错误，则会提前停止。 这可能会产生不可预见的后果：例如，一个数据库条目的损坏可能导致大量条目变得不可读或整个数据库变得无法打开。</li>
+<li><strong>env</strong>：环境变量，封装了平台相关接口。</li>
+<li><strong>info_log</strong>：db 日志句柄。</li>
+<li><strong>write_buffer_size</strong>：memtable 的大小(默认4mb)
+<ul>
+<li>值大有利于性能提升</li>
+<li>但是内存可能会存在两份，太大需要注意oom</li>
+<li>过大刷盘之后，不利于数据恢复</li>
+</ul>
+</li>
+<li><strong>max_open_files</strong>：允许打开的最大文件数。</li>
+<li><strong>block_cache</strong>：block 的缓存。</li>
+<li><strong>block_size</strong>：每个 block 的数据包大小(未压缩)，默认是4k。</li>
+<li><strong>block_restart_interval</strong>：block 中记录完整 key 的间隔。</li>
+<li><strong>max_file_size</strong>：生成新文件的阈值(对于性能较好的文件系统可以调大该阈值，但会增加数据恢复的时间)，默认 2k</li>
+<li><strong>compression</strong>：数据压缩类型，默认是 kSnappyCompression，压缩速度快
+<ul>
+<li>kSnappyCompression 在 Intel(R) Core(TM)2 2.4GHz 上的典型速度：
+<ul>
+<li>~200-500MB/s 压缩</li>
+<li>~400-800MB/s 解压</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>reuse_logs</strong>：是否复用之前的  MANIFES 和 log files。</li>
+<li><strong>filter_policy</strong>：block 块中的过滤策略，支持布隆过滤器。</li>
+</ul>
+</li>
+<li><strong>ReadOptions（读操作参数）</strong>
+<ul>
+<li><strong>verify_checksums</strong>：是否对从磁盘读取的数据进行校验。</li>
+<li><strong>fill_cache</strong>：读取到 block 数据，是否加入到 cache 中。</li>
+<li><strong>snapshot</strong>：记录的是当前的快照。</li>
+</ul>
+</li>
+<li><strong>WriteOptions（写操作参数）</strong>
+<ul>
+<li><strong>sync</strong>：是否同步刷盘，也就是调用完 write 之后是否需要显式 fsync。</li>
+</ul>
+</li>
+</ul>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/leveldb/">LevelDB</a>
+        
+            <a href="/tags/kv%E5%AD%98%E5%82%A8/">KV存储</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 23:52 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/leveldb-dbimpl%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB DBImpl模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-compaction%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB Compaction模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB 版本管理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-wal%E6%97%A5%E5%BF%97%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB WAL日志模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-sstable%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB SSTable模块</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/leveldb-%E6%9E%B6%E6%9E%84\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'LevelDB 架构',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#源码结构">源码结构</a></li>
+    <li><a href="#整体架构">整体架构</a></li>
+    <li><a href="#基本组件">基本组件</a>
+      <ol>
+        <li><a href="#slice">Slice</a></li>
+        <li><a href="#status">Status</a></li>
+        <li><a href="#comparator">Comparator</a></li>
+        <li><a href="#iterate">Iterate</a></li>
+        <li><a href="#option">Option</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

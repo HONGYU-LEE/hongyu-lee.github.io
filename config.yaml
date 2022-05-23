@@ -1,4 +1,4 @@
-baseurl: https://hongyu-lee.github.io/
+baseurl: https://blog.orekilee.top/
 #baseurl: https://example.com
 languageCode: en-us
 theme: hugo-theme-stack
@@ -50,14 +50,14 @@ params:
     article:
         math: true
         toc: true
-        readingTime: true
+        readingTime: false
         license:
             enabled: true
             default: Licensed under CC BY-NC-SA 4.0
 
     comments:
         enabled: true
-        provider: disqus
+        provider: remark42
 
         disqusjs:
             shortname:
@@ -181,18 +181,25 @@ params:
 menu:
     main: []
     
-    #social:
-    #    - identifier: github
-    #      name: GitHub
-    #      url: https://github.com/HONGYU-LEE
-    #      params:
-    #          icon: brand-github
+    social:
+        - identifier: github
+          name: GitHub
+          url: https://github.com/HONGYU-LEE
+          params:
+              icon: brand-github
 
-    #    - identifier: csdn
-    #      name: CSDN
-    #      url: https://oreki.blog.csdn.net
-    #      params:
-    #          icon: brand-csdn
+        - identifier: csdn
+          name: CSDN
+          url: https://oreki.blog.csdn.net
+          params:
+              icon: brand-csdn
+              
+        - identifier: email
+          name: Email
+          url: mailto:orekilee@163.com
+          params:
+              icon: brand-email             
+              
 
 related:
     includeNewer: true
@@ -222,3 +229,8 @@ markup:
         lineNos: true
         lineNumbersInTable: true
         tabWidth: 4
+
+frontmatter:
+  lastmod:
+  - :fileModTime
+  - :defaultte

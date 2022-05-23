@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='Git 分支 什么是分支？ Git 保存的不是文件的变化或者差异，而是一系列不同时刻的文件快照。 在进行提交操作时，Git 会保存一个提交对象，该提交对象会包含一个指向暂存内容快照的指针，以及作者的姓名和邮箱、提交时输入的信息以及指向它的父对象的指针。
+ 首次提交产生的提交对象没有父对象，普通提交操作产生的提交对象有一个父对象，而由多个分支合并产生的提交对象有多个父对象，
+ 假设现在有一个工作目录，里面包含了三个将要被暂存和提交的文件。暂存操作会为每一个文件计算校验和，然后会把当前版本的文件快照保存到 Git 仓库中（Git 使用 blob 对象来保存它们），最终将校验和加入到暂存区域等待提交。
+当进行提交操作时，Git 会先计算每一个子目录的校验和，然后将 Git 仓库中这些校验和保存为树对象。 随后 Git 便会创建一个提交对象，它不仅包含上面提到的那些信息，还包含指向这个树对象（项目根目录）的指针。如此一来，Git 就可以在需要的时候重现此次保存的快照。
+如下图，此时Git 仓库中有五个对象：三个 blob 对象（保存着文件快照）、一个树对象（记录着目录结构和 blob 对象索引）以及一个提交对象（包含着指向前述树对象的指针和所有提交信息）。
+做些修改后再次提交，那么这次产生的提交对象会包含一个指向上次提交对象（父对象）的指针。
+Git 的分支，其实本质上仅仅是指向提交对象的可变指针。 Git 的默认分支名字是 master。 在多次提交操作之后， master 分支会在每次的提交操作中自动向前移动，并指向最后一个提交对象。
+分支管理 查看分支 当我们使用 git branch 命令，并不加任何参数时，就可以得到当前所有分支的列表：
+1 2 3  $ git branch master * test   ps：* 代表当前所在的分支，即当前 HEAD 指针所指向的分支。
+我们可以在后面加上这两个参数，来获取到这个列表中已经合并或尚未合并到当前分支的分支。
+1 2  git branch --merged # 查看哪些分支已经合并到当前分支 git branch --no-merged # 查看所有包含未合并工作的分支   我们还可以通过 -v 选项，查看每一个分支的最后一次提交：'><title>Git 分支</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/git-%E5%88%86%E6%94%AF/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Git 分支'>
+<meta property='og:description' content='Git 分支 什么是分支？ Git 保存的不是文件的变化或者差异，而是一系列不同时刻的文件快照。 在进行提交操作时，Git 会保存一个提交对象，该提交对象会包含一个指向暂存内容快照的指针，以及作者的姓名和邮箱、提交时输入的信息以及指向它的父对象的指针。
+ 首次提交产生的提交对象没有父对象，普通提交操作产生的提交对象有一个父对象，而由多个分支合并产生的提交对象有多个父对象，
+ 假设现在有一个工作目录，里面包含了三个将要被暂存和提交的文件。暂存操作会为每一个文件计算校验和，然后会把当前版本的文件快照保存到 Git 仓库中（Git 使用 blob 对象来保存它们），最终将校验和加入到暂存区域等待提交。
+当进行提交操作时，Git 会先计算每一个子目录的校验和，然后将 Git 仓库中这些校验和保存为树对象。 随后 Git 便会创建一个提交对象，它不仅包含上面提到的那些信息，还包含指向这个树对象（项目根目录）的指针。如此一来，Git 就可以在需要的时候重现此次保存的快照。
+如下图，此时Git 仓库中有五个对象：三个 blob 对象（保存着文件快照）、一个树对象（记录着目录结构和 blob 对象索引）以及一个提交对象（包含着指向前述树对象的指针和所有提交信息）。
+做些修改后再次提交，那么这次产生的提交对象会包含一个指向上次提交对象（父对象）的指针。
+Git 的分支，其实本质上仅仅是指向提交对象的可变指针。 Git 的默认分支名字是 master。 在多次提交操作之后， master 分支会在每次的提交操作中自动向前移动，并指向最后一个提交对象。
+分支管理 查看分支 当我们使用 git branch 命令，并不加任何参数时，就可以得到当前所有分支的列表：
+1 2 3  $ git branch master * test   ps：* 代表当前所在的分支，即当前 HEAD 指针所指向的分支。
+我们可以在后面加上这两个参数，来获取到这个列表中已经合并或尚未合并到当前分支的分支。
+1 2  git branch --merged # 查看哪些分支已经合并到当前分支 git branch --no-merged # 查看所有包含未合并工作的分支   我们还可以通过 -v 选项，查看每一个分支的最后一次提交：'>
+<meta property='og:url' content='https://blog.orekilee.top/p/git-%E5%88%86%E6%94%AF/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='版本管理' /><meta property='article:tag' content='Git' /><meta property='article:published_time' content='2022-05-23T18:39:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T18:46:14&#43;08:00'/>
+<meta name="twitter:title" content="Git 分支">
+<meta name="twitter:description" content="Git 分支 什么是分支？ Git 保存的不是文件的变化或者差异，而是一系列不同时刻的文件快照。 在进行提交操作时，Git 会保存一个提交对象，该提交对象会包含一个指向暂存内容快照的指针，以及作者的姓名和邮箱、提交时输入的信息以及指向它的父对象的指针。
+ 首次提交产生的提交对象没有父对象，普通提交操作产生的提交对象有一个父对象，而由多个分支合并产生的提交对象有多个父对象，
+ 假设现在有一个工作目录，里面包含了三个将要被暂存和提交的文件。暂存操作会为每一个文件计算校验和，然后会把当前版本的文件快照保存到 Git 仓库中（Git 使用 blob 对象来保存它们），最终将校验和加入到暂存区域等待提交。
+当进行提交操作时，Git 会先计算每一个子目录的校验和，然后将 Git 仓库中这些校验和保存为树对象。 随后 Git 便会创建一个提交对象，它不仅包含上面提到的那些信息，还包含指向这个树对象（项目根目录）的指针。如此一来，Git 就可以在需要的时候重现此次保存的快照。
+如下图，此时Git 仓库中有五个对象：三个 blob 对象（保存着文件快照）、一个树对象（记录着目录结构和 blob 对象索引）以及一个提交对象（包含着指向前述树对象的指针和所有提交信息）。
+做些修改后再次提交，那么这次产生的提交对象会包含一个指向上次提交对象（父对象）的指针。
+Git 的分支，其实本质上仅仅是指向提交对象的可变指针。 Git 的默认分支名字是 master。 在多次提交操作之后， master 分支会在每次的提交操作中自动向前移动，并指向最后一个提交对象。
+分支管理 查看分支 当我们使用 git branch 命令，并不加任何参数时，就可以得到当前所有分支的列表：
+1 2 3  $ git branch master * test   ps：* 代表当前所在的分支，即当前 HEAD 指针所指向的分支。
+我们可以在后面加上这两个参数，来获取到这个列表中已经合并或尚未合并到当前分支的分支。
+1 2  git branch --merged # 查看哪些分支已经合并到当前分支 git branch --no-merged # 查看所有包含未合并工作的分支   我们还可以通过 -v 选项，查看每一个分支的最后一次提交：">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/git/" style="background-color: #2a9d8f; color: #fff;">
+                Git
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/git-%E5%88%86%E6%94%AF/">Git 分支</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="git-分支">Git 分支</h1>
+<h2 id="什么是分支">什么是分支？</h2>
+<p><strong>Git 保存的不是文件的变化或者差异，而是一系列不同时刻的文件快照。</strong> 在进行提交操作时，Git 会保存一个提交对象，该提交对象会包含一个指向暂存内容快照的指针，以及作者的姓名和邮箱、提交时输入的信息以及指向它的父对象的指针。</p>
+<blockquote>
+<p>首次提交产生的提交对象没有父对象，普通提交操作产生的提交对象有一个父对象，而由多个分支合并产生的提交对象有多个父对象，</p>
+</blockquote>
+<p>假设现在有一个工作目录，里面包含了三个将要被暂存和提交的文件。暂存操作会为每一个文件计算校验和，然后会把当前版本的文件快照保存到 Git 仓库中（Git 使用 blob 对象来保存它们），最终将校验和加入到暂存区域等待提交。</p>
+<p>当进行提交操作时，Git 会先计算每一个子目录的校验和，然后将 Git 仓库中这些校验和保存为树对象。 随后 Git 便会创建一个提交对象，它不仅包含上面提到的那些信息，还包含指向这个树对象（项目根目录）的指针。如此一来，Git 就可以在需要的时候重现此次保存的快照。</p>
+<p>如下图，此时Git 仓库中有五个对象：三个 blob 对象（保存着文件快照）、一个树对象（记录着目录结构和 blob 对象索引）以及一个提交对象（包含着指向前述树对象的指针和所有提交信息）。</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git16.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>做些修改后再次提交，那么这次产生的提交对象会包含一个指向上次提交对象（父对象）的指针。</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git17.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><strong>Git 的分支，其实本质上仅仅是指向提交对象的可变指针。</strong> Git 的默认分支名字是 <code>master</code>。 在多次提交操作之后， <code>master</code> 分支会在每次的提交操作中自动向前移动，并指向最后一个提交对象。</p>
+<h2 id="分支管理">分支管理</h2>
+<h3 id="查看分支">查看分支</h3>
+<p>当我们使用 <code>git branch</code> 命令，并不加任何参数时，就可以得到当前所有分支的列表：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git branch
+</span></span><span class="line"><span class="cl">  master
+</span></span><span class="line"><span class="cl">* <span class="nb">test</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>ps：* 代表当前所在的分支，即当前 <code>HEAD</code> 指针所指向的分支。</p>
+<p>我们可以在后面加上这两个参数，来获取到这个列表中已经合并或尚未合并到当前分支的分支。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git branch --merged 	<span class="c1"># 查看哪些分支已经合并到当前分支</span>
+</span></span><span class="line"><span class="cl">git branch --no-merged  <span class="c1"># 查看所有包含未合并工作的分支</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>我们还可以通过 -v 选项，查看每一个分支的最后一次提交：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git branch -v
+</span></span><span class="line"><span class="cl">  master f876558 <span class="o">[</span>ahead 1, behind 1<span class="o">]</span> <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">* <span class="nb">test</span>   da8f5f4 commit
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="创建分支">创建分支</h3>
+<p>当我们要创建一个分支时，可以使用以下命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git branch <span class="o">[</span>branch_name<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>例如我们创建一个 testing 分支，这会在当前所在的提交对象上创建一个指针。</p>
+<blockquote>
+<p>那么，Git 又是怎么知道当前在哪一个分支上呢？ 也很简单，它有一个名为 <code>HEAD</code> 的特殊指针。</p>
+</blockquote>
+<p>此时指针关系如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git11.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>想要新建一个分支并同时切换到那个分支上，你可以运行一个带有 <code>-b</code> 参数的 <code>git checkout</code> 命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git checkout -b <span class="o">[</span>branch_name<span class="o">]</span>
+</span></span><span class="line"><span class="cl">等价于
+</span></span><span class="line"><span class="cl">git branch <span class="o">[</span>branch_name<span class="o">]</span>
+</span></span><span class="line"><span class="cl">git checkout <span class="o">[</span>branch_name<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="切换分支">切换分支</h3>
+<p>当我们要切换到一个已经存在的分支上时，可以使用下面这个命令将 HEAD 指向该分支：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git checkout <span class="o">[</span>branch_name<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>例如我们切换到 testing 分支上，此时指向关系如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git12.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如果我们在这个新分支上做了修改，并将修改提交后，此时 <code>testing</code> 分支就会向前移动，如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git13.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>此时由于两个分支的版本不同，当我们再次切换回 master 分支时，此时会执行两个操作：</p>
+<ol>
+<li>使 HEAD 指向 master。</li>
+<li>将工作目录恢复成 <code>master</code> 分支所指向的快照内容。</li>
+</ol>
+<p>如果我们再次在 master 分支上进行修改后提交，此时两个分支就会完全分叉，走上不同的路线，如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git15.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>此时我们就需要通过 <code>merge</code> 来对分支进行合并，使其重新回到统一的一个版本。</p>
+<h3 id="合并分支">合并分支</h3>
+<p>当我们在特性分支上完成开发后，此时就需要将特性分支合并入 <code>master</code> 分支。此时我们就需要先切换到主分支，在主分支上执行 <code>git merge</code>：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git checkout master
+</span></span><span class="line"><span class="cl">git merge <span class="o">[</span>branch<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong>Git 会自行决定选取哪一个提交作为最优的共同祖先，并以此作为合并的基础。接着它会把两个分支的最新快照以及二者最近的共同祖先进行三方合并，合并的结果是生成一个新的快照（并提交）。</strong></p>
+<p>但事实上，只有在这些分支没有任何冲突时才能这么顺利的进行合并，如果存在冲突，我们必须要将冲突的内容解决后，才能进行合并。</p>
+<h3 id="合并冲突解决">合并冲突解决</h3>
+<p>如果你在两个不同的分支中，对同一个文件的同一个部分进行了不同的修改，Git 就没法合并它们。此时 Git 会暂停下来，等待你去解决合并产生的冲突。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git merge <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">Removing test.md
+</span></span><span class="line"><span class="cl">Auto-merging README.md
+</span></span><span class="line"><span class="cl">CONFLICT <span class="o">(</span>content<span class="o">)</span>: Merge conflict in README.md
+</span></span><span class="line"><span class="cl">Automatic merge failed<span class="p">;</span> fix conflicts and <span class="k">then</span> commit the result.
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时我们可以使用 <code>git status</code> 命令来查看那些因包含合并冲突而处于未合并状态的文件，并查看它的内容：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl"><span class="o">&lt;&lt;&lt;&lt;&lt;&lt;</span>&lt; HEAD
+</span></span><span class="line"><span class="cl">Hello world123123:<span class="sb">`</span>
+</span></span><span class="line"><span class="cl"><span class="o">=======</span>
+</span></span><span class="line"><span class="cl">HELLO WORLD !!!
+</span></span><span class="line"><span class="cl">&gt;&gt;&gt;&gt;&gt;&gt;&gt; <span class="nb">test</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时 Git 用 <code>=======</code> 分割了两个分支的冲突的内容，<code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> 后面显示了 HEAD 所指向的版本，<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> 后面展示了 test 指向的版本。此时我们就需要进行权衡，选择应该怎么样去解决冲突。</p>
+<p>当我们将 <code>=======</code>、<code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>、<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> 删除后，并对冲突内容进行解决。此时我们可以对每个文件使用 <code>git add</code> 命令来将其标记为冲突已解决。 一旦暂存这些原本有冲突的文件，Git 就会将它们标记为冲突已解决。此时我们再进行 <code>git commit</code>，就会自动完成 <code>merge</code> 操作。</p>
+<h3 id="删除分支">删除分支</h3>
+<p>当我们想要删除某个分支的时候，可以使用下面这个命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git branch -d <span class="o">[</span>branch name<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果该分支还未被 merge，则此时会报错</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git branch -d testing
+</span></span><span class="line"><span class="cl">error: The branch <span class="s1">&#39;testing&#39;</span> is not fully merged.
+</span></span><span class="line"><span class="cl">If you are sure you want to delete it, run <span class="s1">&#39;git branch -D testing&#39;</span>.
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果仍然需要删除，则可以使用 <code>-D</code> 选项强制删除分支。</p>
+<h2 id="分支开发的工作流程">分支开发的工作流程</h2>
+<h3 id="长期分支">长期分支</h3>
+<p>在项目的开发过程中，为了维护不同层次的稳定性，通常会拥有几个长期存在的分支。大多数人采用下面这种开发模式，只在 master 分支上保留完全稳定的代码，而在 develop、next 等分支上进行后续的开发，当这些分支通过测试，达到稳定状态时就可以将它们并入到 master 分支中。</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git9.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如上图，稳定分支的指针总是在提交历史中落后一大截，而前沿分支的指针往往比较靠前。</p>
+<h3 id="特性分支">特性分支</h3>
+<p>特性分支是一种短期分支，它被用来实现单一特性或其相关工作。例如我们需要快速实现一个新功能，或者修复一些遗留的问题，就可以在特性分支上进行开发，然后将其并入主分支后再将其删除。</p>
+<p>由于工作被分散到不同的流水线中，在不同的流水线中每个分支都仅与其目标特性相关，因此，在做代码审查之类的工作的时候就能更加容易地看出你做了哪些改动。 我们可以把做出的改动在特性分支中保留几分钟、几天甚至几个月，等它们成熟之后再合并，而不用在乎它们建立的顺序或工作进度。对于不想要的分支，也可以直接将其抛弃，并且不会造成任何影响。</p>
+<h2 id="远程分支">远程分支</h2>
+<p>远程引用是对远程仓库的引用（指针），包括分支、标签等等。 可以通过 <code>git ls-remote (remote)</code> 来显式地获得远程引用的完整列表，或者通过 <code>git remote show (remote)</code> 获得远程分支的更多信息。 然而，一个更常见的做法是利用远程跟踪分支。</p>
+<p>远程跟踪分支是远程分支状态的引用。 它们是你不能移动的本地引用，当你做任何网络通信操作时，它们会自动移动。 远程跟踪分支像是你上次连接到远程仓库时，那些分支所处状态的书签。它们以 <code>(remote)/(branch)</code> 形式命名。</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git10.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如上图，例如我们从 Git 服务器上 git clone 一个仓库时，会为自动将其该仓库命名为 <code>origin</code>，拉取它的所有数据，创建一个指向它的 <code>master</code> 分支的指针，并且在本地将其命名为 <code>origin/master</code>。 Git 也会给你一个与 origin 的 <code>master</code> 分支在指向同一个地方的本地 <code>master</code> 分支，这样我们就可以在本地进行开发工作。</p>
+<h3 id="推送">推送</h3>
+<p>当你想要公开分享一个分支时，需要将其推送到有写入权限的远程仓库上，此时可以使用以下命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git push <span class="o">[</span>remote<span class="o">]</span> <span class="o">[</span>branch<span class="o">]</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 如果想要修改远程仓库的分支名，可以使用下面这个命令</span>
+</span></span><span class="line"><span class="cl">git push <span class="o">[</span>remote<span class="o">]</span> <span class="o">[</span>local_branch_name<span class="o">]</span>:<span class="o">[</span>remote_branch_name<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="跟踪">跟踪</h3>
+<p>从一个远程跟踪分支检出一个本地分支会自动创建一个跟踪分支。 跟踪分支是与远程分支有直接关系的本地分支。 如果在一个跟踪分支上输入 <code>git pull</code>，Git 能自动地识别去哪个服务器上抓取、合并到哪个分支。（例如当克隆一个仓库时，自动创建的跟踪 <code>origin/master</code> 的 <code>master</code> 分支）。</p>
+<p>如果我们想要设置一个新的跟踪分支，可以使用下面这个命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git checkout -b <span class="o">[</span>branch<span class="o">]</span> <span class="o">[</span>remote<span class="o">]</span>/<span class="o">[</span>branch<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果我们想要让已有的本地分支跟踪一个远程分支，或者是修改已有分支的跟踪目标，就可以使用下面这个命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git branch -u <span class="o">[</span>remote<span class="o">]</span>/<span class="o">[</span>branch<span class="o">]</span>
+</span></span><span class="line"><span class="cl">或者
+</span></span><span class="line"><span class="cl">git branch --set-upstream-to <span class="o">[</span>remote<span class="o">]</span>/<span class="o">[</span>branch<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果我们想查看设置的所有跟踪分支，可以使用下面这个命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git branch -vv
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong>这些数字的值来自于你从每个服务器上最后一次抓取的数据。 这个命令并没有连接服务器，它只会告诉你关于本地缓存的服务器数据。如果想要统计最新的领先与落后数字，需要在运行此命令前抓取所有的远程仓库。</strong></p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git fetch --all
+</span></span><span class="line"><span class="cl">git branch -vv
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="拉取">拉取</h3>
+<p>如果我们想要同步远程分支上的数据时，可以使用下面两种方式抓取本地没有的数据，并且更新本地数据库，移动 <code>remote/branch</code> 指针指向新的、更新后的位置。</p>
+<ul>
+<li>
+<p><code>git fetch</code> ：该命令从服务器上抓取本地没有的数据时，它并不会修改工作目录中的内容。 它只会获取数据然后让你自己使用 <code>git merge</code> 进行合并。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl"><span class="c1"># 下载远端分支到本地</span>
+</span></span><span class="line"><span class="cl">git fetch <span class="o">[</span>remote<span class="o">]</span> <span class="o">[</span>remote_branch<span class="o">]</span>:<span class="o">[</span>local_branch<span class="o">]</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 比较差异</span>
+</span></span><span class="line"><span class="cl">git diff local_branch 
+</span></span><span class="line"><span class="cl"><span class="c1"># 合并分支</span>
+</span></span><span class="line"><span class="cl">git merge local_branch
+</span></span><span class="line"><span class="cl"><span class="c1"># 旧删除分支</span>
+</span></span><span class="line"><span class="cl">git branch -d local_branch
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<p><code>git pull</code>：它其实相当于 <code>git fetch</code> + <code>git merge</code>，它会查找当前分支所跟踪的服务器与分支，从服务器上抓取数据然后尝试合并入那个远程分支。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git pull <span class="o">[</span>remote<span class="o">]</span> <span class="o">[</span>remote_branch<span class="o">]</span>:<span class="o">[</span>local_branch<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+<p>虽然 <code>git pull</code> 简化了流程，但由于 <code>git pull</code> 会对本地工作目录造成修改，所以通常都会使用 <code>git fetch</code> 来拉取分支。</p>
+<h3 id="删除">删除</h3>
+<p>当我们在某个分支上已经完成了开发，并将其合并到了远程仓库的 <code>master</code> 分支后，此时该分支就失去了作用，可以将其从服务器上删除。此时我们可以使用带有 <code>--delete</code> 选项的 <code>git push</code> 命令来删除一个远程分支：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git push <span class="o">[</span>remote<span class="o">]</span> --delete <span class="o">[</span>branch<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong>这个命令做的只是从服务器上移除这个指针。 Git 服务器通常会保留数据一段时间直到垃圾回收运行，所以如果不小心删除掉了，通常是很容易恢复的。</strong></p>
+<h2 id="rebase">Rebase</h2>
+<p>在 Git 中整合不同分支的方法除了 <code>merge</code> 以外，还有 <code>rebase</code>。</p>
+<h3 id="什么是-rebase">什么是 Rebase？</h3>
+<p>例如下图这个场景，此时出现了两个不同的分支，并且各自又提交了更新，导致出现了分叉：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git19.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如果我们要整合这两个分支，最简单的方法就是使用 <code>merge</code>，它会两个分支的最新快照（C3 和 C4）以及二者最近的共同祖先（C2）进行三方合并，合并的结果是生成一个新的快照（并提交）。</p>
+<p>但除此之外，还有另一种方法，即提取在 C4 中引入的补丁和修改，然后在 C3 的基础上应用一次。在 Git 中，这种操作就叫做 <strong>rebase（变基）</strong>。 你可以使用 <code>rebase</code> 命令将提交到某一分支上的所有修改都移至另一分支上。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git rebase <span class="o">[</span>topicbranch<span class="o">]</span> <span class="c1"># 此时basebranch为当前HEAD指向的分支</span>
+</span></span><span class="line"><span class="cl">or
+</span></span><span class="line"><span class="cl">git rebase <span class="o">[</span>basebranch<span class="o">]</span> <span class="o">[</span>topicbranch<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong><code>rebase</code> 的原理是首先找到这两个分支的最近共同祖先，然后对比当前分支相对于该祖先的历次提交，提取相应的修改并存为临时文件，然后将当前分支指向目标基底，最后以此将之前另存为临时文件的修改依序应用。</strong></p>
+<p>例如执行下面这个命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git checkout experiment
+</span></span><span class="line"><span class="cl">git rebase master
+</span></span><span class="line"><span class="cl">或者
+</span></span><span class="line"><span class="cl">git rebase master experiment <span class="c1"># 等价于前两句，将master变基到experiment上，避免切换分支</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时就会将 C4 中的修改变基到 C3 上，如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git20.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>此时 experiment 与 master 处于同一条之间中，我们回到 master 分支上执行一次快进合并，即可再次回到一条直线：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git checkout master
+</span></span><span class="line"><span class="cl">git merge experiment
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/paper/git21.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>此时就已经完成了分支的合并，不仅和 <code>merge</code> 的效果相同，而且还是得提交历史更加整洁，是一条没有分叉的直线。</p>
+<p><strong>因此当我们需要确保在向远程分支推送时能保持提交历史的整洁时就可以使用 <code>rebase</code></strong>，我们在自己的分支开发完毕后将代码 <code>rebase</code> 到 master 分支上，master 在进行快进合并即可整合分支。</p>
+<blockquote>
+<p>除了直接 rebase 一个分支，rebase 还支持更细粒度的操作</p>
+</blockquote>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git rebase --onto <span class="o">[</span>branch<span class="o">]</span> <span class="o">[</span>from<span class="o">]</span> <span class="o">[</span>to<span class="o">]</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># from 待合并片段的起始commitId（不包含）</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># to 待合并片段的结束commitId（包含）</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong>即取出 to 分支，找出处于 from 分支和 to 分支的共同祖先之后的修改，然后把它们在 base 分支上重放一遍。</strong> 以下图为例，执行 <code>git rebase --onto master server client</code>，此时会将 client 的 c8 和 c9 在 master 上重放：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git26.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="rebase-的风险">Rebase 的风险</h3>
+<p>如果要使用 <code>rebase</code>，就必须记住这条原则：<strong>只对尚未推送或分享给别人的本地修改执行变基操作清理历史，从不对已推送至别处的提交执行变基操作。</strong></p>
+<p>假设这样一个场景，我们与项目的其他成员在同一个远程仓库中进行协作开发，此时我们拉取下来项目，并在其基础上进行开发，如图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git22.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>此时用户 A 也在该仓库进行开发，它首先提交了修改 c4 和 c5，并将它们 <code>merge</code> 得到 c6。此时我们使用 <code>pull</code> 将这些修改拉取到本地，此时提交历史如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git23.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>此时用户 A 对 <code>merge</code> 不满意，他想通过 <code>rebase</code> 来使提交记录更加清晰，于是将 <code>merge</code> 回滚后改为使用 <code>rebase</code>，并使用 <code>git push --force</code> 强制覆盖了提交历史。此时提交记录如下：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git24.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如果我们再次使用 <code>pull</code> 拉取数据，此时提交历史如下：</p>
+<p><img src="http://img.orekilee.top//imgbed/paper/git25.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>此时就出现了意料之外的情况：</p>
+<ul>
+<li>对我们而言，我们将相同的内容又合并了一次，生成了一个新的提交，并且用户 A 使用了 <code>rebase</code>，因此这两次提交的 log 中作者、日期、日志等信息是一模一样的。</li>
+<li>对于用户 A 而言，如果我们此时将修改 <code>push</code> 到远程仓库中，又再次将用户 A 丢弃的 c4 和 c6 提交记录找回，而这又违背了用户 A 简化提交历史的初衷。</li>
+</ul>
+<blockquote>
+<p>那在这种情况下，有什么方法能解决这个问题呢？</p>
+</blockquote>
+<p>可以使用 <code>git pull --rebase</code> 命令而不是直接 <code>git pull</code>。 又或者可以自己手动完成这个过程，先 <code>git fetch</code>，再 <code>git rebase teamone/master</code>。但这种方法需要每一个人都执行该命令，因此我们通常把变基命令当作是在推送前清理提交使之整洁的工具，并且只在从未推送至共用仓库的提交上执行变基命令，以避免这种场景的出现。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86/">版本管理</a>
+        
+            <a href="/tags/git/">Git</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 18:46 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/git-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Git 基本操作</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/git-%E5%9F%BA%E7%A1%80/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Git 基础</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/git-%E5%88%86%E6%94%AF\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'Git 分支',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#什么是分支">什么是分支？</a></li>
+    <li><a href="#分支管理">分支管理</a>
+      <ol>
+        <li><a href="#查看分支">查看分支</a></li>
+        <li><a href="#创建分支">创建分支</a></li>
+        <li><a href="#切换分支">切换分支</a></li>
+        <li><a href="#合并分支">合并分支</a></li>
+        <li><a href="#合并冲突解决">合并冲突解决</a></li>
+        <li><a href="#删除分支">删除分支</a></li>
+      </ol>
+    </li>
+    <li><a href="#分支开发的工作流程">分支开发的工作流程</a>
+      <ol>
+        <li><a href="#长期分支">长期分支</a></li>
+        <li><a href="#特性分支">特性分支</a></li>
+      </ol>
+    </li>
+    <li><a href="#远程分支">远程分支</a>
+      <ol>
+        <li><a href="#推送">推送</a></li>
+        <li><a href="#跟踪">跟踪</a></li>
+        <li><a href="#拉取">拉取</a></li>
+        <li><a href="#删除">删除</a></li>
+      </ol>
+    </li>
+    <li><a href="#rebase">Rebase</a>
+      <ol>
+        <li><a href="#什么是-rebase">什么是 Rebase？</a></li>
+        <li><a href="#rebase-的风险">Rebase 的风险</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

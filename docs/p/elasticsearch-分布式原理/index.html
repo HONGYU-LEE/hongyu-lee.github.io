@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='分布式原理 分布式存储 路由 当索引一个文档的时候，Elasticsearch会通过哈希来决定将文档存储到哪一个主分片中，路由计算公式如下：
+1 2 3 4  shard = hash(routing) % number_of_primary_shards //routing：默认为文档id,也可以自定义。 //number_of_primary_shards：主分片的数量     查询时指定routing：可以直接根据routing信息定位到某个分片查询，不需要查询所有的分配，经
+过协调节点排序。
+  查询时不指定routing：因为不知道要查询的数据具体在哪个分片上，所以整个过程分为 2 个步骤
+ 分发：请求到达协调节点后，协调节点将查询请求分发到每个分片上。 聚合：协调节点搜集到每个分片上查询结果，在将查询的结果进行排序，之后给用户返回结果。    从上面的这个公式我们也可以看到一个问题，路由的逻辑与当前主分片的数量强关联，也就是说如果分片数量变化了，那么所有之前路由的值都会无效，文档也再也找不到了。这也就是为什么我们要在创建索引的时候就确定好主分片的数量并且永远不会改变这个数量。
+ 分片数量固定是否意味着会使索引难以进行扩容？
+ 答案是否定的，Elasticsearch还提供了其他的一些方案来让我们轻松的实现扩容，如：
+ 分片预分配：一个分片存在于单个节点，但一个节点可以持有多个分片。因此我们可以根据未来的数据的扩张状况来预先分配一定数量的分片到各个节点中。（注意⚠️：预先分配过多的分片会导致性能的下降以及影响搜索结果的相关度） 新建索引：分片数不够时，可以考虑新建索引，搜索1个有着50个分片的索引与搜索50个每个都有1个分片的索引完全等价。  更多关于水平拓展的内容可以参考官方文档扩容设计。
+新增、索引和删除文档 我们可以发送请求到集群中的任一节点。 每个节点都有能力处理任意请求。 每个节点都知道集群中任一文档位置，所以可以直接将请求转发到需要的节点上。 在下面的例子中，将所有的请求发送到 Node 1 ，我们将其称为协调节点(coordinating node) 。
+ 当发送请求的时候， 为了扩展负载，更好的做法是轮询集群中所有的节点。
+ 新建、索引和删除请求都是写操作， 必须在主分片上面完成之后才能被复制到相关的副本分片。
+流程如下：
+ 客户端向 Node 1 发送新建、索引或者删除请求。 节点使用文档的 _id 确定文档属于分片 0 。请求会被转发到 Node 3，因为分片 0 的主分片目前被分配在 Node 3 上。 Node 3 在主分片上面执行请求。如果成功了，它将请求并行转发到 Node 1 和 Node 2 的副本分片上。一旦所有的副本分片都报告成功, Node 3 将向协调节点报告成功，协调节点向客户端报告成功。  取回文档 由于取回文档为读操作，我们可以从主分片或者从其它任意副本分片检索文档。'><title>ElasticSearch 分布式原理</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/elasticsearch-%E5%88%86%E5%B8%83%E5%BC%8F%E5%8E%9F%E7%90%86/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='ElasticSearch 分布式原理'>
+<meta property='og:description' content='分布式原理 分布式存储 路由 当索引一个文档的时候，Elasticsearch会通过哈希来决定将文档存储到哪一个主分片中，路由计算公式如下：
+1 2 3 4  shard = hash(routing) % number_of_primary_shards //routing：默认为文档id,也可以自定义。 //number_of_primary_shards：主分片的数量     查询时指定routing：可以直接根据routing信息定位到某个分片查询，不需要查询所有的分配，经
+过协调节点排序。
+  查询时不指定routing：因为不知道要查询的数据具体在哪个分片上，所以整个过程分为 2 个步骤
+ 分发：请求到达协调节点后，协调节点将查询请求分发到每个分片上。 聚合：协调节点搜集到每个分片上查询结果，在将查询的结果进行排序，之后给用户返回结果。    从上面的这个公式我们也可以看到一个问题，路由的逻辑与当前主分片的数量强关联，也就是说如果分片数量变化了，那么所有之前路由的值都会无效，文档也再也找不到了。这也就是为什么我们要在创建索引的时候就确定好主分片的数量并且永远不会改变这个数量。
+ 分片数量固定是否意味着会使索引难以进行扩容？
+ 答案是否定的，Elasticsearch还提供了其他的一些方案来让我们轻松的实现扩容，如：
+ 分片预分配：一个分片存在于单个节点，但一个节点可以持有多个分片。因此我们可以根据未来的数据的扩张状况来预先分配一定数量的分片到各个节点中。（注意⚠️：预先分配过多的分片会导致性能的下降以及影响搜索结果的相关度） 新建索引：分片数不够时，可以考虑新建索引，搜索1个有着50个分片的索引与搜索50个每个都有1个分片的索引完全等价。  更多关于水平拓展的内容可以参考官方文档扩容设计。
+新增、索引和删除文档 我们可以发送请求到集群中的任一节点。 每个节点都有能力处理任意请求。 每个节点都知道集群中任一文档位置，所以可以直接将请求转发到需要的节点上。 在下面的例子中，将所有的请求发送到 Node 1 ，我们将其称为协调节点(coordinating node) 。
+ 当发送请求的时候， 为了扩展负载，更好的做法是轮询集群中所有的节点。
+ 新建、索引和删除请求都是写操作， 必须在主分片上面完成之后才能被复制到相关的副本分片。
+流程如下：
+ 客户端向 Node 1 发送新建、索引或者删除请求。 节点使用文档的 _id 确定文档属于分片 0 。请求会被转发到 Node 3，因为分片 0 的主分片目前被分配在 Node 3 上。 Node 3 在主分片上面执行请求。如果成功了，它将请求并行转发到 Node 1 和 Node 2 的副本分片上。一旦所有的副本分片都报告成功, Node 3 将向协调节点报告成功，协调节点向客户端报告成功。  取回文档 由于取回文档为读操作，我们可以从主分片或者从其它任意副本分片检索文档。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/elasticsearch-%E5%88%86%E5%B8%83%E5%BC%8F%E5%8E%9F%E7%90%86/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='ElasticSearch' /><meta property='article:tag' content='搜索引擎' /><meta property='article:published_time' content='2022-05-23T22:20:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T22:28:08&#43;08:00'/>
+<meta name="twitter:title" content="ElasticSearch 分布式原理">
+<meta name="twitter:description" content="分布式原理 分布式存储 路由 当索引一个文档的时候，Elasticsearch会通过哈希来决定将文档存储到哪一个主分片中，路由计算公式如下：
+1 2 3 4  shard = hash(routing) % number_of_primary_shards //routing：默认为文档id,也可以自定义。 //number_of_primary_shards：主分片的数量     查询时指定routing：可以直接根据routing信息定位到某个分片查询，不需要查询所有的分配，经
+过协调节点排序。
+  查询时不指定routing：因为不知道要查询的数据具体在哪个分片上，所以整个过程分为 2 个步骤
+ 分发：请求到达协调节点后，协调节点将查询请求分发到每个分片上。 聚合：协调节点搜集到每个分片上查询结果，在将查询的结果进行排序，之后给用户返回结果。    从上面的这个公式我们也可以看到一个问题，路由的逻辑与当前主分片的数量强关联，也就是说如果分片数量变化了，那么所有之前路由的值都会无效，文档也再也找不到了。这也就是为什么我们要在创建索引的时候就确定好主分片的数量并且永远不会改变这个数量。
+ 分片数量固定是否意味着会使索引难以进行扩容？
+ 答案是否定的，Elasticsearch还提供了其他的一些方案来让我们轻松的实现扩容，如：
+ 分片预分配：一个分片存在于单个节点，但一个节点可以持有多个分片。因此我们可以根据未来的数据的扩张状况来预先分配一定数量的分片到各个节点中。（注意⚠️：预先分配过多的分片会导致性能的下降以及影响搜索结果的相关度） 新建索引：分片数不够时，可以考虑新建索引，搜索1个有着50个分片的索引与搜索50个每个都有1个分片的索引完全等价。  更多关于水平拓展的内容可以参考官方文档扩容设计。
+新增、索引和删除文档 我们可以发送请求到集群中的任一节点。 每个节点都有能力处理任意请求。 每个节点都知道集群中任一文档位置，所以可以直接将请求转发到需要的节点上。 在下面的例子中，将所有的请求发送到 Node 1 ，我们将其称为协调节点(coordinating node) 。
+ 当发送请求的时候， 为了扩展负载，更好的做法是轮询集群中所有的节点。
+ 新建、索引和删除请求都是写操作， 必须在主分片上面完成之后才能被复制到相关的副本分片。
+流程如下：
+ 客户端向 Node 1 发送新建、索引或者删除请求。 节点使用文档的 _id 确定文档属于分片 0 。请求会被转发到 Node 3，因为分片 0 的主分片目前被分配在 Node 3 上。 Node 3 在主分片上面执行请求。如果成功了，它将请求并行转发到 Node 1 和 Node 2 的副本分片上。一旦所有的副本分片都报告成功, Node 3 将向协调节点报告成功，协调节点向客户端报告成功。  取回文档 由于取回文档为读操作，我们可以从主分片或者从其它任意副本分片检索文档。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/elasticsearch/" style="background-color: #2a9d8f; color: #fff;">
+                ElasticSearch
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/elasticsearch-%E5%88%86%E5%B8%83%E5%BC%8F%E5%8E%9F%E7%90%86/">ElasticSearch 分布式原理</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="分布式原理">分布式原理</h1>
+<h2 id="分布式存储">分布式存储</h2>
+<h3 id="路由">路由</h3>
+<p>当索引一个文档的时候，Elasticsearch会通过<strong>哈希</strong>来决定将文档存储到哪一个主分片中，路由计算公式如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">shard</span> <span class="o">=</span> <span class="n">hash</span><span class="p">(</span><span class="n">routing</span><span class="p">)</span> <span class="o">%</span> <span class="n">number_of_primary_shards</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//routing：默认为文档id,也可以自定义。
+</span></span></span><span class="line"><span class="cl"><span class="c1">//number_of_primary_shards：主分片的数量
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><ul>
+<li>
+<p><strong>查询时指定routing</strong>：可以直接根据routing信息定位到某个分片查询，不需要查询所有的分配，经</p>
+<p>过协调节点排序。</p>
+</li>
+<li>
+<p><strong>查询时不指定routing</strong>：因为不知道要查询的数据具体在哪个分片上，所以整个过程分为 2 个步骤</p>
+<ol>
+<li><strong>分发</strong>：请求到达协调节点后，协调节点将查询请求分发到每个分片上。</li>
+<li><strong>聚合</strong>：协调节点搜集到每个分片上查询结果，在将查询的结果进行排序，之后给用户返回结果。</li>
+</ol>
+</li>
+</ul>
+<p>从上面的这个公式我们也可以看到一个问题，路由的逻辑与当前主分片的数量强关联，也就是说如果分片数量变化了，那么所有之前路由的值都会无效，文档也再也找不到了。这也就是为什么我们要<strong>在创建索引的时候就确定好主分片的数量并且永远不会改变这个数量</strong>。</p>
+<blockquote>
+<p>分片数量固定是否意味着会使索引难以进行扩容？</p>
+</blockquote>
+<p>答案是否定的，Elasticsearch还提供了其他的一些方案来让我们轻松的实现扩容，如：</p>
+<ul>
+<li><strong>分片预分配</strong>：一个分片存在于单个节点，但一个节点可以持有多个分片。因此我们可以根据未来的数据的扩张状况来预先分配一定数量的分片到各个节点中。（注意⚠️：预先分配过多的分片会导致性能的下降以及影响搜索结果的相关度）</li>
+<li><strong>新建索引</strong>：分片数不够时，可以考虑新建索引，搜索1个有着50个分片的索引与搜索50个每个都有1个分片的索引完全等价。</li>
+</ul>
+<p>更多关于水平拓展的内容可以参考官方文档<a class="link" href="https://www.elastic.co/guide/cn/elasticsearch/guide/current/scale.html"  target="_blank" rel="noopener"
+    ><strong>扩容设计</strong></a>。</p>
+<h3 id="新增索引和删除文档">新增、索引和删除文档</h3>
+<p>我们可以发送请求到集群中的任一节点。 每个节点都有能力处理任意请求。 每个节点都知道集群中任一文档位置，所以可以直接将请求转发到需要的节点上。 在下面的例子中，将所有的请求发送到 <code>Node 1</code> ，我们将其称为<strong>协调节点(coordinating node)</strong> 。</p>
+<blockquote>
+<p>当发送请求的时候， 为了扩展负载，更好的做法是轮询集群中所有的节点。</p>
+</blockquote>
+<p>新建、索引和删除请求都是写操作， 必须在主分片上面完成之后才能被复制到相关的副本分片。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es4.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>流程如下：</p>
+<ol>
+<li>客户端向 <code>Node 1</code> 发送新建、索引或者删除请求。</li>
+<li>节点使用文档的 <code>_id</code> 确定文档属于分片 0 。请求会被转发到 <code>Node 3</code>，因为分片 0 的主分片目前被分配在 <code>Node 3</code> 上。</li>
+<li><code>Node 3</code> 在主分片上面执行请求。如果成功了，它将请求并行转发到 <code>Node 1</code> 和 <code>Node 2</code> 的副本分片上。一旦所有的副本分片都报告成功, <code>Node 3</code> 将向协调节点报告成功，协调节点向客户端报告成功。</li>
+</ol>
+<h3 id="取回文档">取回文档</h3>
+<p>由于取回文档为读操作，我们可以从主分片或者从其它任意副本分片检索文档。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es6.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>流程如下：</p>
+<ol>
+<li>客户端向 <code>Node 1</code> 发送获取请求。</li>
+<li>节点使用文档的 <code>_id</code> 来确定文档属于分片 <code>0</code> 。分片 <code>0</code> 的副本分片存在于所有的三个节点上。 在这种情况下，它将请求转发到 <code>Node 2</code> 。</li>
+<li><code>Node 2</code> 将文档返回给 <code>Node 1</code> ，然后将文档返回给客户端。</li>
+</ol>
+<p>在处理读取请求时，协调结点在每次请求的时候都会通过<strong>轮询</strong>所有的副本分片来达到负载均衡。</p>
+<h3 id="并发控制">并发控制</h3>
+<p>在数据库领域中，有两种方法通常被用来确保并发更新时变更不会丢失：</p>
+<ul>
+<li><strong>悲观并发控制</strong>：这种方法被关系型数据库广泛使用，它假定有变更冲突可能发生，因此阻塞访问资源以防止冲突。 一个典型的例子是读取一行数据之前先将其锁住，确保只有放置锁的线程能够对这行数据进行修改。</li>
+<li><strong>乐观并发控制</strong>：Elasticsearch中使用的这种方法假定冲突是不可能发生的，并且不会阻塞正在尝试的操作。 然而，如果源数据在读写当中被修改，更新将会失败。应用程序接下来将决定该如何解决冲突。 例如，可以重试更新、使用新的数据、或者将相关情况报告给用户。</li>
+</ul>
+<p>Elasticsearch是分布式的。当文档创建、更新或删除时， 新版本的文档必须复制到集群中的其他节点。Elasticsearch也是异步和并发的，这意味着这些复制请求被并行发送，并且到达目的地时也许会乱序。所以Elasticsearch 需要一种方法确保文档的旧版本不会覆盖新的版本。</p>
+<p>在Elasticsearch中，其通过<strong>版本号</strong>机制来实现<strong>乐观并发控制</strong>。即每一个文档中都会有一个<code>_version</code>版本号字段，当文档被修改时版本号递增。 Elasticsearch使用<code>_version</code>来确保变更以正确顺序得到执行。如果旧版本的文档在新版本之后到达，它可以被简单的忽略。</p>
+<p>我们可以利用<code>_version</code>号来确保应用中相互冲突的变更不会导致数据丢失。我们通过指定想要修改文档的 <code>version</code> 号来达到这个目的。 如果该版本不是当前版本号，我们的请求将会失败。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="c1">// 例如我们想更新文档的内容，并指定版本号为1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">PUT</span> <span class="err">/website/blog/</span><span class="mi">1</span><span class="err">?version=</span><span class="mi">1</span> 
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;title&#34;</span><span class="p">:</span> <span class="s2">&#34;My first blog entry&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;text&#34;</span><span class="p">:</span>  <span class="s2">&#34;Starting to get the hang of this...&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 当文档的版本号为1时，次请求成功，同时响应体告诉我们版本号递增到2
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_index&#34;</span><span class="p">:</span>   <span class="s2">&#34;website&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_type&#34;</span><span class="p">:</span>    <span class="s2">&#34;blog&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_id&#34;</span><span class="p">:</span>      <span class="s2">&#34;1&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_version&#34;</span><span class="p">:</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl">  <span class="s2">&#34;created&#34;</span><span class="p">:</span>  <span class="kc">false</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 此时我们再次尝试更新文档的内容，仍然指定版本号为1，由于版本号不符合，此时返回409 Conflict HTTP 响应码
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">   <span class="nt">&#34;error&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;root_cause&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">         <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;version_conflict_engine_exception&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&#34;reason&#34;</span><span class="p">:</span> <span class="s2">&#34;[blog][1]: version conflict, current [2], provided [1]&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&#34;index&#34;</span><span class="p">:</span> <span class="s2">&#34;website&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&#34;shard&#34;</span><span class="p">:</span> <span class="s2">&#34;3&#34;</span>
+</span></span><span class="line"><span class="cl">         <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;version_conflict_engine_exception&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;reason&#34;</span><span class="p">:</span> <span class="s2">&#34;[blog][1]: version conflict, current [2], provided [1]&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;index&#34;</span><span class="p">:</span> <span class="s2">&#34;website&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;shard&#34;</span><span class="p">:</span> <span class="s2">&#34;3&#34;</span>
+</span></span><span class="line"><span class="cl">   <span class="p">},</span>
+</span></span><span class="line"><span class="cl">   <span class="nt">&#34;status&#34;</span><span class="p">:</span> <span class="mi">409</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h2 id="分布式搜索">分布式搜索</h2>
+<p>搜索需要一种更加复杂的执行模型，因为我们不知道查询会命中哪些文档，这些文档有可能在集群的任何分片上。 一个搜索请求必须询问我们关注的索引的所有分片的某个副本来确定它们是否含有任何匹配的文档。</p>
+<p>但是找到所有的匹配文档仅仅完成事情的一半。 在 <code>search</code> 接口返回一个 <code>page</code> 结果之前，多分片中的结果必须组合成单个排序列表。 为此，搜索被执行成一个两阶段过程，我们称之为<strong>query then fetch</strong>（查询后取回）。</p>
+<h3 id="查询阶段">查询阶段</h3>
+<p>在查询阶段时， 查询会广播到索引中每一个分片拷贝（主分片或者副本分片）。 每个分片在本地执行搜索并构建一个匹配文档的优先队列。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es28.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>查询阶段包含以下三个步骤</p>
+<ol>
+<li>客户端发送一个 <code>search</code> 请求到 <code>Node 3</code> ，此时<code>Node 3</code>成为协调节点，由它来负责本次的查询。</li>
+<li><code>Node 3</code> 将查询请求广播到索引的每个主分片或副本分片中。每个分片在本地执行查询并添加结果到大小为 <code>from + size</code> 的本地有序优先队列中。</li>
+<li>每个分片返回各自优先队列中所有文档的ID和排序值给协调节点，也就是 <code>Node 3</code> ，它合并这些值到自己的优先队列中来产生一个全局排序后的结果列表。至此查询过程结束。</li>
+</ol>
+<blockquote>
+<p>一个索引可以由一个或几个主分片组成， 所以一个针对单个索引的搜索请求需要能够把来自多个分片的结果组合起来。 针对 <em>multiple</em> 或者 <em>all</em> 索引的搜索工作方式也是完全一致的——仅仅是包含了更多的分片而已。</p>
+</blockquote>
+<h3 id="取回阶段">取回阶段</h3>
+<p>在查询阶段中，我们标识了哪些文档满足搜索请求，而接下来我们就需要取回这些文档。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es30.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>取回阶段由以下步骤构成</p>
+<ol>
+<li>协调节点辨别出哪些文档需要被取回并向相关的分片提交多个 <code>GET</code> 请求。例如，如果我们的查询指定了 <code>{ &quot;from&quot;: 90, &quot;size&quot;: 10 }</code> ，最初的90个结果会被丢弃，只有从第91个开始的10个结果需要被取回。</li>
+<li>每个分片加载并丰富文档（如_source字段和高亮参数），接着返回文档给协调节点。</li>
+<li>协调节点等待所有文档被取回，将结果返回给客户端。</li>
+</ol>
+<h2 id="集群内部原理">集群内部原理</h2>
+<h3 id="集群与节点">集群与节点</h3>
+<p>一个运行中的Elasticsearch实例称为一个<strong>节点</strong>，而<strong>集群</strong>是由一个或者多个拥有相同 <code>cluster.name</code> 配置的节点组成， 它们共同承担数据和负载的压力。当有节点加入集群中或者从集群中移除节点时，集群将会重新平均分布所有的数据。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es35.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>由于Elasticsearch采用了<strong>主从模式</strong>，所以当一个节点被选举成为主节点时， 它将负责管理集群范围内的所有变更，例如增加、删除索引，或者增加、删除节点等。 因为主节点并不需要涉及到文档级别的变更和搜索等操作，所以当集群只拥有一个主节点的情况下，即使流量的增加它也不会成为瓶颈。 任何节点都可以成为主节点。</p>
+<p>作为用户，我们可以将请求发送到<strong>集群中的任何节点</strong>（这个处理请求的节点也叫做<strong>协调节点</strong>）。 每个节点都知道任意文档所处的位置，并且能够将我们的请求直接转发到存储我们所需文档的节点。 无论我们将请求发送到哪个节点，它都能负责从各个包含我们所需文档的节点收集回数据，并将最终结果返回給客户端。</p>
+<h3 id="分片">分片</h3>
+<p>在分布式系统中，单机无法存储规模巨大的数据，要依靠大规模集群处理和存储这些数据，一般通过增加机器数量来提高系统水平扩展能力。因此，需要将数据分成若干小块分配到各个机器上。然后通过某种路由策略找到某个数据块所在的位置。</p>
+<p><strong>分片（shard）<strong>是底层的基本读写单元，分片的目的是</strong>分割巨大索引，让读写可以并行操作，由多台机器共同完成</strong>。读写请求最终落到某个分片上，分片可以独立执行读写工作。Elasticsearch利用分片将数据分发到集群内各处。分片是数据的容器，文档保存在分片内，不会跨分片存储。分片又被分配到集群内的各个节点里。当集群规模扩大或缩小时，Elasticsearch会自动在各节点中迁移分片，使数据仍然均匀分布在集群里。</p>
+<p>为了应对并发更新问题，Elasticsearch将分片分为两部分，即<strong>主分片（primary shard）<strong>和</strong>副本分片（replica shard）</strong>。主数据作为权威数据，写过程中先写主分片，成功后再写副分片，恢复阶段以主分片为准。</p>
+<p>一个副本分片只是一个主分片的拷贝。副本分片作为硬件故障时保护数据不丢失的冗余备份，并为搜索和返回文档等读操作提供服务。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es31.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<blockquote>
+<p>那索引与分片之间又有什么关系呢？</p>
+</blockquote>
+<p>一个Elasticsearch索引包含了很多个分片，每个分片又是一个Lucene的索引，它本身就是一个完整的搜索引擎，可以独立执行建立索引和搜索任务。Lucene索引又由很多分段组成，每个分段都是一个倒排索引。Elasticsearch每次<code>refresh</code>都会生成一个新的分段，其中包含若干文档的数据。在每个分段内部，文档的不同字段被单独建立索引。每个字段的值由若干词（Term）组成，Term是原文本内容经过分词器处理和语言处理后的最终结果。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es34.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="选举">选举</h3>
+<p>在主节点选举算法的选择上，基本原则是不重复造轮子。最好实现一个众所周知的算法，这样的好处是其中的优点和缺陷是已知的。Elasticsearch的选举算法的选择上主要考虑下面两种。</p>
+<ul>
+<li><strong>Bully算法</strong>：Leader选举的基本算法之一。它假定所有节点都有一个唯一的ID，使用该ID对节点进行排序。任何时候的当前Leader都是参与集群的最高ID节点。该算法的优点是易于实现。但是，当拥有最大ID的节点处于不稳定状态的场景下会有问题。例如，Master负载过重而假死，集群拥有第二大ID的节点被选为新主，这时原来的Master恢复，再次被选为新主，然后又假死……</li>
+<li><strong>Paxos算法</strong>：Paxos非常强大，尤其在什么时机，以及如何进行选举方面的灵活性比简单的Bully算法有很大的优势，因为在现实生活中，存在比网络连接异常更多的故障模式。但Paxos实现起来非常复杂。</li>
+</ul>
+<p>Elasticsearch的选主算法是基于Bully算法的改进，主要思路是<strong>对节点ID排序，取ID值最大的节点作为Master，每个节点都运行这个流程</strong>。同时，为了解决Bully算法的缺陷，其通过<strong>推迟选举</strong>，直到当前的Master失效来解决上述问题，只要当前主节点不挂掉，就不重新选主。但是容易产生脑裂（双主），为此，再通过<strong>法定得票人数过半</strong>解决<strong>脑裂</strong>问题。</p>
+<p>Elasticsearch对Bully附加的三个约定条件</p>
+<ol>
+<li><strong>参选人数需要过半</strong>。当达到多数时就选出<strong>临时</strong>主节点，为什么是临时的？每个节点运行排序取最大值的算法，结果不一定相同。举个例子，集群有5台主机，节点ID分别是1、2、3、4、5。当产生网络分区或节点启动速度差异较大时，节点1看到的节点列表是1、2、3、4，选出4；节点2看到的节点列表是2、3、4、5，选出5。结果就不一致了，由此产生下面的第二条限制。</li>
+<li><strong>得票数需要过半</strong>。某节点被选为主节点，必须判断加入它的节点数达到半数以上，才确认Master身份（推迟选举）。</li>
+<li><strong>当探测到节点离开事件时，必须判断当前节点数是否过半。<strong>如果达不到半数以上，则放弃Master身份，重新加入集群。如果不这么做，则设想以下情况：假设5台机器组成的集群产生网络分区，2台一组，3台一组，产生分区前，Master位于2台中的一个，此时3台一组的节点会重新并成功选取Master，产生双主，俗称</strong>脑裂</strong>。（节点失效检测）</li>
+</ol>
+<p>流程如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es38.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>节点失效检测会监控节点是否离线，然后处理其中的异常。失效检测是选主流程之后不可或缺的步骤，不执行失效检测可能会产生脑裂（双主或多主）。在此我们需要启动两种失效探测器：</p>
+<ul>
+<li>在Master节点，启动NodesFaultDetection，简称NodesFD。定期探测加入集群的节点是否活跃。</li>
+<li>非Master节点启动MasterFaultDetection，简称MasterFD。定期探测Master节点是否活跃。</li>
+</ul>
+<h2 id="分片内部原理">分片内部原理</h2>
+<h3 id="索引不变性">索引不变性</h3>
+<p>早期的全文检索会为整个文档集合建立一个很大的倒排索引并将其写入到磁盘。 一旦新的索引就绪，旧的就会被其替换，这样最近的变化便可以被检索到。</p>
+<p>倒排索引被写入磁盘后是<strong>不可改变的</strong>，索引的不变性具有以下好处：</p>
+<ul>
+<li><strong>不需要锁</strong>。如果你从来不更新索引，你就不需要担心多进程同时修改数据的问题。</li>
+<li><strong>一旦索引被读入内核的文件系统缓存，便会留在哪里</strong>。由于其不变性，只要文件系统缓存中还有足够的空间，那么大部分读请求会直接请求内存，而不会命中磁盘。这提供了很大的性能提升。</li>
+<li><strong>缓存(像过滤器缓存)在索引的生命周期内始终有效</strong>。它们不需要在每次数据改变时被重建，因为数据不会变化。</li>
+<li><strong>写入单个大的倒排索引允许数据被压缩</strong>，减少磁盘 I/O 和 需要被缓存到内存的索引的使用量。</li>
+</ul>
+<p>当然，一个不变的索引也有不好的地方。最大的缺点就是它是不可变的，我们无法对其进行修改。如果我们需要让一个新的文档可被搜索，就需要重建整个索引。这不仅对一个索引所能包含的数据量造成了巨大的限制，而且对索引可被更新的频率同样造成了影响。</p>
+<h3 id="动态更新索引">动态更新索引</h3>
+<blockquote>
+<p>那么我们如何能在保留不变性的前提下实现倒排索引的动态更新呢？</p>
+</blockquote>
+<p>答案就是<strong>使用更多的索引</strong>，<strong>即新增内容并写到一个新的倒排索引中，查询时，每个倒排索引都被轮流查询，查询完再对结果进行合并。</strong></p>
+<p>Elasticsearch基于Lucene引入了<strong>按段写入</strong>的概念——<strong>每次内存缓冲的数据被写入文件时，会产生一个新的Lucene段，每个段都是一个倒排索引</strong>。同时，在提交点中描述了当前Lucene索引都含有哪些分段。</p>
+<p>按段写入的流程如下：</p>
+<ol>
+<li><strong>新文档被收集到内存的索引中缓存</strong></li>
+<li><strong>当缓存堆积到一定规模时，就会进行提交</strong>
+<ul>
+<li>一个新的段（倒排索引）被写入磁盘。</li>
+<li>一个新的提交点被写入磁盘。</li>
+<li>所有在文件系统缓存中等待的写入都刷新到磁盘，以确保它们被写入物理文件。</li>
+</ul>
+</li>
+<li><strong>新的段被开启，让它包含的文档可见以被搜索</strong></li>
+<li><strong>内存缓存被清空，等待接收新的文档</strong></li>
+</ol>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es56.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es57.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>当一个查询被触发，所有已知的段按顺序被查询。词项统计会对所有段的结果进行聚合，以保证每个词和每个文档的关联都被准确计算。 这种方式可以用相对较低的成本将新文档添加到索引。</p>
+<blockquote>
+<p>那插入和更新又如何实现呢？</p>
+</blockquote>
+<p>段是不可改变的，所以既不能从把文档从旧的段中移除，也不能修改旧的段来进行反映文档的更新。 取而代之的是，每个提交点会包含一个 <code>.del</code> 文件，文件中会列出这些被删除文档的段信息。</p>
+<ul>
+<li>
+<p>当一个文档被删除时，它实际上只是在 <code>.del</code> 文件中被<strong>标记删除</strong>。一个被标记删除的文档仍然可以被查询匹配到， 但它会在最终结果被返回前从结果集中移除。</p>
+</li>
+<li>
+<p>当一个文档被更新时，旧版本文档被标记删除，文档的新版本被索引到一个新的段中。 可能两个版本的文档都会被一个查询匹配到，但被删除的那个旧版本文档在结果集返回前就已经被移除。</p>
+</li>
+</ul>
+<h3 id="近实时搜索">近实时搜索</h3>
+<p>Elasticsearch和磁盘之间是文件系统缓存，在执行写操作时，为了降低从索引到可被搜索的延迟，一般新段会被先写入到文件系统缓存，再将这些数据写入硬盘（磁盘I/O是性能瓶颈）。</p>
+<p>在写操作中，一般会先在内存中缓冲一段数据，再将这些数据写入硬盘，每次写入硬盘的这批数据称为一个分段。如同任何写操作一样，通过操作系统的<code>write</code>接口写到磁盘的数据会先到达系统缓存（内存）。<code>write</code>函数返回成功时，数据未必被刷到磁盘。通过手工调用<code>flush</code>，或者操作系统通过一定策略将文件系统缓存刷到磁盘。</p>
+<p>这种策略大幅提升了写入效率。从<code>write</code>函数返回成功开始，无论数据有没有被刷到磁盘，只要文件已经在缓存中， 就可以像其它文件一样被打开和读取了。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es8.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>Lucene允许新段被写入和打开——<strong>使其包含的文档在未进行一次完整提交时便对搜索可见</strong>。 这种方式比进行一次提交代价要小得多，并且在不影响性能的前提下可以被频繁地执行。</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es10.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>Elasticsearch中将写入和打开一个新段的过程叫做<strong>refresh(刷新)</strong> 。 默认情况下每个分片会每秒自动刷新一次。这就是为什么我们说Elasticsearch是<strong>近实时搜索</strong>——<strong>文档的变化并不是立即对搜索可见，但会在一秒之内变为可见。</strong></p>
+<h3 id="事务日志">事务日志</h3>
+<p>由于系统先缓冲一段数据才写，且新段不会立即刷入磁盘，这两个过程中如果出现某些意外情况（如主机断电），则会存在丢失数据的风险。</p>
+<p>为了解决这个问题，Elasticsearch增加了一个<strong>translog（事务日志）</strong>，在每一次对Elasticsearch进行操作时均进行了日志记录，当Elasticsearch启动的时候，重放translog中所有在最后一次提交后发生的变更操作。</p>
+<p>其执行流程如下：</p>
+<ol>
+<li><strong>一个文档被索引之后，就会被添加到内存缓冲区，并且追加到了translog</strong>
+<ul>
+<li>新的文档被添加到内存缓冲区并且被追加到了事务日志，如下图</li>
+<li><img src="http://img.orekilee.top//imgbed/elasticsearch/es12.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+<li>分片会每秒自动执行一次刷新，这些内存缓冲区的文档被写入新的段中并打开以便搜索，同时清空内存缓冲区。
+<ul>
+<li>刷新完成后, 缓存被清空但是事务日志不会，同时新段写入文件系统缓冲区</li>
+<li><img src="http://img.orekilee.top//imgbed/elasticsearch/es14.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+<li><strong>这个进程继续工作，更多的文档被添加到内存缓冲区和追加到translog</strong>
+<ul>
+<li>事务日志不断积累文档</li>
+<li><img src="http://img.orekilee.top//imgbed/elasticsearch/es15.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+<li>当translog足够大时，就会执行全量提交，对文件系统缓存执行<code>flush</code>，将其内容全部写入硬盘中，并清空事务日志。
+<ul>
+<li>在刷新（flush）之后，段被全量提交，并且事务日志被清空</li>
+<li><img src="http://img.orekilee.top//imgbed/elasticsearch/es18.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+</li>
+</ol>
+<p>除此之外，translog还有下面这些功能</p>
+<ul>
+<li><strong>translog提供所有还没有被刷到磁盘的操作的一个持久化纪录</strong>。当Elasticsearch启动的时候， 它会从磁盘中使用最后一个提交点去恢复已知的段，并且会重放translog中所有在最后一次提交后发生的变更操作。</li>
+<li><strong>translog也被用来提供实时CRUD</strong> 。当你试着通过ID查询、更新、删除一个文档，在从相应的段中检索之前， 首先检查translog任何最近的变更。这意味着它总是能够实时地获取到文档的最新版本。</li>
+</ul>
+<h3 id="段合并">段合并</h3>
+<p>由于<strong>自动刷新流程每秒会创建一个新的段</strong> ，这样会导致短时间内的段数量暴增。而段数目太多会带来较大的麻烦。 每一个段都会消耗文件句柄、内存和cpu运行周期。更重要的是，每个搜索请求都必须轮流检查每个段，<strong>所以段越多，搜索也就越慢</strong>。</p>
+<p>Elasticsearch通过在后台进行<strong>段合并</strong>来解决这个问题，其会选择大小相似的分段进行合并。在合并过程中，标记为删除（更新）的数据不会写入新分段，当合并过程结束，旧的分段数据被删除，标记删除的数据才从磁盘删除。</p>
+<p>流程如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es19.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es21.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>合并大的段需要消耗大量的I/O和CPU资源，如果任其发展会影响搜索性能。Elasticsearch在默认情况下会对合并流程进行资源限制，所以搜索仍然有足够的资源很好地执行。</p>
+<p>整体写入流程如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/elasticsearch/es55.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h1 id="heading"></h1>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/elasticsearch/">ElasticSearch</a>
+        
+            <a href="/tags/%E6%90%9C%E7%B4%A2%E5%BC%95%E6%93%8E/">搜索引擎</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 22:28 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E7%B4%A2%E5%BC%95%E5%8E%9F%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 索引原理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E6%9D%83%E9%87%8D%E8%AE%A1%E7%AE%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 权重计算</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 基本操作</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 基本概念</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/elasticsearch-%E5%88%86%E5%B8%83%E5%BC%8F%E5%8E%9F%E7%90%86\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'ElasticSearch 分布式原理',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#分布式存储">分布式存储</a>
+      <ol>
+        <li><a href="#路由">路由</a></li>
+        <li><a href="#新增索引和删除文档">新增、索引和删除文档</a></li>
+        <li><a href="#取回文档">取回文档</a></li>
+        <li><a href="#并发控制">并发控制</a></li>
+      </ol>
+    </li>
+    <li><a href="#分布式搜索">分布式搜索</a>
+      <ol>
+        <li><a href="#查询阶段">查询阶段</a></li>
+        <li><a href="#取回阶段">取回阶段</a></li>
+      </ol>
+    </li>
+    <li><a href="#集群内部原理">集群内部原理</a>
+      <ol>
+        <li><a href="#集群与节点">集群与节点</a></li>
+        <li><a href="#分片">分片</a></li>
+        <li><a href="#选举">选举</a></li>
+      </ol>
+    </li>
+    <li><a href="#分片内部原理">分片内部原理</a>
+      <ol>
+        <li><a href="#索引不变性">索引不变性</a></li>
+        <li><a href="#动态更新索引">动态更新索引</a></li>
+        <li><a href="#近实时搜索">近实时搜索</a></li>
+        <li><a href="#事务日志">事务日志</a></li>
+        <li><a href="#段合并">段合并</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>ZooKeeper on 凌桓&#39;s BLOG</title>
+        <link>https://blog.orekilee.top/categories/zookeeper/</link>
+        <description>Recent content in ZooKeeper on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language><atom:link href="https://blog.orekilee.top/categories/zookeeper/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>ZAB 协议</title>
+        <link>https://blog.orekilee.top/p/zab-%E5%8D%8F%E8%AE%AE/</link>
+        <pubDate>Mon, 23 May 2022 21:14:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/zab-%E5%8D%8F%E8%AE%AE/</guid>
+        <description>&lt;h1 id=&#34;zab协议&#34;&gt;ZAB协议&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;ZAB（ZooKeeper Atomic Broadcast 原子广播）&lt;/strong&gt; 协议是为分布式协调服务ZooKeeper专门设计的一种支持崩溃恢复的原子广播协议。 在ZooKeeper中，主要依赖ZAB协议来实现分布式数据一致性，基于该协议，ZooKeeper实现了一种主备模式的系统架构来保持集群中各个副本之间的数据一致性。&lt;/p&gt;
+&lt;p&gt;ZAB协议包括了两种基本的模式，分别是&lt;strong&gt;崩溃恢复&lt;/strong&gt;和&lt;strong&gt;消息广播&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;消息广播&#34;&gt;消息广播&lt;/h2&gt;
+&lt;p&gt;为了保证集群中存在过半的机器能够和Leader服务器的数据状态保持一致，ZAB协议中引入了&lt;strong&gt;消息广播&lt;/strong&gt;模式。&lt;/p&gt;
+&lt;p&gt;在上面我们提到了，ZooKeeper集群中只有Leader服务器能够执行写操作，为了保证集群的&lt;strong&gt;数据一致性&lt;/strong&gt;，我们需要将Leader节点更新的数据同步到Follower与Observer服务器中，所以当Leader服务器接收到客户端发送的写请求后，会自动生成对应的提案并发起一轮消息广播。&lt;/p&gt;
+&lt;p&gt;消息广播的执行流程如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;接受到客户端发送的事务请求，Leader服务器为其生成对应的事务提议。&lt;/li&gt;
+&lt;li&gt;Leader为每一个Follower和Observer都准备了一个FIFO的队列，并把提议发送到队列上。&lt;/li&gt;
+&lt;li&gt;当Follower接收到事务提议后，都会先将其以事务日志的形式写入本地磁盘中，然后再写入成功后反馈给Leader服务器一个ACK。&lt;/li&gt;
+&lt;li&gt;当Leader接收到半数以上Follower节点的ACK，它就会认为大部分节点都同意议题，准备开始提交。&lt;/li&gt;
+&lt;li&gt;Leader向所有节点发送提交事务的Commit请求，完成事务。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk5.jpeg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;为了防止因为网络等原因导致的Follower、Observer节点处理请求的顺序不同而导致的数据不一致问题，保证消息广播过程中消息接收与发送的顺序性，消息广播中引入了&lt;strong&gt;FIFO队列&lt;/strong&gt;和&lt;strong&gt;事务ID&lt;/strong&gt;来解决这个问题。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;在消息广播的过程中，Leader服务器会为每一个Follower、Observer服务器都各自分配一个单独的队列，然后将需要广播的事务提议放到这些队列中，并根据FIFO策略进行消息发送。由于ZAB由于协议是通过&lt;strong&gt;TCP协议&lt;/strong&gt;来进行网络通信的，这样不仅保证了消息的发送顺序性，也保证了接受顺序性。&lt;/li&gt;
+&lt;li&gt;在广播事务提议之前，Leader服务器会先给这个提议分配一个全局单调递增的唯一事务ID（ZXID）。为了保证每一个消息严格的因果关系，必须将每一个事务提议按照其ZXID的先后顺序来进行排序与处理。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果你了解过&lt;strong&gt;二阶段提交（2PC）协议&lt;/strong&gt;，你会发现其实消息广播的过程实际上就是一个&lt;strong&gt;简化版本的二阶段提交过程&lt;/strong&gt;，他将二阶段提交中的中断逻辑删除，Leader服务器不需要等待集群中的全部Follower服务器都响应反馈，只需要得到过半Follower的ACK就开始执行事务的提交。这种简化版的2PC虽然提高了效率，但是无法处理Leader服务器崩溃退出而导致的数据不一致问题，因此ZooKeeper中又添加了&lt;strong&gt;崩溃恢复模式&lt;/strong&gt;来解决这个问题。&lt;/p&gt;
+&lt;h2 id=&#34;崩溃恢复&#34;&gt;崩溃恢复&lt;/h2&gt;
+&lt;p&gt;当Leader服务器出现崩溃退出或机器重启，亦或是集群中不存在半数以上的服务器与Leader服务器保持正常通信时，在重新开始新的一轮原子广播事务操作之前，此时所有节点都会使用&lt;strong&gt;崩溃恢复协议&lt;/strong&gt;来使彼此达到一个一致的状态。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;崩溃恢复过程需要确保那些已经在Leader服务器上提交的事务最终被所有的事务提交。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;假设一个事务中Leader服务器（server2）上被提交了，并且已经得到了过半Follower服务器的ACK反馈，但是在它将Commit消息发送给所有的Follower机器之前，Leader服务器就挂掉了，如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk6.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上图可以看到，部分的节点收到了commit请求并进行了提交，而有一部分Leader还没来得及发送就已经崩溃了。针对这种情况，崩溃恢复必须要确保该事务最终能够在所有的服务器上都被提交成功，否则将会出现数据不一致的情况。所以在重新选举的时候，必定会选取&lt;strong&gt;ZXID最大&lt;/strong&gt;的节点来确保其保留了最新的事件。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;崩溃恢复过程需要确保丢弃那些只在Leader服务器上被提出的事务。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;如果Leader服务器在提交了一个事务之后，还没来得及广播发送commit就已经崩溃推出了，从而导致集群中的其他服务器都没有收到这个事务提议。当原先的Leader节点故障恢复后，再次以Follower的角色加入集群后，此时就因为只有它完成了事务提交，而产生了数据不一致的情况，如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk7.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;针对这种情况，我们需要让server2在故障恢复后能够丢弃这些只在它这个节点上提出的事务，来确保数据一致。&lt;/p&gt;
+&lt;p&gt;为了能够满足上述的两个要求，所以ZooKeeper让Leader选举算法保证新选举出来的Leader服务器拥有集群中所有机器&lt;strong&gt;最高的事务编号（ZXID最大）&lt;/strong&gt;，那么这就肯定能够保证新选举出来的Leader一定具有所有已经提交的提案，此时新的Leader就会将事务日志中尚未提交的消息同步到各个服务器中。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>ZooKeeper 集群</title>
+        <link>https://blog.orekilee.top/p/zookeeper-%E9%9B%86%E7%BE%A4/</link>
+        <pubDate>Mon, 23 May 2022 21:13:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/zookeeper-%E9%9B%86%E7%BE%A4/</guid>
+        <description>&lt;h1 id=&#34;集群&#34;&gt;集群&lt;/h1&gt;
+&lt;h2 id=&#34;集群角色&#34;&gt;集群角色&lt;/h2&gt;
+&lt;p&gt;通常在分布式系统中，构成一个集群的每一台机器都有自己的角色，最常见的集群模式就是&lt;strong&gt;Master/Slave模式（主从模式）&lt;/strong&gt;，在这种模式中，通常Maste服务器作为主服务器提供写服务，其他的Slave服务器从服务器通过异步复制的方式获取Master服务器最新的数据提供读服务。&lt;/p&gt;
+&lt;p&gt;但是ZooKeeper并没有沿用传统的主从模式，而是引入了&lt;strong&gt;Leader&lt;/strong&gt;、&lt;strong&gt;Follower&lt;/strong&gt;和&lt;strong&gt;Observer&lt;/strong&gt;三种角色，如下图所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk4.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;ZooKeeper集群中的所有机器通过一个&lt;strong&gt;Leader 选举过程&lt;/strong&gt;来选定一台称为&lt;strong&gt;Leader&lt;/strong&gt;的机器，Leader既可以为客户端提供写服务又能提供读服务。除了Leader外，&lt;strong&gt;Follower&lt;/strong&gt;和&lt;strong&gt;Observer&lt;/strong&gt;都只能提供读服务。Follower和Observer唯一的区别在于Observer机器不参与Leader的选举过程，也不参与写操作的“过半写成功”策略，因此Observer机器可以在不影响写性能的情况下提升集群的读性能。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Leader&lt;/strong&gt;：为客户端提供读和写的服务，负责投票的发起和决议，更新系统状态。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Follower&lt;/strong&gt;：为客户端提供读服务，如果是写服务则转发给Leader。在选举过程中参与投票。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Observer&lt;/strong&gt;：与Follower工作原理基本一致，唯一的区别是Observer不参与任何形式的投票。Observer主要用来在不影响写性能的情况下提升集群的读性能，是ZooKeeper3.3中新增的角色。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;ZooKeeper用以下四种状态来表示各个节点&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;LOOKING&lt;/strong&gt;：竞选状态。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LEADING&lt;/strong&gt;：Leader状态。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;FOLLOWING&lt;/strong&gt;：Follower状态。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OBSERVING&lt;/strong&gt;：Observer状态。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;选举&#34;&gt;选举&lt;/h2&gt;
+&lt;p&gt;Leader选举是ZooKeeper中最重要的技术之一，也是保证分布式数据一致性的关键所在。&lt;/p&gt;
+&lt;p&gt;当ZooKeeper集群中的一台服务器出现以下两种情况之一时，就会开始进入Leader选举&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;服务器初始化启动&lt;/li&gt;
+&lt;li&gt;服务器运行期间无法和Leader保持连接&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在介绍选举之前，首先介绍三个重要参数&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;服务器ID（myid）&lt;/strong&gt;：编号越大在选举算法中权重越大。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务ID（zxid）&lt;/strong&gt;：值越大说明数据越新，权重越大。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;逻辑时钟（epoch-logicalclock）&lt;/strong&gt;：同一轮投票过程中的逻辑时钟值是相同的，每投完一次值会增加。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;服务器启动时期的选举&#34;&gt;服务器启动时期的选举&lt;/h3&gt;
+&lt;p&gt;ZooKeeper集群初始化时，当满足以下两个条件时，就会开始进入Leader选举流程：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;集群规模至少为2台机器&lt;/li&gt;
+&lt;li&gt;集群内的机器能够互相通信&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk8.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;如上图，选举流程如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;每个服务器会发出一个投票&lt;/strong&gt;：由于是初始化状态，每一个节点都会将自己作为Leader来进行投票，每次投票的内容包含：推举服务器的myid（在集群中的机器序号）和ZXID（事务ID），以&lt;code&gt;(myid, ZXID)&lt;/code&gt;的形式表示。初始化阶段每个节点都会将票投给自己，然后将这个投票发给集群总其他所有机器。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;接受来自各个服务器的投票&lt;/strong&gt;：每个服务器都会接收来自其他服务器的投票，在接收投票后首先会判断该投票的有效性，如是否为本轮投票（逻辑时钟）、是否来自LOOING状态的服务器。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;处理投票&lt;/strong&gt;：在接收到来自其他服务器的投票后，针对每一个投票，服务器都需要将别人的投票和自己的投票进行PK，PK规则如下
+&lt;ul&gt;
+&lt;li&gt;优先检查ZXID，ZXID较大的优先作为Leader。&lt;/li&gt;
+&lt;li&gt;如果Leader相同则比较myid，myid较大的作为Leader。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk9.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;统计投票&lt;/strong&gt;：每次投票后，服务器都会统计所有投票，判断是否已经有过半的机器接收到相同的投票信息。当票数达到半数以上时，此时就认为已经选出了Leader。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;改变服务器状态&lt;/strong&gt;：一旦确认了Leader，则每个服务器开始改变自己的状态。如果是Follower则更改成FOLLOWING；如果是Observer则更改成OBSERVING；如果是Leader则更改成LEADING；&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;服务器运行时期的选举&#34;&gt;服务器运行时期的选举&lt;/h3&gt;
+&lt;p&gt;在ZooKeeper集群正常运行中，一旦选出一个Leader，那么所有服务器的集群角色一般不会再发生变化——也就是说Leader服务器将一直作为集群的Leader，即使集群中有非Leader机器挂了或者是有机器加入集群也不会影响Leader。但是一旦Leader所在的机器挂掉，那么此时整个集群将暂时无法对外服务，马上进入新一轮的Leader选举。&lt;/p&gt;
+&lt;p&gt;服务器运行期间的Leader选举和启动时期的Leader选举基本是一致的，只增加了一个变更状态的步骤，流程如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;变更状态&lt;/strong&gt;：当Leader挂了之后，剩下的所有非Observer服务器都会将自己的服务器状态变更为LOOKING，然后开始进入Leader选举流程。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;每个服务器会发出一个投票&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;接受来自各个服务器的投票&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;处理投票&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;统计投票&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;改变服务器状态&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;集群的机器数量&#34;&gt;集群的机器数量&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;为什么ZooKeeper提倡集群的机器数量最好要做奇数台呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;ZooKeeper 集群在宕掉几个 ZooKeeper 服务器之后，如果剩下的 ZooKeeper 服务器个数大于宕掉的个数的话整个 ZooKeeper 才依然可用。假如我们的集群中有 n 台 ZooKeeper 服务器，那么也就是剩下的服务数必须大于 n/2。先说一下结论，2n 和 2n-1 的容忍度是一样的，都是 n-1，大家可以先自己仔细想一想，这应该是一个很简单的数学问题了。 比如假如我们有 3 台，那么最大允许宕掉 1 台 ZooKeeper 服务器，如果我们有 4 台的的时候也同样只允许宕掉 1 台。 假如我们有 5 台，那么最大允许宕掉 2 台 ZooKeeper 服务器，如果我们有 6 台的的时候也同样只允许宕掉 2 台。&lt;/p&gt;
+&lt;p&gt;综上，何必增加那一个不必要的 ZooKeeper 呢？&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>ZooKeeper 系统模型</title>
+        <link>https://blog.orekilee.top/p/zookeeper-%E7%B3%BB%E7%BB%9F%E6%A8%A1%E5%9E%8B/</link>
+        <pubDate>Mon, 23 May 2022 21:11:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/zookeeper-%E7%B3%BB%E7%BB%9F%E6%A8%A1%E5%9E%8B/</guid>
+        <description>&lt;h1 id=&#34;系统模型&#34;&gt;系统模型&lt;/h1&gt;
+&lt;h2 id=&#34;数据模型&#34;&gt;数据模型&lt;/h2&gt;
+&lt;p&gt;ZooKeeper数据存储的结构与标准的Unix文件系统非常类似，但是并没有引入传统文件系统中目录和文件等概念，而是使用了其特有的&lt;strong&gt;数据节点&lt;/strong&gt;的概念，我们称之为&lt;code&gt;ZNode&lt;/code&gt;。&lt;code&gt;Znode&lt;/code&gt;是zookeeper中的最小数据单元，每个&lt;code&gt;Znode&lt;/code&gt;上都可以保存数据，同时还可以挂载子节点，形成一个树形化命名空间。&lt;/p&gt;
+&lt;p&gt;如上下图，&lt;code&gt;Znode&lt;/code&gt;的节点路径标识方式和Unix文件系统路径非常相似，都是由一系列使用斜杠（/）进行分割的路径表示，最上层的根结点以&lt;code&gt;/&lt;/code&gt;代表，并且每个&lt;code&gt;Znode&lt;/code&gt;都有一个唯一的路径标识。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk11.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;blockquote&gt;
+&lt;p&gt;⚠️注意：ZooKeeper 主要是用来协调服务的，而不是用来存储业务数据的，所以不要放比较大的数据在 znode 上，ZooKeeper 给出的上限是每个结点的数据大小最大是 1M。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;节点特性&#34;&gt;节点特性&lt;/h2&gt;
+&lt;h3 id=&#34;节点类型&#34;&gt;节点类型&lt;/h3&gt;
+&lt;p&gt;在ZooKeeper中，&lt;code&gt;Znode&lt;/code&gt;节点类型分为&lt;strong&gt;持久节点（PERSISTENT）&lt;/strong&gt;、&lt;strong&gt;临时节点（EPHEMERAL）&lt;/strong&gt;、**顺序节点（SEQUENTIAL）**三大类，通过组合使用，可以生成以下四种组合型节点类型：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;持久节点&lt;/strong&gt;：该数据节点被创建后，就会一直存在于ZooKeeper的服务器上，直到有删除操作来主动清除这个节点。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;持久顺序节点&lt;/strong&gt;：基本特性与持久节点一致，额外的特性是顺序性，即一个父节点可以为其子节点&lt;strong&gt;维护一个创建的先后顺序&lt;/strong&gt; ，这个顺序体现在&lt;strong&gt;节点名称&lt;/strong&gt;上，是节点名称后自动添加一个由 10 位数字组成的数字串，从 0 开始计数，上限是整型最大值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;临时节点&lt;/strong&gt;：临时节点的生命周期与客户端的会话绑定在一起，如果客户端会话失效，则这个节点就会自动被清理掉。同时，临时节点不能创建子节点，它只能作为叶子节点使用。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;临时顺序节点&lt;/strong&gt;：基本特性与临时节点一致，额外的特性是顺序性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;节点状态&#34;&gt;节点状态&lt;/h3&gt;
+&lt;p&gt;每个数据节点除了存储数据内容之外，还存储了数据节点本身的一些状态信息（如子节点数量、事务id、版本信息等），这些状态信息由&lt;code&gt;Stat&lt;/code&gt;这个类来维护。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;czxid&lt;/code&gt;：&lt;code&gt;Created ZXID&lt;/code&gt;，该数据节点被创建时的事务ID。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;mzxid&lt;/code&gt;：&lt;code&gt;Modified ZXID&lt;/code&gt;，节点最后一次被更新时的事务ID。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ctime&lt;/code&gt;：&lt;code&gt;Created Time&lt;/code&gt;，该节点被创建的时间。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;mtime&lt;/code&gt;： &lt;code&gt;Modified Time&lt;/code&gt;，该节点最后一次被修改的时间。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;version&lt;/code&gt;：节点的版本号。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;cversion&lt;/code&gt;：子节点的版本号。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;aversion&lt;/code&gt;：节点的 &lt;code&gt;ACL&lt;/code&gt; 版本号。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ephemeralOwner&lt;/code&gt;：创建该节点的会话的&lt;code&gt;sessionID&lt;/code&gt; ，如果该节点为持久节点，该值为0。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;dataLength&lt;/code&gt;：节点数据内容的长度。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;numChildre&lt;/code&gt;：该节点的子节点个数，如果为临时节点为0。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pzxid&lt;/code&gt;：该节点子节点列表最后一次被修改时的事务ID，注意是子节点的&lt;strong&gt;列表&lt;/strong&gt; ，不是内容。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;版本&#34;&gt;版本&lt;/h2&gt;
+&lt;p&gt;ZooKeeper中为节点引入了版本的概念，每个数据节点都具有三种类型的版本信息，对数据节点的任何更新操作都会引起版本号的变化。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;dataVersion&lt;/strong&gt;：当前&lt;code&gt;Znode&lt;/code&gt;节点数据内容版本号&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;cversion&lt;/strong&gt;：当前&lt;code&gt;Znode&lt;/code&gt;节点的子节点版本号。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;aclVersion&lt;/strong&gt;：当前&lt;code&gt;Znode&lt;/code&gt;的ACL变更版本号。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;为了解决那些数据更新竞争激烈的场景，ZooKeeper借助版本号机制来实现乐观并发控制。&lt;/p&gt;
+&lt;h2 id=&#34;watcher&#34;&gt;Watcher&lt;/h2&gt;
+&lt;p&gt;Watcher（事件监听器），是ZooKeeper中的一个很重要的特性。ZooKeeper允许客户端在指定节点上注册一些 Watcher，并且在一些特定事件触发的时候，ZooKeeper服务端会将事件通知到感兴趣的客户端上去，该机制是 ZooKeeper 实现分布式协调服务的重要特性。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk2.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上图中我们可以看到，ZooKeeper的Watcher机制主要包括客户端线程、客户端WatchManager、ZooKeeper服务器三个部分。工作流程如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;客户端向ZooKeeper服务器注册Watcher对象&lt;/li&gt;
+&lt;li&gt;客户端将Watcher对象存储在客户端的WatchManager中。&lt;/li&gt;
+&lt;li&gt;当ZooKeeper服务器触发Watcher事件后，会向客户端发送通知。&lt;/li&gt;
+&lt;li&gt;客户端从WatchManager中取出对应的Watcher对象来执行回调逻辑。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;acl&#34;&gt;ACL&lt;/h2&gt;
+&lt;p&gt;ZooKeeper提供了一套完善的&lt;strong&gt;ACL（Access Control Lists）权限控制机制&lt;/strong&gt;来保障数据的安全，类似于Unix/Linux中的UGO权限控制机制。&lt;/p&gt;
+&lt;p&gt;ACL机制由以下三部分组成，我们通常使用&lt;code&gt;scheme:id:permission&lt;/code&gt;来标识一个有效的ACL信息。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;权限模式（Scheme）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;授权对象（ID）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;权限（Permission）&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;权限模式scheme&#34;&gt;权限模式：Scheme&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;权限模式是用来确定权限验证过程中使用的校验策略&lt;/strong&gt;。在ZooKeeper中最常用的就是以下四种权限模式&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;IP&lt;/strong&gt;：IP模式通过IP地址粒度来进行权限控制。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Digest&lt;/strong&gt;：Digest是最常用的权限控制模式，其以类似于&lt;code&gt;username:password&lt;/code&gt;形式的权限标识来进行权限配置，便于区分不同应用来进行权限控制。当我们配置了权限标识后，为了保证安全，ZooKeeper会分别使用SHA-1算法和BASE64编码进行处理，将其混淆为无法辨识的字符串。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;World&lt;/strong&gt;：World是最开放的权限控制模式，是一种特殊的Digest模式。在该模式下数据节点的访问权限对所有用户开放，即所有用户都可以在不进行任何数据校验的情况下操作ZooKeeper上的数据。权限标识为&lt;code&gt;world:anyone&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Super&lt;/strong&gt;：Super模式即超级用户模式，是一种特殊的Digest模式。在该模式下超级用户可以对任意ZooKeeper上的数据节点进行任何操作。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;权限对象id&#34;&gt;权限对象：ID&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;授权对象指的是权限赋予的用户或一个指定实体&lt;/strong&gt;，例如IP地址或是机器等。在不同的权限关系下，授权对象是不同的，对应关系如下图：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;IP&lt;/strong&gt;：通常是一个IP地址或者一个IP网段，如&lt;code&gt;192.168.0.110&lt;/code&gt;或&lt;code&gt;192.168.0.1/24&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Digest&lt;/strong&gt;：Digest是最常用的权限控制模式，其以类似于&lt;code&gt;username:password&lt;/code&gt;形式的权限标识来进行权限配置，便于区分不同应用来进行权限控制。当我们配置了权限标识后，为了保证安全，ZooKeeper会分别使用SHA-1算法和BASE64编码进行处理，将其混淆为无法辨识的字符串。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;World&lt;/strong&gt;：只有一个ID：&lt;code&gt;anyone&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Super&lt;/strong&gt;：与Digest模式一致。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;权限permission&#34;&gt;权限：Permission&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;权限就是指那些通过权限检查后可以被允许执行的操作&lt;/strong&gt;。在ZooKeeper中，所有对数据的操作权限分为以下五大类：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;CREATE&lt;/strong&gt;：数据节点的创建权限，允许授权对象在该数据节点下创建子节点。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;DELETE&lt;/strong&gt;：数据节点的删除权限，允许授权对象删除该数据节点的子节点。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;READ&lt;/strong&gt;：数据节点的读取权限，允许授权对象访问该数据节点并读取其数据内容或子节点列表等。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;WRITE&lt;/strong&gt;：数据节点的更新权限，允许授权对象对该数据节点进行更新操作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ADMIN&lt;/strong&gt;：数据节点的管理权限，允许授权对象在该数据节点进行ACL相关的设置操作。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;session&#34;&gt;Session&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;Session（会话）&lt;/strong&gt; 可以看作是ZooKeeper服务器与客户端的之间的一个&lt;strong&gt;TCP长连接&lt;/strong&gt;，通过这个连接，客户端能够通过&lt;strong&gt;心跳检测&lt;/strong&gt;与服务器保持有效的会话，也能够向ZooKeeper服务器发送请求并接受响应，同时还能够通过该连接接收来自服务器的Watcher事件通知。&lt;/p&gt;
+&lt;p&gt;Session有一个属性叫做：&lt;code&gt;sessionTimeout&lt;/code&gt; ，&lt;code&gt;sessionTimeout&lt;/code&gt; 代表会话的超时时间。当由于服务器压力太大、网络故障或是客户端主动断开连接等各种原因导致客户端连接断开时，只要在&lt;code&gt;sessionTimeout&lt;/code&gt;规定的时间内能够重新连接上集群中任意一台服务器，那么之前创建的会话仍然有效。&lt;/p&gt;
+&lt;p&gt;另外在每次客户端向服务端发起会话创建请求时，服务端都会为其分配一个&lt;strong&gt;SessionID&lt;/strong&gt;，SessionID用来&lt;strong&gt;唯一标识&lt;/strong&gt;一个会话，因此ZooKeeper必须保证SessionID的&lt;strong&gt;全局唯一性&lt;/strong&gt;。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>ZooKeeper 基本概念</title>
+        <link>https://blog.orekilee.top/p/zookeeper-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/</link>
+        <pubDate>Mon, 23 May 2022 21:10:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/zookeeper-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/</guid>
+        <description>&lt;h1 id=&#34;zookeeper-基本概念&#34;&gt;ZooKeeper 基本概念&lt;/h1&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk11.jpeg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;ZooKeeper是一个开源的&lt;strong&gt;分布式协调服务&lt;/strong&gt;，由知名互联网公司雅虎创建，是Google Chubby的开源实现。它的设计目标是将那些复杂且容易出错的分布式一致性服务封装起来，构成一个高效可靠的&lt;strong&gt;原语集&lt;/strong&gt;，并以一系列简单易用的接口提供给用户使用。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;原语：&lt;/strong&gt; 操作系统或计算机网络用语范畴。是由若干条指令组成的，用于完成一定功能的一个过程。具有不可分割性·即原语的执行必须是连续的，在执行过程中不允许被中断。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;特点&#34;&gt;特点&lt;/h2&gt;
+&lt;p&gt;ZooKeeper可以保证如下分布式一致性特性：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;顺序一致性&lt;/strong&gt;：从同一客户端发起的事务请求，最终将会严格地按照顺序被应用到 ZooKeeper 中去。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;原子性&lt;/strong&gt;：所有事务请求的处理结果在整个集群中所有机器上的应用情况是一致的，也就是说，要么整个集群中所有的机器都成功应用了某一个事务，要么都没有应用。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;单一视图&lt;/strong&gt;：无论客户端连到哪一个 ZooKeeper 服务器上，其看到的服务端数据模型都是一致的。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;可靠性&lt;/strong&gt;：一旦一次更改请求被应用，更改的结果就会被持久化，直到被下一次更改覆盖。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实时性&lt;/strong&gt;：ZooKeeper保证在一定时间段内，客户端最终一定能够从服务端上读取到最新的数据状态。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;设计目标&#34;&gt;设计目标&lt;/h2&gt;
+&lt;p&gt;ZooKeeper致力于实现一个&lt;strong&gt;高性能、高可用，具有严格顺序访问控制能力&lt;/strong&gt;（主要是写操作的严格顺序性）的分布式协调服务。高性能使得ZooKeeper能够应用于那些对系统吞吐有明确要求的大型分布式系统，高可用使得分布式的单点问题得到了很好的解决，而严格的顺序访问控制使得客户端能够基于ZooKeeper实现一些复杂的同步原语。&lt;/p&gt;
+&lt;p&gt;针对以上需求，ZooKeeper的四个设计目标如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;简单的数据模型&lt;/strong&gt;：ZooKeeper使用一个共享的、树形结构的命名空间来协调分布式程序。其数据模型类似一个文件系统，不过与传统的文件系统不同，ZooKeeper将全量数据存储在内存中，以此来实现提高服务器吞吐、减少延迟的目的。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;可以构建集群&lt;/strong&gt;：一个ZooKeeper集群通常由一组机器组成，组成ZooKeeper集群的每台机器都会在内存中维护当前服务器状态，并且每台机器之间都互相保持通信。只要集群中存在半数以上的机器能够正常工作，整个集群就可以正常对外提供服务。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/zookeeper/zk10.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;顺序访问&lt;/strong&gt;：对于来自客户端的每个更新请求，ZooKeeper都会分配一个全局唯一的递增编号，这个编号反映了所有事务操作的先后顺序，可以根据这个特性来实现更高层次的同步原语。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;高性能&lt;/strong&gt;：由于ZooKeeper将全量数据存储在内存中，并直接服务于客户端的所有非事务请求，因此它尤其适用于以读操作为主的应用场景。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;应用场景&#34;&gt;应用场景&lt;/h2&gt;
+&lt;p&gt;ZooKeeper是一个典型的分布式数据一致性的解决方案，通常用于以下这些场景：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;数据发布/订阅&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;负载均衡&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;命名服务&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;分布式协调/通知&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;集群管理&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Master选举&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;分布式锁&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;分布式队列&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

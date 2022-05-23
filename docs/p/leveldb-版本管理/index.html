@@ -1,0 +1,2115 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='版本管理  为什么 LevelDB 需要版本的概念呢？
+ 针对共享的资源，有三种方式：
+ 悲观锁：这是最简单的处理方式。加锁保护，读写互斥。效率低。 乐观锁：它假设多用户并发的事物在处理时不会彼此互相影响，各事务能够在不产生锁的的情况下处理各自影响的那部分数据。在提交数据更新之前，每个事务会先检查在该事务读取数据后，有没有其他事务又修改了该数据。 果其他事务有更新的话，正在提交的事务会进行回滚；这样做不会有锁竞争更不会产生死锁， 但如果数据竞争的概率较高，效率也会受影响 。 MVCC：MVCC 是一个数据库常用的概念。Multi Version Concurrency Control 多版本并发控制。每一个执行操作的用户，看到的都是数据库特定时刻的的快照 （Snapshot）， Writer 的任何未完成的修改都不会被其他的用户所看到；当对数据进行更新的时候并是不直接覆盖，而是先进行标记，然后在其他地方添加新的数据（这些变更存储在 VersionEdit），从而形成一个新版本，此时再来读取的 Reader 看到的就是最新的版本了。所以这种处理策略是维护了多个版本的数据的，但只有一个是最新的（VersionSet 中维护着全局最新的 Seqnum）。  LevelDB 通过 Version 以及 VersionSet 来管理元信息，用 Manifest 来保存元信息。
+Manifest Manifest 文件专用于记录版本信息。LevelDB 采用了增量式的存储方式，记录每一个版本相较于一个版本的变化情况。
+ 变化情况大致包括：
+（1）新增了哪些 SSTable 文件；
+（2）删除了哪些 SSTable 文件（由于Compaction导致）；
+（3）最新的 Journal 日志文件标号等；
+ 一个 Manifest 文件中，包含了多条 Session Record。其中第一条 Session Record 记载了当时 LevelDB 的全量版本信息，其余若干条 Session Record 仅记录每次更迭的变化情况。具体结构如下图：
+LevelDB 启动时会先到数据目录寻找一个名为 CURRENT 的文件，该文件中会保存 Manifest 的文件名称，通过读取 Manifest 记录的 Session Record，从初始状态开始不断地应用这些版本改动，即可使得系统的版本信息恢复到最近一次使用的状态。'><title>LevelDB 版本管理</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/leveldb-%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='LevelDB 版本管理'>
+<meta property='og:description' content='版本管理  为什么 LevelDB 需要版本的概念呢？
+ 针对共享的资源，有三种方式：
+ 悲观锁：这是最简单的处理方式。加锁保护，读写互斥。效率低。 乐观锁：它假设多用户并发的事物在处理时不会彼此互相影响，各事务能够在不产生锁的的情况下处理各自影响的那部分数据。在提交数据更新之前，每个事务会先检查在该事务读取数据后，有没有其他事务又修改了该数据。 果其他事务有更新的话，正在提交的事务会进行回滚；这样做不会有锁竞争更不会产生死锁， 但如果数据竞争的概率较高，效率也会受影响 。 MVCC：MVCC 是一个数据库常用的概念。Multi Version Concurrency Control 多版本并发控制。每一个执行操作的用户，看到的都是数据库特定时刻的的快照 （Snapshot）， Writer 的任何未完成的修改都不会被其他的用户所看到；当对数据进行更新的时候并是不直接覆盖，而是先进行标记，然后在其他地方添加新的数据（这些变更存储在 VersionEdit），从而形成一个新版本，此时再来读取的 Reader 看到的就是最新的版本了。所以这种处理策略是维护了多个版本的数据的，但只有一个是最新的（VersionSet 中维护着全局最新的 Seqnum）。  LevelDB 通过 Version 以及 VersionSet 来管理元信息，用 Manifest 来保存元信息。
+Manifest Manifest 文件专用于记录版本信息。LevelDB 采用了增量式的存储方式，记录每一个版本相较于一个版本的变化情况。
+ 变化情况大致包括：
+（1）新增了哪些 SSTable 文件；
+（2）删除了哪些 SSTable 文件（由于Compaction导致）；
+（3）最新的 Journal 日志文件标号等；
+ 一个 Manifest 文件中，包含了多条 Session Record。其中第一条 Session Record 记载了当时 LevelDB 的全量版本信息，其余若干条 Session Record 仅记录每次更迭的变化情况。具体结构如下图：
+LevelDB 启动时会先到数据目录寻找一个名为 CURRENT 的文件，该文件中会保存 Manifest 的文件名称，通过读取 Manifest 记录的 Session Record，从初始状态开始不断地应用这些版本改动，即可使得系统的版本信息恢复到最近一次使用的状态。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/leveldb-%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='LevelDB' /><meta property='article:tag' content='KV存储' /><meta property='article:published_time' content='2022-05-23T23:43:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-24T00:05:26&#43;08:00'/>
+<meta name="twitter:title" content="LevelDB 版本管理">
+<meta name="twitter:description" content="版本管理  为什么 LevelDB 需要版本的概念呢？
+ 针对共享的资源，有三种方式：
+ 悲观锁：这是最简单的处理方式。加锁保护，读写互斥。效率低。 乐观锁：它假设多用户并发的事物在处理时不会彼此互相影响，各事务能够在不产生锁的的情况下处理各自影响的那部分数据。在提交数据更新之前，每个事务会先检查在该事务读取数据后，有没有其他事务又修改了该数据。 果其他事务有更新的话，正在提交的事务会进行回滚；这样做不会有锁竞争更不会产生死锁， 但如果数据竞争的概率较高，效率也会受影响 。 MVCC：MVCC 是一个数据库常用的概念。Multi Version Concurrency Control 多版本并发控制。每一个执行操作的用户，看到的都是数据库特定时刻的的快照 （Snapshot）， Writer 的任何未完成的修改都不会被其他的用户所看到；当对数据进行更新的时候并是不直接覆盖，而是先进行标记，然后在其他地方添加新的数据（这些变更存储在 VersionEdit），从而形成一个新版本，此时再来读取的 Reader 看到的就是最新的版本了。所以这种处理策略是维护了多个版本的数据的，但只有一个是最新的（VersionSet 中维护着全局最新的 Seqnum）。  LevelDB 通过 Version 以及 VersionSet 来管理元信息，用 Manifest 来保存元信息。
+Manifest Manifest 文件专用于记录版本信息。LevelDB 采用了增量式的存储方式，记录每一个版本相较于一个版本的变化情况。
+ 变化情况大致包括：
+（1）新增了哪些 SSTable 文件；
+（2）删除了哪些 SSTable 文件（由于Compaction导致）；
+（3）最新的 Journal 日志文件标号等；
+ 一个 Manifest 文件中，包含了多条 Session Record。其中第一条 Session Record 记载了当时 LevelDB 的全量版本信息，其余若干条 Session Record 仅记录每次更迭的变化情况。具体结构如下图：
+LevelDB 启动时会先到数据目录寻找一个名为 CURRENT 的文件，该文件中会保存 Manifest 的文件名称，通过读取 Manifest 记录的 Session Record，从初始状态开始不断地应用这些版本改动，即可使得系统的版本信息恢复到最近一次使用的状态。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/leveldb/" style="background-color: #2a9d8f; color: #fff;">
+                LevelDB
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/leveldb-%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86/">LevelDB 版本管理</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="版本管理">版本管理</h1>
+<blockquote>
+<p>为什么 LevelDB 需要版本的概念呢？</p>
+</blockquote>
+<p>针对共享的资源，有三种方式：</p>
+<ul>
+<li><strong>悲观锁</strong>：这是最简单的处理方式。加锁保护，读写互斥。效率低。</li>
+<li><strong>乐观锁</strong>：它假设多用户并发的事物在处理时不会彼此互相影响，各事务能够在不产生锁的的情况下处理各自影响的那部分数据。在提交数据更新之前，每个事务会先检查在该事务读取数据后，有没有其他事务又修改了该数据。 果其他事务有更新的话，正在提交的事务会进行回滚；这样做不会有锁竞争更不会产生死锁， 但如果数据竞争的概率较高，效率也会受影响 。</li>
+<li><strong>MVCC</strong>：MVCC 是一个数据库常用的概念。Multi Version Concurrency Control 多版本并发控制。每一个执行操作的用户，看到的都是数据库特定时刻的的快照 （Snapshot）， Writer 的任何未完成的修改都不会被其他的用户所看到；当对数据进行更新的时候并是不直接覆盖，而是先进行标记，然后在其他地方添加新的数据（这些变更存储在 VersionEdit），从而形成一个新版本，此时再来读取的 Reader 看到的就是最新的版本了。所以这种处理策略是维护了多个版本的数据的，但只有一个是最新的（VersionSet 中维护着全局最新的 Seqnum）。</li>
+</ul>
+<p><strong>LevelDB 通过 Version 以及 VersionSet 来管理元信息，用 Manifest 来保存元信息。</strong></p>
+<h2 id="manifest">Manifest</h2>
+<p><strong>Manifest 文件专用于记录版本信息。LevelDB 采用了增量式的存储方式，记录每一个版本相较于一个版本的变化情况。</strong></p>
+<blockquote>
+<p>变化情况大致包括：</p>
+<p>（1）新增了哪些 SSTable 文件；</p>
+<p>（2）删除了哪些 SSTable 文件（由于Compaction导致）；</p>
+<p>（3）最新的 Journal 日志文件标号等；</p>
+</blockquote>
+<p>一个 Manifest 文件中，包含了多条 Session Record。其中第一条 Session Record 记载了当时 LevelDB 的全量版本信息，其余若干条 Session Record 仅记录每次更迭的变化情况。具体结构如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/leveldb/leveldb12.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>LevelDB 启动时会先到数据目录寻找一个名为 CURRENT 的文件，该文件中会保存 Manifest 的文件名称，通过读取 Manifest 记录的 Session Record，从初始状态开始不断地应用这些版本改动，即可使得系统的版本信息恢复到最近一次使用的状态。</p>
+<h2 id="version">Version</h2>
+<p><strong>Version 表示当前的一个版本</strong>，该结构中会保存每个层级拥有的文件信息以及指向前一个和后一个版本的指针等。</p>
+<h3 id="结构">结构</h3>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span><span class="lnt">69
+</span><span class="lnt">70
+</span><span class="lnt">71
+</span><span class="lnt">72
+</span><span class="lnt">73
+</span><span class="lnt">74
+</span><span class="lnt">75
+</span><span class="lnt">76
+</span><span class="lnt">77
+</span><span class="lnt">78
+</span><span class="lnt">79
+</span><span class="lnt">80
+</span><span class="lnt">81
+</span><span class="lnt">82
+</span><span class="lnt">83
+</span><span class="lnt">84
+</span><span class="lnt">85
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Version</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="k">struct</span> <span class="nc">GetStats</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">FileMetaData</span><span class="o">*</span> <span class="n">seek_file</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="kt">int</span> <span class="n">seek_file_level</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">AddIterators</span><span class="p">(</span><span class="k">const</span> <span class="n">ReadOptions</span><span class="o">&amp;</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Iterator</span><span class="o">*&gt;*</span> <span class="n">iters</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Status</span> <span class="nf">Get</span><span class="p">(</span><span class="k">const</span> <span class="n">ReadOptions</span><span class="o">&amp;</span><span class="p">,</span> <span class="k">const</span> <span class="n">LookupKey</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">val</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">             <span class="n">GetStats</span><span class="o">*</span> <span class="n">stats</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="nf">UpdateStats</span><span class="p">(</span><span class="k">const</span> <span class="n">GetStats</span><span class="o">&amp;</span> <span class="n">stats</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="nf">RecordReadSample</span><span class="p">(</span><span class="n">Slice</span> <span class="n">key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">Ref</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">Unref</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">GetOverlappingInputs</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">      <span class="kt">int</span> <span class="n">level</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="k">const</span> <span class="n">InternalKey</span><span class="o">*</span> <span class="n">begin</span><span class="p">,</span>  <span class="c1">// nullptr means before all keys
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">const</span> <span class="n">InternalKey</span><span class="o">*</span> <span class="n">end</span><span class="p">,</span>    <span class="c1">// nullptr means after all keys
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">FileMetaData</span><span class="o">*&gt;*</span> <span class="n">inputs</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="nf">OverlapInLevel</span><span class="p">(</span><span class="kt">int</span> <span class="n">level</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">smallest_user_key</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                      <span class="k">const</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">largest_user_key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="nf">PickLevelForMemTableOutput</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">smallest_user_key</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                 <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">largest_user_key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="nf">NumFiles</span><span class="p">(</span><span class="kt">int</span> <span class="n">level</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">files_</span><span class="p">[</span><span class="n">level</span><span class="p">].</span><span class="n">size</span><span class="p">();</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">DebugString</span><span class="p">()</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="k">friend</span> <span class="k">class</span> <span class="nc">Compaction</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">friend</span> <span class="k">class</span> <span class="nc">VersionSet</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">class</span> <span class="nc">LevelFileNumIterator</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">explicit</span> <span class="nf">Version</span><span class="p">(</span><span class="n">VersionSet</span><span class="o">*</span> <span class="n">vset</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">      <span class="o">:</span> <span class="n">vset_</span><span class="p">(</span><span class="n">vset</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">  <span class="n">next_</span><span class="p">(</span><span class="k">this</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">  <span class="n">prev_</span><span class="p">(</span><span class="k">this</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">  <span class="n">refs_</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">  <span class="n">file_to_compact_</span><span class="p">(</span><span class="k">nullptr</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">  <span class="n">file_to_compact_level_</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">  <span class="n">compaction_score_</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">  <span class="n">compaction_level_</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Version</span><span class="p">(</span><span class="k">const</span> <span class="n">Version</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Version</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Version</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="o">~</span><span class="n">Version</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Iterator</span><span class="o">*</span> <span class="nf">NewConcatenatingIterator</span><span class="p">(</span><span class="k">const</span> <span class="n">ReadOptions</span><span class="o">&amp;</span><span class="p">,</span> <span class="kt">int</span> <span class="n">level</span><span class="p">)</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">ForEachOverlapping</span><span class="p">(</span><span class="n">Slice</span> <span class="n">user_key</span><span class="p">,</span> <span class="n">Slice</span> <span class="n">internal_key</span><span class="p">,</span> <span class="kt">void</span><span class="o">*</span> <span class="n">arg</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                          <span class="kt">bool</span> <span class="p">(</span><span class="o">*</span><span class="n">func</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="p">,</span> <span class="kt">int</span><span class="p">,</span> <span class="n">FileMetaData</span><span class="o">*</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">VersionSet</span><span class="o">*</span> <span class="n">vset_</span><span class="p">;</span>  <span class="c1">// VersionSet to which this Version belongs
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">Version</span><span class="o">*</span> <span class="n">next_</span><span class="p">;</span>     <span class="c1">// Next version in linked list
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">Version</span><span class="o">*</span> <span class="n">prev_</span><span class="p">;</span>     <span class="c1">// Previous version in linked list
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">int</span> <span class="n">refs_</span><span class="p">;</span>          <span class="c1">// Number of live refs to this version
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">FileMetaData</span><span class="o">*&gt;</span> <span class="n">files_</span><span class="p">[</span><span class="n">config</span><span class="o">::</span><span class="n">kNumLevels</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">FileMetaData</span><span class="o">*</span> <span class="n">file_to_compact_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">file_to_compact_level_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">double</span> <span class="n">compaction_score_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">compaction_level_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">FileMetaData</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">FileMetaData</span><span class="p">()</span> <span class="o">:</span> <span class="n">refs</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">allowed_seeks</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">30</span><span class="p">),</span> <span class="n">file_size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">refs</span><span class="p">;</span>				 <span class="c1">// 引用计数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">int</span> <span class="n">allowed_seeks</span><span class="p">;</span>     <span class="c1">// 用于seek compaction
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">uint64_t</span> <span class="n">number</span><span class="p">;</span>		 <span class="c1">// 唯一标识一个sstable
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">uint64_t</span> <span class="n">file_size</span><span class="p">;</span>    <span class="c1">// 文件大小
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">InternalKey</span> <span class="n">smallest</span><span class="p">;</span>  <span class="c1">// 最小key
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">InternalKey</span> <span class="n">largest</span><span class="p">;</span>   <span class="c1">// 最大key
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><ul>
+<li><strong>成员变量</strong>：
+<ul>
+<li><strong>GetStats</strong>：键查找时用来保存中间状态的一个结构。</li>
+<li><strong>vset_</strong>：该版本属于的版本集合。</li>
+<li><strong>next_</strong>：指向后一个版本的指针。</li>
+<li><strong>prev_</strong>：指向前一个版本的指针。</li>
+<li><strong>refs_</strong>：该版本的引用计数。</li>
+<li><strong>files_</strong>：每个层级所包含的 SSTable 文件，每一个文件以一个 FileMetaData 结构表示。</li>
+<li><strong>file_to_compact_</strong>：下次需要进行 Compaction 操作的文件。</li>
+<li><strong>file_to_compact_level_</strong>：下次需要进行 Compaction 操作的文件所属的层级。</li>
+<li><strong>compaction_score_</strong>：如果 compaction_score_ 大于 1，说明需要进行一次 Compaction 操作。</li>
+<li><strong>compaction_level_</strong>：表明需要进行 Compaction 操作的层级。</li>
+</ul>
+</li>
+</ul>
+<h2 id="versionedit">VersionEdit</h2>
+<p>**VersionEdit 是一个版本的中间状态，会保存一次 Compaction 操作后增加的删除文件信息以及其他一些元数据。**当数据库正常/非正常关闭，重新打开时，只需要按顺序把 Manifest 文件中的 VersionEdit 执行一遍，就可以把数据恢复到宕机前的最新版本。</p>
+<h3 id="结构-1">结构</h3>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span><span class="lnt">69
+</span><span class="lnt">70
+</span><span class="lnt">71
+</span><span class="lnt">72
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_edit.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">VersionEdit</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="n">VersionEdit</span><span class="p">()</span> <span class="p">{</span> <span class="n">Clear</span><span class="p">();</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="o">~</span><span class="n">VersionEdit</span><span class="p">()</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">Clear</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">SetComparatorName</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">name</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">has_comparator_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">comparator_</span> <span class="o">=</span> <span class="n">name</span><span class="p">.</span><span class="n">ToString</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">SetLogNumber</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">num</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">has_log_number_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">log_number_</span> <span class="o">=</span> <span class="n">num</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">SetPrevLogNumber</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">num</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">has_prev_log_number_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">prev_log_number_</span> <span class="o">=</span> <span class="n">num</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">SetNextFile</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">num</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">has_next_file_number_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">next_file_number_</span> <span class="o">=</span> <span class="n">num</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">SetLastSequence</span><span class="p">(</span><span class="n">SequenceNumber</span> <span class="n">seq</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">has_last_sequence_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">last_sequence_</span> <span class="o">=</span> <span class="n">seq</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">SetCompactPointer</span><span class="p">(</span><span class="kt">int</span> <span class="n">level</span><span class="p">,</span> <span class="k">const</span> <span class="n">InternalKey</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">compact_pointers_</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">make_pair</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">key</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">AddFile</span><span class="p">(</span><span class="kt">int</span> <span class="n">level</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">file</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">file_size</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">               <span class="k">const</span> <span class="n">InternalKey</span><span class="o">&amp;</span> <span class="n">smallest</span><span class="p">,</span> <span class="k">const</span> <span class="n">InternalKey</span><span class="o">&amp;</span> <span class="n">largest</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">FileMetaData</span> <span class="n">f</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">f</span><span class="p">.</span><span class="n">number</span> <span class="o">=</span> <span class="n">file</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">f</span><span class="p">.</span><span class="n">file_size</span> <span class="o">=</span> <span class="n">file_size</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">f</span><span class="p">.</span><span class="n">smallest</span> <span class="o">=</span> <span class="n">smallest</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">f</span><span class="p">.</span><span class="n">largest</span> <span class="o">=</span> <span class="n">largest</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">new_files_</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">make_pair</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">f</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">RemoveFile</span><span class="p">(</span><span class="kt">int</span> <span class="n">level</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">file</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">deleted_files_</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">make_pair</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">file</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">EncodeTo</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">dst</span><span class="p">)</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Status</span> <span class="nf">DecodeFrom</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">src</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">DebugString</span><span class="p">()</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="k">friend</span> <span class="k">class</span> <span class="nc">VersionSet</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">typedef</span> <span class="n">std</span><span class="o">::</span><span class="n">set</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">pair</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="kt">uint64_t</span><span class="o">&gt;&gt;</span> <span class="n">DeletedFileSet</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">comparator_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">log_number_</span><span class="p">;</span>		<span class="c1">//已经弃用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">uint64_t</span> <span class="n">prev_log_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">next_file_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">SequenceNumber</span> <span class="n">last_sequence_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="n">has_comparator_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="n">has_log_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="n">has_prev_log_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="n">has_next_file_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="n">has_last_sequence_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">pair</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="n">InternalKey</span><span class="o">&gt;&gt;</span> <span class="n">compact_pointers_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">DeletedFileSet</span> <span class="n">deleted_files_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">pair</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="n">FileMetaData</span><span class="o">&gt;&gt;</span> <span class="n">new_files_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><ul>
+<li><strong>成员变量</strong>：
+<ul>
+<li><strong>comparator_</strong>：比较器名称。</li>
+<li><strong>log_number_</strong>：日志文件序号。</li>
+<li>**next_file_number_：**下一个文件序列号。</li>
+<li><strong>last_sequence_</strong>：下一个写入序列号。</li>
+<li><strong>has_xxxxx_</strong>：has_comparator_ ，has_log_number_ ，has_prev_log_number_ ，has_last_sequence_ ，has_next_file_number_，布尔型变量，表明相应的成员变量是否已经设置。</li>
+<li><strong>compact_pointers_</strong>：该变量用来指示 LevelDB 中每个层级下一次进行 Compaction 操作时需要从哪个键开始。</li>
+<li>**deleted_files_：**记录每个层级执行 Compaction 操作之后删除掉的文件。</li>
+<li><strong>new_files_</strong>：记录每个层级执行 Compaction 操作之后新增的文件。新增文件记录为一个个FileMetaData 结构体。</li>
+</ul>
+</li>
+</ul>
+<h3 id="encodeto">EncodeTo</h3>
+<p><code>EncodeTo</code> 会将 VersionEdit 各个成员变量的信息编码为一个字符串，编码时会先给每个成员变量定义一个 Tag，Tag的枚举值如下所示：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_edit.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">enum</span> <span class="nc">Tag</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">kComparator</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>		<span class="c1">//比较器
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">kLogNumber</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>		<span class="c1">//日志文件序列号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">kNextFileNumber</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>	<span class="c1">//下一个文件序列号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">kLastSequence</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>	<span class="c1">//下一个写入序列号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">kCompactPointer</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>	<span class="c1">//CompactPointer类型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">kDeletedFile</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span>		<span class="c1">//删除的文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">kNewFile</span> <span class="o">=</span> <span class="mi">7</span><span class="p">,</span>			<span class="c1">//增加的文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="c1">// 8 曾经用于大Value的引用，现以弃用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">kPrevLogNumber</span> <span class="o">=</span> <span class="mi">9</span>	<span class="c1">//前一个日志文件序列号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>接下来看看 <code>EncodeTo</code> 的实现逻辑：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_edit.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">VersionEdit</span><span class="o">::</span><span class="n">EncodeTo</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">dst</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//如果为true，则先将kComparator Tag编码，然后将比较器名称编码写入。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="n">has_comparator_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">kComparator</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutLengthPrefixedSlice</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">comparator_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//与上面类似，就不再重复
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="n">has_log_number_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">kLogNumber</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint64</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">log_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">has_prev_log_number_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">kPrevLogNumber</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint64</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">prev_log_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">has_next_file_number_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">kNextFileNumber</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint64</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">next_file_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">has_last_sequence_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">kLastSequence</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint64</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">last_sequence_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//依次将compact_pointers_中的level和Key编码
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">for</span> <span class="p">(</span><span class="n">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">compact_pointers_</span><span class="p">.</span><span class="n">size</span><span class="p">();</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">kCompactPointer</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">compact_pointers_</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">first</span><span class="p">);</span>  <span class="c1">// level
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">PutLengthPrefixedSlice</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">compact_pointers_</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">second</span><span class="p">.</span><span class="n">Encode</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//依次将deleted_file_中的level和file number编码
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">for</span> <span class="p">(</span><span class="k">const</span> <span class="k">auto</span><span class="o">&amp;</span> <span class="nl">deleted_file_kvp</span> <span class="p">:</span> <span class="n">deleted_files_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">kDeletedFile</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">deleted_file_kvp</span><span class="p">.</span><span class="n">first</span><span class="p">);</span>   <span class="c1">// level
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">PutVarint64</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">deleted_file_kvp</span><span class="p">.</span><span class="n">second</span><span class="p">);</span>  <span class="c1">// file number
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//依次将new_files_中的level和FileMetaData进行编码
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">for</span> <span class="p">(</span><span class="n">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">new_files_</span><span class="p">.</span><span class="n">size</span><span class="p">();</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">const</span> <span class="n">FileMetaData</span><span class="o">&amp;</span> <span class="n">f</span> <span class="o">=</span> <span class="n">new_files_</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">second</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">kNewFile</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint32</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">new_files_</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">first</span><span class="p">);</span>  <span class="c1">// level
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//编码FileMetaData
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">PutVarint64</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">f</span><span class="p">.</span><span class="n">number</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutVarint64</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">f</span><span class="p">.</span><span class="n">file_size</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutLengthPrefixedSlice</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">f</span><span class="p">.</span><span class="n">smallest</span><span class="p">.</span><span class="n">Encode</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">      <span class="n">PutLengthPrefixedSlice</span><span class="p">(</span><span class="n">dst</span><span class="p">,</span> <span class="n">f</span><span class="p">.</span><span class="n">largest</span><span class="p">.</span><span class="n">Encode</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><code>EncodeTo</code> 函数会依次以 Tag 开头，将比较器名称、日志序列号、上一个日志序列号、下一个文件序列号、最后一个序列号、CompactPointers、每个层级删除的文件以及增加的文件信息保存到一个字符串中。</p>
+<h3 id="decodefrom">DecodeFrom</h3>
+<p>解码逻辑与上面的类似，根据不同的 tag 解析对应的成员变量，代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">  1
+</span><span class="lnt">  2
+</span><span class="lnt">  3
+</span><span class="lnt">  4
+</span><span class="lnt">  5
+</span><span class="lnt">  6
+</span><span class="lnt">  7
+</span><span class="lnt">  8
+</span><span class="lnt">  9
+</span><span class="lnt"> 10
+</span><span class="lnt"> 11
+</span><span class="lnt"> 12
+</span><span class="lnt"> 13
+</span><span class="lnt"> 14
+</span><span class="lnt"> 15
+</span><span class="lnt"> 16
+</span><span class="lnt"> 17
+</span><span class="lnt"> 18
+</span><span class="lnt"> 19
+</span><span class="lnt"> 20
+</span><span class="lnt"> 21
+</span><span class="lnt"> 22
+</span><span class="lnt"> 23
+</span><span class="lnt"> 24
+</span><span class="lnt"> 25
+</span><span class="lnt"> 26
+</span><span class="lnt"> 27
+</span><span class="lnt"> 28
+</span><span class="lnt"> 29
+</span><span class="lnt"> 30
+</span><span class="lnt"> 31
+</span><span class="lnt"> 32
+</span><span class="lnt"> 33
+</span><span class="lnt"> 34
+</span><span class="lnt"> 35
+</span><span class="lnt"> 36
+</span><span class="lnt"> 37
+</span><span class="lnt"> 38
+</span><span class="lnt"> 39
+</span><span class="lnt"> 40
+</span><span class="lnt"> 41
+</span><span class="lnt"> 42
+</span><span class="lnt"> 43
+</span><span class="lnt"> 44
+</span><span class="lnt"> 45
+</span><span class="lnt"> 46
+</span><span class="lnt"> 47
+</span><span class="lnt"> 48
+</span><span class="lnt"> 49
+</span><span class="lnt"> 50
+</span><span class="lnt"> 51
+</span><span class="lnt"> 52
+</span><span class="lnt"> 53
+</span><span class="lnt"> 54
+</span><span class="lnt"> 55
+</span><span class="lnt"> 56
+</span><span class="lnt"> 57
+</span><span class="lnt"> 58
+</span><span class="lnt"> 59
+</span><span class="lnt"> 60
+</span><span class="lnt"> 61
+</span><span class="lnt"> 62
+</span><span class="lnt"> 63
+</span><span class="lnt"> 64
+</span><span class="lnt"> 65
+</span><span class="lnt"> 66
+</span><span class="lnt"> 67
+</span><span class="lnt"> 68
+</span><span class="lnt"> 69
+</span><span class="lnt"> 70
+</span><span class="lnt"> 71
+</span><span class="lnt"> 72
+</span><span class="lnt"> 73
+</span><span class="lnt"> 74
+</span><span class="lnt"> 75
+</span><span class="lnt"> 76
+</span><span class="lnt"> 77
+</span><span class="lnt"> 78
+</span><span class="lnt"> 79
+</span><span class="lnt"> 80
+</span><span class="lnt"> 81
+</span><span class="lnt"> 82
+</span><span class="lnt"> 83
+</span><span class="lnt"> 84
+</span><span class="lnt"> 85
+</span><span class="lnt"> 86
+</span><span class="lnt"> 87
+</span><span class="lnt"> 88
+</span><span class="lnt"> 89
+</span><span class="lnt"> 90
+</span><span class="lnt"> 91
+</span><span class="lnt"> 92
+</span><span class="lnt"> 93
+</span><span class="lnt"> 94
+</span><span class="lnt"> 95
+</span><span class="lnt"> 96
+</span><span class="lnt"> 97
+</span><span class="lnt"> 98
+</span><span class="lnt"> 99
+</span><span class="lnt">100
+</span><span class="lnt">101
+</span><span class="lnt">102
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_edit.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Status</span> <span class="n">VersionEdit</span><span class="o">::</span><span class="n">DecodeFrom</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">src</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Clear</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Slice</span> <span class="n">input</span> <span class="o">=</span> <span class="n">src</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">msg</span> <span class="o">=</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint32_t</span> <span class="n">tag</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">// Temporary storage for parsing
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">int</span> <span class="n">level</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">number</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">FileMetaData</span> <span class="n">f</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Slice</span> <span class="n">str</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">InternalKey</span> <span class="n">key</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">while</span> <span class="p">(</span><span class="n">msg</span> <span class="o">==</span> <span class="k">nullptr</span> <span class="o">&amp;&amp;</span> <span class="n">GetVarint32</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">tag</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//根据不同的tag执行对应的解码逻辑
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">switch</span> <span class="p">(</span><span class="n">tag</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="k">case</span> <span class="nl">kComparator</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">GetLengthPrefixedSlice</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">str</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">comparator_</span> <span class="o">=</span> <span class="n">str</span><span class="p">.</span><span class="n">ToString</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">has_comparator_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;comparator name&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">case</span> <span class="nl">kLogNumber</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">GetVarint64</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">log_number_</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">has_log_number_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;log number&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">case</span> <span class="nl">kPrevLogNumber</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">GetVarint64</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">prev_log_number_</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">has_prev_log_number_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;previous log number&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">case</span> <span class="nl">kNextFileNumber</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">GetVarint64</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">next_file_number_</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">has_next_file_number_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;next file number&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">case</span> <span class="nl">kLastSequence</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">GetVarint64</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">last_sequence_</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">has_last_sequence_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;last sequence number&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">case</span> <span class="nl">kCompactPointer</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">GetLevel</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">level</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">GetInternalKey</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">key</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">compact_pointers_</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">make_pair</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">key</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;compaction pointer&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">case</span> <span class="nl">kDeletedFile</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">GetLevel</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">level</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">GetVarint64</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">number</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">deleted_files_</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">make_pair</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">number</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;deleted file&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">case</span> <span class="nl">kNewFile</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">GetLevel</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">level</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">GetVarint64</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">f</span><span class="p">.</span><span class="n">number</span><span class="p">)</span> <span class="o">&amp;&amp;</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">GetVarint64</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">f</span><span class="p">.</span><span class="n">file_size</span><span class="p">)</span> <span class="o">&amp;&amp;</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">GetInternalKey</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">f</span><span class="p">.</span><span class="n">smallest</span><span class="p">)</span> <span class="o">&amp;&amp;</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">GetInternalKey</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">f</span><span class="p">.</span><span class="n">largest</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">new_files_</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">make_pair</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">f</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;new-file entry&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">default</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">              <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;unknown tag&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">msg</span> <span class="o">==</span> <span class="k">nullptr</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="n">input</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">msg</span> <span class="o">=</span> <span class="s">&#34;invalid tag&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Status</span> <span class="n">result</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">msg</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">result</span> <span class="o">=</span> <span class="n">Status</span><span class="o">::</span><span class="n">Corruption</span><span class="p">(</span><span class="s">&#34;VersionEdit&#34;</span><span class="p">,</span> <span class="n">msg</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h2 id="versionset">VersionSet</h2>
+<p>LevelDB 为了支持 MVCC，引入了 Version 和 VersionEdit 的概念，那么如何来有效的管理这些 Version 呢？于是引出了 VersionSet，<strong>VersionSet 是一个双向链表，而且整个 DB 只会有一个 VersionSet。</strong></p>
+<h3 id="结构-2">结构</h3>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">  1
+</span><span class="lnt">  2
+</span><span class="lnt">  3
+</span><span class="lnt">  4
+</span><span class="lnt">  5
+</span><span class="lnt">  6
+</span><span class="lnt">  7
+</span><span class="lnt">  8
+</span><span class="lnt">  9
+</span><span class="lnt"> 10
+</span><span class="lnt"> 11
+</span><span class="lnt"> 12
+</span><span class="lnt"> 13
+</span><span class="lnt"> 14
+</span><span class="lnt"> 15
+</span><span class="lnt"> 16
+</span><span class="lnt"> 17
+</span><span class="lnt"> 18
+</span><span class="lnt"> 19
+</span><span class="lnt"> 20
+</span><span class="lnt"> 21
+</span><span class="lnt"> 22
+</span><span class="lnt"> 23
+</span><span class="lnt"> 24
+</span><span class="lnt"> 25
+</span><span class="lnt"> 26
+</span><span class="lnt"> 27
+</span><span class="lnt"> 28
+</span><span class="lnt"> 29
+</span><span class="lnt"> 30
+</span><span class="lnt"> 31
+</span><span class="lnt"> 32
+</span><span class="lnt"> 33
+</span><span class="lnt"> 34
+</span><span class="lnt"> 35
+</span><span class="lnt"> 36
+</span><span class="lnt"> 37
+</span><span class="lnt"> 38
+</span><span class="lnt"> 39
+</span><span class="lnt"> 40
+</span><span class="lnt"> 41
+</span><span class="lnt"> 42
+</span><span class="lnt"> 43
+</span><span class="lnt"> 44
+</span><span class="lnt"> 45
+</span><span class="lnt"> 46
+</span><span class="lnt"> 47
+</span><span class="lnt"> 48
+</span><span class="lnt"> 49
+</span><span class="lnt"> 50
+</span><span class="lnt"> 51
+</span><span class="lnt"> 52
+</span><span class="lnt"> 53
+</span><span class="lnt"> 54
+</span><span class="lnt"> 55
+</span><span class="lnt"> 56
+</span><span class="lnt"> 57
+</span><span class="lnt"> 58
+</span><span class="lnt"> 59
+</span><span class="lnt"> 60
+</span><span class="lnt"> 61
+</span><span class="lnt"> 62
+</span><span class="lnt"> 63
+</span><span class="lnt"> 64
+</span><span class="lnt"> 65
+</span><span class="lnt"> 66
+</span><span class="lnt"> 67
+</span><span class="lnt"> 68
+</span><span class="lnt"> 69
+</span><span class="lnt"> 70
+</span><span class="lnt"> 71
+</span><span class="lnt"> 72
+</span><span class="lnt"> 73
+</span><span class="lnt"> 74
+</span><span class="lnt"> 75
+</span><span class="lnt"> 76
+</span><span class="lnt"> 77
+</span><span class="lnt"> 78
+</span><span class="lnt"> 79
+</span><span class="lnt"> 80
+</span><span class="lnt"> 81
+</span><span class="lnt"> 82
+</span><span class="lnt"> 83
+</span><span class="lnt"> 84
+</span><span class="lnt"> 85
+</span><span class="lnt"> 86
+</span><span class="lnt"> 87
+</span><span class="lnt"> 88
+</span><span class="lnt"> 89
+</span><span class="lnt"> 90
+</span><span class="lnt"> 91
+</span><span class="lnt"> 92
+</span><span class="lnt"> 93
+</span><span class="lnt"> 94
+</span><span class="lnt"> 95
+</span><span class="lnt"> 96
+</span><span class="lnt"> 97
+</span><span class="lnt"> 98
+</span><span class="lnt"> 99
+</span><span class="lnt">100
+</span><span class="lnt">101
+</span><span class="lnt">102
+</span><span class="lnt">103
+</span><span class="lnt">104
+</span><span class="lnt">105
+</span><span class="lnt">106
+</span><span class="lnt">107
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">VersionSet</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="n">VersionSet</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">dbname</span><span class="p">,</span> <span class="k">const</span> <span class="n">Options</span><span class="o">*</span> <span class="n">options</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">             <span class="n">TableCache</span><span class="o">*</span> <span class="n">table_cache</span><span class="p">,</span> <span class="k">const</span> <span class="n">InternalKeyComparator</span><span class="o">*</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">VersionSet</span><span class="p">(</span><span class="k">const</span> <span class="n">VersionSet</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">VersionSet</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">VersionSet</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="o">~</span><span class="n">VersionSet</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Status</span> <span class="nf">LogAndApply</span><span class="p">(</span><span class="n">VersionEdit</span><span class="o">*</span> <span class="n">edit</span><span class="p">,</span> <span class="n">port</span><span class="o">::</span><span class="n">Mutex</span><span class="o">*</span> <span class="n">mu</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">      <span class="n">EXCLUSIVE_LOCKS_REQUIRED</span><span class="p">(</span><span class="n">mu</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Status</span> <span class="nf">Recover</span><span class="p">(</span><span class="kt">bool</span><span class="o">*</span> <span class="n">save_manifest</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Version</span><span class="o">*</span> <span class="nf">current</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">current_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="nf">ManifestFileNumber</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">manifest_file_number_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="nf">NewFileNumber</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="n">next_file_number_</span><span class="o">++</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">ReuseFileNumber</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">file_number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">if</span> <span class="p">(</span><span class="n">next_file_number_</span> <span class="o">==</span> <span class="n">file_number</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">next_file_number_</span> <span class="o">=</span> <span class="n">file_number</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="nf">NumLevelFiles</span><span class="p">(</span><span class="kt">int</span> <span class="n">level</span><span class="p">)</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">int64_t</span> <span class="nf">NumLevelBytes</span><span class="p">(</span><span class="kt">int</span> <span class="n">level</span><span class="p">)</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="nf">LastSequence</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">last_sequence_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">SetLastSequence</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">s</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">assert</span><span class="p">(</span><span class="n">s</span> <span class="o">&gt;=</span> <span class="n">last_sequence_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">last_sequence_</span> <span class="o">=</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">MarkFileNumberUsed</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">number</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="nf">LogNumber</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">log_number_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="nf">PrevLogNumber</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">prev_log_number_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Compaction</span><span class="o">*</span> <span class="nf">PickCompaction</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Compaction</span><span class="o">*</span> <span class="nf">CompactRange</span><span class="p">(</span><span class="kt">int</span> <span class="n">level</span><span class="p">,</span> <span class="k">const</span> <span class="n">InternalKey</span><span class="o">*</span> <span class="n">begin</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                           <span class="k">const</span> <span class="n">InternalKey</span><span class="o">*</span> <span class="n">end</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">int64_t</span> <span class="nf">MaxNextLevelOverlappingBytes</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Iterator</span><span class="o">*</span> <span class="nf">MakeInputIterator</span><span class="p">(</span><span class="n">Compaction</span><span class="o">*</span> <span class="n">c</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="nf">NeedsCompaction</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">Version</span><span class="o">*</span> <span class="n">v</span> <span class="o">=</span> <span class="n">current_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="p">(</span><span class="n">v</span><span class="o">-&gt;</span><span class="n">compaction_score_</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">||</span> <span class="p">(</span><span class="n">v</span><span class="o">-&gt;</span><span class="n">file_to_compact_</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">AddLiveFiles</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">set</span><span class="o">&lt;</span><span class="kt">uint64_t</span><span class="o">&gt;*</span> <span class="n">live</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="nf">ApproximateOffsetOf</span><span class="p">(</span><span class="n">Version</span><span class="o">*</span> <span class="n">v</span><span class="p">,</span> <span class="k">const</span> <span class="n">InternalKey</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">struct</span> <span class="nc">LevelSummaryStorage</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="kt">char</span> <span class="n">buffer</span><span class="p">[</span><span class="mi">100</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl">  <span class="p">};</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="nf">LevelSummary</span><span class="p">(</span><span class="n">LevelSummaryStorage</span><span class="o">*</span> <span class="n">scratch</span><span class="p">)</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="k">class</span> <span class="nc">Builder</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">friend</span> <span class="k">class</span> <span class="nc">Compaction</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">friend</span> <span class="k">class</span> <span class="nc">Version</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="nf">ReuseManifest</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">dscname</span><span class="p">,</span> <span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">dscbase</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">Finalize</span><span class="p">(</span><span class="n">Version</span><span class="o">*</span> <span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">GetRange</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">FileMetaData</span><span class="o">*&gt;&amp;</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">InternalKey</span><span class="o">*</span> <span class="n">smallest</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="n">InternalKey</span><span class="o">*</span> <span class="n">largest</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">GetRange2</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">FileMetaData</span><span class="o">*&gt;&amp;</span> <span class="n">inputs1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                 <span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">FileMetaData</span><span class="o">*&gt;&amp;</span> <span class="n">inputs2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                 <span class="n">InternalKey</span><span class="o">*</span> <span class="n">smallest</span><span class="p">,</span> <span class="n">InternalKey</span><span class="o">*</span> <span class="n">largest</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">SetupOtherInputs</span><span class="p">(</span><span class="n">Compaction</span><span class="o">*</span> <span class="n">c</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Status</span> <span class="nf">WriteSnapshot</span><span class="p">(</span><span class="n">log</span><span class="o">::</span><span class="n">Writer</span><span class="o">*</span> <span class="n">log</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">AppendVersion</span><span class="p">(</span><span class="n">Version</span><span class="o">*</span> <span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Env</span><span class="o">*</span> <span class="k">const</span> <span class="n">env_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">dbname_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="n">Options</span><span class="o">*</span> <span class="k">const</span> <span class="n">options_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">TableCache</span><span class="o">*</span> <span class="k">const</span> <span class="n">table_cache_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="n">InternalKeyComparator</span> <span class="n">icmp_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">next_file_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">manifest_file_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">last_sequence_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">log_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">prev_log_number_</span><span class="p">;</span>  <span class="c1">// 0 or backing store for memtable being compacted
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="n">WritableFile</span><span class="o">*</span> <span class="n">descriptor_file_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">log</span><span class="o">::</span><span class="n">Writer</span><span class="o">*</span> <span class="n">descriptor_log_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Version</span> <span class="n">dummy_versions_</span><span class="p">;</span>  <span class="c1">// Head of circular doubly-linked list of versions.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">Version</span><span class="o">*</span> <span class="n">current_</span><span class="p">;</span>        <span class="c1">// == dummy_versions_.prev_
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">compact_pointer_</span><span class="p">[</span><span class="n">config</span><span class="o">::</span><span class="n">kNumLevels</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><ul>
+<li><strong>关键成员变量</strong>：
+<ul>
+<li>**next_file_number_**下一个文件序列号。</li>
+<li><strong>manifest_file_number_</strong>：Manifest 文件的文件序列号。</li>
+<li><strong>last_sequence_</strong>：当前最大的写入序列号。</li>
+<li><strong>log_number_</strong>：Log文件的文件序列号。</li>
+<li><strong>current_</strong>：当前的最新版本。</li>
+<li><strong>compact_pointer_</strong>：记录每个层级下一次开始进行 Compaction 操作时需要从哪个键开始。</li>
+</ul>
+</li>
+</ul>
+<p>下面就介绍一下其中最核心的 <code>LogAndApply</code> 和 <code>Recover</code> 两个函数。</p>
+<h3 id="logandapply">LogAndApply</h3>
+<p>当每次进行完 Compaction 操作后，需要调用并执行 VersionSet 中的 <code>LogAndApply</code> 写入版本变化后并生成一个新的版本。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span><span class="lnt">69
+</span><span class="lnt">70
+</span><span class="lnt">71
+</span><span class="lnt">72
+</span><span class="lnt">73
+</span><span class="lnt">74
+</span><span class="lnt">75
+</span><span class="lnt">76
+</span><span class="lnt">77
+</span><span class="lnt">78
+</span><span class="lnt">79
+</span><span class="lnt">80
+</span><span class="lnt">81
+</span><span class="lnt">82
+</span><span class="lnt">83
+</span><span class="lnt">84
+</span><span class="lnt">85
+</span><span class="lnt">86
+</span><span class="lnt">87
+</span><span class="lnt">88
+</span><span class="lnt">89
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_set.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Status</span> <span class="n">VersionSet</span><span class="o">::</span><span class="n">LogAndApply</span><span class="p">(</span><span class="n">VersionEdit</span><span class="o">*</span> <span class="n">edit</span><span class="p">,</span> <span class="n">port</span><span class="o">::</span><span class="n">Mutex</span><span class="o">*</span> <span class="n">mu</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//根据版本变化进行处理
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="n">edit</span><span class="o">-&gt;</span><span class="n">has_log_number_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">assert</span><span class="p">(</span><span class="n">edit</span><span class="o">-&gt;</span><span class="n">log_number_</span> <span class="o">&gt;=</span> <span class="n">log_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">assert</span><span class="p">(</span><span class="n">edit</span><span class="o">-&gt;</span><span class="n">log_number_</span> <span class="o">&lt;</span> <span class="n">next_file_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">edit</span><span class="o">-&gt;</span><span class="n">SetLogNumber</span><span class="p">(</span><span class="n">log_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">edit</span><span class="o">-&gt;</span><span class="n">has_prev_log_number_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">edit</span><span class="o">-&gt;</span><span class="n">SetPrevLogNumber</span><span class="p">(</span><span class="n">prev_log_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">edit</span><span class="o">-&gt;</span><span class="n">SetNextFile</span><span class="p">(</span><span class="n">next_file_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">edit</span><span class="o">-&gt;</span><span class="n">SetLastSequence</span><span class="p">(</span><span class="n">last_sequence_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//生成新的版本，其为上一个Version+VersionEdit
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">Version</span><span class="o">*</span> <span class="n">v</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Version</span><span class="p">(</span><span class="k">this</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">Builder</span> <span class="nf">builder</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="n">current_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">builder</span><span class="p">.</span><span class="n">Apply</span><span class="p">(</span><span class="n">edit</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">builder</span><span class="p">.</span><span class="n">SaveTo</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//计算这个新version的compact score和compact level，算出最应该被Compact的level
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">Finalize</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">new_manifest_file</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Status</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">descriptor_log_</span> <span class="o">==</span> <span class="k">nullptr</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//这里没有必要进行unlock操作，因为只有在第一次调用，也就是打开数据库的时候才会走到这个路径里面来
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">assert</span><span class="p">(</span><span class="n">descriptor_file_</span> <span class="o">==</span> <span class="k">nullptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">new_manifest_file</span> <span class="o">=</span> <span class="n">DescriptorFileName</span><span class="p">(</span><span class="n">dbname_</span><span class="p">,</span> <span class="n">manifest_file_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">edit</span><span class="o">-&gt;</span><span class="n">SetNextFile</span><span class="p">(</span><span class="n">next_file_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">s</span> <span class="o">=</span> <span class="n">env_</span><span class="o">-&gt;</span><span class="n">NewWritableFile</span><span class="p">(</span><span class="n">new_manifest_file</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">descriptor_file_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//此时重新开启一个新的MANIFEST文件，并将当前状态作为base状态写入快照
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">descriptor_log_</span> <span class="o">=</span> <span class="k">new</span> <span class="n">log</span><span class="o">::</span><span class="n">Writer</span><span class="p">(</span><span class="n">descriptor_file_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">          <span class="c1">//写入当前快照
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>          <span class="n">s</span> <span class="o">=</span> <span class="n">WriteSnapshot</span><span class="p">(</span><span class="n">descriptor_log_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//在MANIFEST写入磁盘时解锁（此时没必要加锁，由后台线程完成）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">mu</span><span class="o">-&gt;</span><span class="n">Unlock</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="err">后将其写入磁盘</span>
+</span></span><span class="line"><span class="cl">          <span class="nf">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">record</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="n">edit</span><span class="o">-&gt;</span><span class="n">EncodeTo</span><span class="p">(</span><span class="o">&amp;</span><span class="n">record</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">              <span class="c1">//将版本变化写入MANIFEST
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>              <span class="n">s</span> <span class="o">=</span> <span class="n">descriptor_log_</span><span class="o">-&gt;</span><span class="n">AddRecord</span><span class="p">(</span><span class="n">record</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="c1">//将MANIFEST写入磁盘文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                  <span class="n">s</span> <span class="o">=</span> <span class="n">descriptor_file_</span><span class="o">-&gt;</span><span class="n">Sync</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">Log</span><span class="p">(</span><span class="n">options_</span><span class="o">-&gt;</span><span class="n">info_log</span><span class="p">,</span> <span class="s">&#34;MANIFEST write: %s</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="n">s</span><span class="p">.</span><span class="n">ToString</span><span class="p">().</span><span class="n">c_str</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="c1">//当产生新的Manifest时更新current
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">()</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="n">new_manifest_file</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">s</span> <span class="o">=</span> <span class="n">SetCurrentFile</span><span class="p">(</span><span class="n">env_</span><span class="p">,</span> <span class="n">dbname_</span><span class="p">,</span> <span class="n">manifest_file_number_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="n">mu</span><span class="o">-&gt;</span><span class="n">Lock</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">// 将新生成的版本挂在到VersionSet，并且将当前版本（current_）设置为新生成的版本。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">AppendVersion</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">log_number_</span> <span class="o">=</span> <span class="n">edit</span><span class="o">-&gt;</span><span class="n">log_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">prev_log_number_</span> <span class="o">=</span> <span class="n">edit</span><span class="o">-&gt;</span><span class="n">prev_log_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">delete</span> <span class="n">v</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">new_manifest_file</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="k">delete</span> <span class="n">descriptor_log_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="k">delete</span> <span class="n">descriptor_file_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">descriptor_log_</span> <span class="o">=</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">descriptor_file_</span> <span class="o">=</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">env_</span><span class="o">-&gt;</span><span class="n">RemoveFile</span><span class="p">(</span><span class="n">new_manifest_file</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>执行逻辑如下:</p>
+<ol>
+<li>将当前的版本根据版本变化（VersionEdit）进行处理，然后生成一个新的版本。</li>
+<li>如果是第一次调用，则创建一个新的 Manifest 文件，并将当前状态作为 base 写入。</li>
+<li>调用  <code>Finalize</code> 算出下一次需要 Compaction 的 level。</li>
+<li>将版本变化写入 Manifest，把 Manifest 写入磁盘。</li>
+<li>将新生成的版本挂载到 VersionSet 中，并且将 current_ 设置为新生成的版本。</li>
+</ol>
+<h3 id="recover">Recover</h3>
+<p><code>Recover</code> 会根据 Manifest 文件中记录的每次版本变化（调用 VersionEdit 的 <code>DecodeFrom</code> 方法）逐次回放生成一个最新的版本。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">  1
+</span><span class="lnt">  2
+</span><span class="lnt">  3
+</span><span class="lnt">  4
+</span><span class="lnt">  5
+</span><span class="lnt">  6
+</span><span class="lnt">  7
+</span><span class="lnt">  8
+</span><span class="lnt">  9
+</span><span class="lnt"> 10
+</span><span class="lnt"> 11
+</span><span class="lnt"> 12
+</span><span class="lnt"> 13
+</span><span class="lnt"> 14
+</span><span class="lnt"> 15
+</span><span class="lnt"> 16
+</span><span class="lnt"> 17
+</span><span class="lnt"> 18
+</span><span class="lnt"> 19
+</span><span class="lnt"> 20
+</span><span class="lnt"> 21
+</span><span class="lnt"> 22
+</span><span class="lnt"> 23
+</span><span class="lnt"> 24
+</span><span class="lnt"> 25
+</span><span class="lnt"> 26
+</span><span class="lnt"> 27
+</span><span class="lnt"> 28
+</span><span class="lnt"> 29
+</span><span class="lnt"> 30
+</span><span class="lnt"> 31
+</span><span class="lnt"> 32
+</span><span class="lnt"> 33
+</span><span class="lnt"> 34
+</span><span class="lnt"> 35
+</span><span class="lnt"> 36
+</span><span class="lnt"> 37
+</span><span class="lnt"> 38
+</span><span class="lnt"> 39
+</span><span class="lnt"> 40
+</span><span class="lnt"> 41
+</span><span class="lnt"> 42
+</span><span class="lnt"> 43
+</span><span class="lnt"> 44
+</span><span class="lnt"> 45
+</span><span class="lnt"> 46
+</span><span class="lnt"> 47
+</span><span class="lnt"> 48
+</span><span class="lnt"> 49
+</span><span class="lnt"> 50
+</span><span class="lnt"> 51
+</span><span class="lnt"> 52
+</span><span class="lnt"> 53
+</span><span class="lnt"> 54
+</span><span class="lnt"> 55
+</span><span class="lnt"> 56
+</span><span class="lnt"> 57
+</span><span class="lnt"> 58
+</span><span class="lnt"> 59
+</span><span class="lnt"> 60
+</span><span class="lnt"> 61
+</span><span class="lnt"> 62
+</span><span class="lnt"> 63
+</span><span class="lnt"> 64
+</span><span class="lnt"> 65
+</span><span class="lnt"> 66
+</span><span class="lnt"> 67
+</span><span class="lnt"> 68
+</span><span class="lnt"> 69
+</span><span class="lnt"> 70
+</span><span class="lnt"> 71
+</span><span class="lnt"> 72
+</span><span class="lnt"> 73
+</span><span class="lnt"> 74
+</span><span class="lnt"> 75
+</span><span class="lnt"> 76
+</span><span class="lnt"> 77
+</span><span class="lnt"> 78
+</span><span class="lnt"> 79
+</span><span class="lnt"> 80
+</span><span class="lnt"> 81
+</span><span class="lnt"> 82
+</span><span class="lnt"> 83
+</span><span class="lnt"> 84
+</span><span class="lnt"> 85
+</span><span class="lnt"> 86
+</span><span class="lnt"> 87
+</span><span class="lnt"> 88
+</span><span class="lnt"> 89
+</span><span class="lnt"> 90
+</span><span class="lnt"> 91
+</span><span class="lnt"> 92
+</span><span class="lnt"> 93
+</span><span class="lnt"> 94
+</span><span class="lnt"> 95
+</span><span class="lnt"> 96
+</span><span class="lnt"> 97
+</span><span class="lnt"> 98
+</span><span class="lnt"> 99
+</span><span class="lnt">100
+</span><span class="lnt">101
+</span><span class="lnt">102
+</span><span class="lnt">103
+</span><span class="lnt">104
+</span><span class="lnt">105
+</span><span class="lnt">106
+</span><span class="lnt">107
+</span><span class="lnt">108
+</span><span class="lnt">109
+</span><span class="lnt">110
+</span><span class="lnt">111
+</span><span class="lnt">112
+</span><span class="lnt">113
+</span><span class="lnt">114
+</span><span class="lnt">115
+</span><span class="lnt">116
+</span><span class="lnt">117
+</span><span class="lnt">118
+</span><span class="lnt">119
+</span><span class="lnt">120
+</span><span class="lnt">121
+</span><span class="lnt">122
+</span><span class="lnt">123
+</span><span class="lnt">124
+</span><span class="lnt">125
+</span><span class="lnt">126
+</span><span class="lnt">127
+</span><span class="lnt">128
+</span><span class="lnt">129
+</span><span class="lnt">130
+</span><span class="lnt">131
+</span><span class="lnt">132
+</span><span class="lnt">133
+</span><span class="lnt">134
+</span><span class="lnt">135
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_set.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Status</span> <span class="n">VersionSet</span><span class="o">::</span><span class="n">Recover</span><span class="p">(</span><span class="kt">bool</span><span class="o">*</span> <span class="n">save_manifest</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">struct</span> <span class="nc">LogReporter</span> <span class="o">:</span> <span class="k">public</span> <span class="n">log</span><span class="o">::</span><span class="n">Reader</span><span class="o">::</span><span class="n">Reporter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">Status</span><span class="o">*</span> <span class="n">status</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="kt">void</span> <span class="nf">Corruption</span><span class="p">(</span><span class="n">size_t</span> <span class="n">bytes</span><span class="p">,</span> <span class="k">const</span> <span class="n">Status</span><span class="o">&amp;</span> <span class="n">s</span><span class="p">)</span> <span class="k">override</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="k">this</span><span class="o">-&gt;</span><span class="n">status</span><span class="o">-&gt;</span><span class="n">ok</span><span class="p">())</span> <span class="o">*</span><span class="k">this</span><span class="o">-&gt;</span><span class="n">status</span> <span class="o">=</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//读取CURRENT文件，找到Manifest文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">current</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Status</span> <span class="n">s</span> <span class="o">=</span> <span class="n">ReadFileToString</span><span class="p">(</span><span class="n">env_</span><span class="p">,</span> <span class="n">CurrentFileName</span><span class="p">(</span><span class="n">dbname_</span><span class="p">),</span> <span class="o">&amp;</span><span class="n">current</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">current</span><span class="p">.</span><span class="n">empty</span><span class="p">()</span> <span class="o">||</span> <span class="n">current</span><span class="p">[</span><span class="n">current</span><span class="p">.</span><span class="n">size</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="sc">&#39;\n&#39;</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="n">Status</span><span class="o">::</span><span class="n">Corruption</span><span class="p">(</span><span class="s">&#34;CURRENT file does not end with newline&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="n">current</span><span class="p">.</span><span class="n">resize</span><span class="p">(</span><span class="n">current</span><span class="p">.</span><span class="n">size</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">dscname</span> <span class="o">=</span> <span class="n">dbname_</span> <span class="o">+</span> <span class="s">&#34;/&#34;</span> <span class="o">+</span> <span class="n">current</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">SequentialFile</span><span class="o">*</span> <span class="n">file</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">s</span> <span class="o">=</span> <span class="n">env_</span><span class="o">-&gt;</span><span class="n">NewSequentialFile</span><span class="p">(</span><span class="n">dscname</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">file</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">IsNotFound</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="k">return</span> <span class="n">Status</span><span class="o">::</span><span class="n">Corruption</span><span class="p">(</span><span class="s">&#34;CURRENT points to a non-existent file&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                    <span class="n">s</span><span class="p">.</span><span class="n">ToString</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="n">have_log_number</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="n">have_prev_log_number</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="n">have_next_file</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="n">have_last_sequence</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">next_file</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">last_sequence</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">log_number</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">prev_log_number</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Builder</span> <span class="nf">builder</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="n">current_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">read_records</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">LogReporter</span> <span class="n">reporter</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">reporter</span><span class="p">.</span><span class="n">status</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">log</span><span class="o">::</span><span class="n">Reader</span> <span class="n">reader</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">reporter</span><span class="p">,</span> <span class="nb">true</span> <span class="cm">/*checksum*/</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                         <span class="mi">0</span> <span class="cm">/*initial_offset*/</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">Slice</span> <span class="n">record</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">scratch</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//读取versionedit并获取变更
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">while</span> <span class="p">(</span><span class="n">reader</span><span class="p">.</span><span class="n">ReadRecord</span><span class="p">(</span><span class="o">&amp;</span><span class="n">record</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">scratch</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="o">++</span><span class="n">read_records</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">VersionEdit</span> <span class="n">edit</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">s</span> <span class="o">=</span> <span class="n">edit</span><span class="p">.</span><span class="n">DecodeFrom</span><span class="p">(</span><span class="n">record</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="n">edit</span><span class="p">.</span><span class="n">has_comparator_</span> <span class="o">&amp;&amp;</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">edit</span><span class="p">.</span><span class="n">comparator_</span> <span class="o">!=</span> <span class="n">icmp_</span><span class="p">.</span><span class="n">user_comparator</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">Name</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">s</span> <span class="o">=</span> <span class="n">Status</span><span class="o">::</span><span class="n">InvalidArgument</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">                      <span class="n">edit</span><span class="p">.</span><span class="n">comparator_</span> <span class="o">+</span> <span class="s">&#34; does not match existing comparator &#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                      <span class="n">icmp_</span><span class="p">.</span><span class="n">user_comparator</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">Name</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">builder</span><span class="p">.</span><span class="n">Apply</span><span class="p">(</span><span class="o">&amp;</span><span class="n">edit</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">edit</span><span class="p">.</span><span class="n">has_log_number_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">log_number</span> <span class="o">=</span> <span class="n">edit</span><span class="p">.</span><span class="n">log_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="n">have_log_number</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">edit</span><span class="p">.</span><span class="n">has_prev_log_number_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">prev_log_number</span> <span class="o">=</span> <span class="n">edit</span><span class="p">.</span><span class="n">prev_log_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="n">have_prev_log_number</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">edit</span><span class="p">.</span><span class="n">has_next_file_number_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">next_file</span> <span class="o">=</span> <span class="n">edit</span><span class="p">.</span><span class="n">next_file_number_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="n">have_next_file</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">edit</span><span class="p">.</span><span class="n">has_last_sequence_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">last_sequence</span> <span class="o">=</span> <span class="n">edit</span><span class="p">.</span><span class="n">last_sequence_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="n">have_last_sequence</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">delete</span> <span class="n">file</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">file</span> <span class="o">=</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">have_next_file</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">s</span> <span class="o">=</span> <span class="n">Status</span><span class="o">::</span><span class="n">Corruption</span><span class="p">(</span><span class="s">&#34;no meta-nextfile entry in descriptor&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span> <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="o">!</span><span class="n">have_log_number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">s</span> <span class="o">=</span> <span class="n">Status</span><span class="o">::</span><span class="n">Corruption</span><span class="p">(</span><span class="s">&#34;no meta-lognumber entry in descriptor&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span> <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="o">!</span><span class="n">have_last_sequence</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">s</span> <span class="o">=</span> <span class="n">Status</span><span class="o">::</span><span class="n">Corruption</span><span class="p">(</span><span class="s">&#34;no last-sequence-number entry in descriptor&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">have_prev_log_number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">prev_log_number</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="n">MarkFileNumberUsed</span><span class="p">(</span><span class="n">prev_log_number</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">MarkFileNumberUsed</span><span class="p">(</span><span class="n">log_number</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//生成最新版本
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">Version</span><span class="o">*</span> <span class="n">v</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Version</span><span class="p">(</span><span class="k">this</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">builder</span><span class="p">.</span><span class="n">SaveTo</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">Finalize</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//加入versionset并设置current指针
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">AppendVersion</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">manifest_file_number_</span> <span class="o">=</span> <span class="n">next_file</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">next_file_number_</span> <span class="o">=</span> <span class="n">next_file</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">last_sequence_</span> <span class="o">=</span> <span class="n">last_sequence</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">log_number_</span> <span class="o">=</span> <span class="n">log_number</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">prev_log_number_</span> <span class="o">=</span> <span class="n">prev_log_number</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="c1">//判断是否能够复用已有MANIFEST文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">if</span> <span class="p">(</span><span class="n">ReuseManifest</span><span class="p">(</span><span class="n">dscname</span><span class="p">,</span> <span class="n">current</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="o">*</span><span class="n">save_manifest</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">error</span> <span class="o">=</span> <span class="n">s</span><span class="p">.</span><span class="n">ToString</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">      <span class="n">Log</span><span class="p">(</span><span class="n">options_</span><span class="o">-&gt;</span><span class="n">info_log</span><span class="p">,</span> <span class="s">&#34;Error recovering version set with %d records: %s&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="n">read_records</span><span class="p">,</span> <span class="n">error</span><span class="p">.</span><span class="n">c_str</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>执行流程如下：</p>
+<ol>
+<li>通过 current_ 获取到 Manifest，读取 Manifest 获取 base 状态。</li>
+<li>读取 Manifest 文件中的 VersionEdit，并执行变更。</li>
+<li>生成最终的版本，并将其加入 VersionSet，更新 current_。</li>
+<li>判断是否能够复用已有 MANIFEST 文件。</li>
+</ol>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/leveldb/">LevelDB</a>
+        
+            <a href="/tags/kv%E5%AD%98%E5%82%A8/">KV存储</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 24, 2022 00:05 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/leveldb-dbimpl%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB DBImpl模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-compaction%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB Compaction模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-wal%E6%97%A5%E5%BF%97%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB WAL日志模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-sstable%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB SSTable模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-memtable%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB MemTable模块</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/leveldb-%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'LevelDB 版本管理',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#manifest">Manifest</a></li>
+    <li><a href="#version">Version</a>
+      <ol>
+        <li><a href="#结构">结构</a></li>
+      </ol>
+    </li>
+    <li><a href="#versionedit">VersionEdit</a>
+      <ol>
+        <li><a href="#结构-1">结构</a></li>
+        <li><a href="#encodeto">EncodeTo</a></li>
+        <li><a href="#decodefrom">DecodeFrom</a></li>
+      </ol>
+    </li>
+    <li><a href="#versionset">VersionSet</a>
+      <ol>
+        <li><a href="#结构-2">结构</a></li>
+        <li><a href="#logandapply">LogAndApply</a></li>
+        <li><a href="#recover">Recover</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='LevelDB 基本概念 LevelDB 是一个由 Google 公司所研发的 K-V 存储嵌入式数据库管理系统编程库，以开源的 BSD 许可证发布。其作为 LSM Tree 的经典实现，具有很高的随机写，顺序读/写性能，但是随机读的性能很一般，也就是说，LevelDB很适合应用在查询较少，而写很多的场景。
+为什么需求K-V数据库？ K-V 数据库主要用于存取、管理关联性的数组。关联性数组又称映射、字典，是一种抽象的数据结构，其数据对象为一个个的 key-value 数据对，且在整个数据库中每个 key 均是唯一的。
+随着近年来互联网的兴起，云计算、大数据应用越来越广泛，对于数据库来说也出现了一些需要面对的新情况：
+ 数据量呈指数级增长，存储也开始实现分布式。 查询响应时间要求越来越快，需在1秒内完成查询操作。 应用一般需要 7 × 24 小时连续运行，因此对稳定性要求越来越高，通常要求数据库支持热备份，并实现故障下快速无缝切换。 在某些应用中，写数据比读数据更加频繁，对数据写的速度要求也越来越高。 在实际应用中，并不是所有环境下的数据都是完整的结构化数据，非结构化数据普遍存在，因此如何实现对灵活多变的非结构化数据的支持是需要考虑的一个问题。  正是在上述情况的催生下，2010年开始兴起了一场 NoSQL 运动，而 K-V 数据库作为 NoSQL 中一种重要的数据库也日益繁荣，因此催生出了许多成功的商业化产品，并得到了广泛应用。
+BigTable与LevelDB 早在 2004 年，Google 开始研发一种结构化的分布式存储系统，它被设计用来处理海量数据，通常是分布在数千台普通服务器上的 PB 级的数据——这一系统就是风靡全球的 Bigtable。
+2006 年，Google 发表了一篇论文——《Bigtable: A Distributed Storage System for StructuredData》。这篇论文公布了 Bigtable 的具体实现方法，揭开了 Bigtable 的技术面纱。Bigtable 虽然也有行、列、表的概念，但不同于传统的关系数据库，从本质上讲，它是一个稀疏的、分布式的、持久化的、多维的排序键-值映射。
+虽然 Google 公布了 Bigtable 的实现论文，但 Bigtable 依赖于 Google 其他项目所开发的未开源的库，Google 一直没有将 Bigtable 的代码开源。然而这一切在 2011 年迎来了转机。Sanjay Ghemawat 和 Jeff Dean 这两位来自 Google 的重量级工程师，为了能将 Bigtable 的实现原理与技术细节分享给大众开发者，于2011年基于 Bigtable 的基本原理，采用 C&#43;&#43; 开发了一个高性能的 K-V 数据库——LevelDB。由于没有历史的产品包袱，LevelDB 结构简单，不依赖于任何第三方库，具有很好的独立性，虽然其有针对性地对 Bigtable 进行了一定程度的简化，然而Bigtable的主要技术思想与数据结构均在 LevelDB 予以体现了。因此 LevelDB 可看作 Bigtable 的简化版或单机版。'><title>LevelDB 基本概念</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/leveldb-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='LevelDB 基本概念'>
+<meta property='og:description' content='LevelDB 基本概念 LevelDB 是一个由 Google 公司所研发的 K-V 存储嵌入式数据库管理系统编程库，以开源的 BSD 许可证发布。其作为 LSM Tree 的经典实现，具有很高的随机写，顺序读/写性能，但是随机读的性能很一般，也就是说，LevelDB很适合应用在查询较少，而写很多的场景。
+为什么需求K-V数据库？ K-V 数据库主要用于存取、管理关联性的数组。关联性数组又称映射、字典，是一种抽象的数据结构，其数据对象为一个个的 key-value 数据对，且在整个数据库中每个 key 均是唯一的。
+随着近年来互联网的兴起，云计算、大数据应用越来越广泛，对于数据库来说也出现了一些需要面对的新情况：
+ 数据量呈指数级增长，存储也开始实现分布式。 查询响应时间要求越来越快，需在1秒内完成查询操作。 应用一般需要 7 × 24 小时连续运行，因此对稳定性要求越来越高，通常要求数据库支持热备份，并实现故障下快速无缝切换。 在某些应用中，写数据比读数据更加频繁，对数据写的速度要求也越来越高。 在实际应用中，并不是所有环境下的数据都是完整的结构化数据，非结构化数据普遍存在，因此如何实现对灵活多变的非结构化数据的支持是需要考虑的一个问题。  正是在上述情况的催生下，2010年开始兴起了一场 NoSQL 运动，而 K-V 数据库作为 NoSQL 中一种重要的数据库也日益繁荣，因此催生出了许多成功的商业化产品，并得到了广泛应用。
+BigTable与LevelDB 早在 2004 年，Google 开始研发一种结构化的分布式存储系统，它被设计用来处理海量数据，通常是分布在数千台普通服务器上的 PB 级的数据——这一系统就是风靡全球的 Bigtable。
+2006 年，Google 发表了一篇论文——《Bigtable: A Distributed Storage System for StructuredData》。这篇论文公布了 Bigtable 的具体实现方法，揭开了 Bigtable 的技术面纱。Bigtable 虽然也有行、列、表的概念，但不同于传统的关系数据库，从本质上讲，它是一个稀疏的、分布式的、持久化的、多维的排序键-值映射。
+虽然 Google 公布了 Bigtable 的实现论文，但 Bigtable 依赖于 Google 其他项目所开发的未开源的库，Google 一直没有将 Bigtable 的代码开源。然而这一切在 2011 年迎来了转机。Sanjay Ghemawat 和 Jeff Dean 这两位来自 Google 的重量级工程师，为了能将 Bigtable 的实现原理与技术细节分享给大众开发者，于2011年基于 Bigtable 的基本原理，采用 C&#43;&#43; 开发了一个高性能的 K-V 数据库——LevelDB。由于没有历史的产品包袱，LevelDB 结构简单，不依赖于任何第三方库，具有很好的独立性，虽然其有针对性地对 Bigtable 进行了一定程度的简化，然而Bigtable的主要技术思想与数据结构均在 LevelDB 予以体现了。因此 LevelDB 可看作 Bigtable 的简化版或单机版。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/leveldb-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='LevelDB' /><meta property='article:tag' content='KV存储' /><meta property='article:published_time' content='2022-05-23T23:11:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T23:12:11&#43;08:00'/>
+<meta name="twitter:title" content="LevelDB 基本概念">
+<meta name="twitter:description" content="LevelDB 基本概念 LevelDB 是一个由 Google 公司所研发的 K-V 存储嵌入式数据库管理系统编程库，以开源的 BSD 许可证发布。其作为 LSM Tree 的经典实现，具有很高的随机写，顺序读/写性能，但是随机读的性能很一般，也就是说，LevelDB很适合应用在查询较少，而写很多的场景。
+为什么需求K-V数据库？ K-V 数据库主要用于存取、管理关联性的数组。关联性数组又称映射、字典，是一种抽象的数据结构，其数据对象为一个个的 key-value 数据对，且在整个数据库中每个 key 均是唯一的。
+随着近年来互联网的兴起，云计算、大数据应用越来越广泛，对于数据库来说也出现了一些需要面对的新情况：
+ 数据量呈指数级增长，存储也开始实现分布式。 查询响应时间要求越来越快，需在1秒内完成查询操作。 应用一般需要 7 × 24 小时连续运行，因此对稳定性要求越来越高，通常要求数据库支持热备份，并实现故障下快速无缝切换。 在某些应用中，写数据比读数据更加频繁，对数据写的速度要求也越来越高。 在实际应用中，并不是所有环境下的数据都是完整的结构化数据，非结构化数据普遍存在，因此如何实现对灵活多变的非结构化数据的支持是需要考虑的一个问题。  正是在上述情况的催生下，2010年开始兴起了一场 NoSQL 运动，而 K-V 数据库作为 NoSQL 中一种重要的数据库也日益繁荣，因此催生出了许多成功的商业化产品，并得到了广泛应用。
+BigTable与LevelDB 早在 2004 年，Google 开始研发一种结构化的分布式存储系统，它被设计用来处理海量数据，通常是分布在数千台普通服务器上的 PB 级的数据——这一系统就是风靡全球的 Bigtable。
+2006 年，Google 发表了一篇论文——《Bigtable: A Distributed Storage System for StructuredData》。这篇论文公布了 Bigtable 的具体实现方法，揭开了 Bigtable 的技术面纱。Bigtable 虽然也有行、列、表的概念，但不同于传统的关系数据库，从本质上讲，它是一个稀疏的、分布式的、持久化的、多维的排序键-值映射。
+虽然 Google 公布了 Bigtable 的实现论文，但 Bigtable 依赖于 Google 其他项目所开发的未开源的库，Google 一直没有将 Bigtable 的代码开源。然而这一切在 2011 年迎来了转机。Sanjay Ghemawat 和 Jeff Dean 这两位来自 Google 的重量级工程师，为了能将 Bigtable 的实现原理与技术细节分享给大众开发者，于2011年基于 Bigtable 的基本原理，采用 C&#43;&#43; 开发了一个高性能的 K-V 数据库——LevelDB。由于没有历史的产品包袱，LevelDB 结构简单，不依赖于任何第三方库，具有很好的独立性，虽然其有针对性地对 Bigtable 进行了一定程度的简化，然而Bigtable的主要技术思想与数据结构均在 LevelDB 予以体现了。因此 LevelDB 可看作 Bigtable 的简化版或单机版。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/leveldb/" style="background-color: #2a9d8f; color: #fff;">
+                LevelDB
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/leveldb-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/">LevelDB 基本概念</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="leveldb-基本概念">LevelDB 基本概念</h1>
+<p><img src="http://img.orekilee.top//imgbed/leveldb/leveldb11.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<p><strong>LevelDB</strong> 是一个由 Google 公司所研发的 <strong>K-V 存储嵌入式数据库管理系统编程库</strong>，以开源的 BSD 许可证发布。其作为 <strong>LSM Tree</strong> 的经典实现，具有<strong>很高的随机写，顺序读/写性能，但是随机读的性能很一般</strong>，也就是说，LevelDB很适合应用在<strong>查询较少，而写很多</strong>的场景。</p>
+<h2 id="为什么需求k-v数据库">为什么需求K-V数据库？</h2>
+<p>K-V 数据库主要用于存取、管理关联性的数组。关联性数组又称映射、字典，是一种抽象的数据结构，其数据对象为一个个的 key-value 数据对，且在整个数据库中每个 key 均是唯一的。</p>
+<p>随着近年来互联网的兴起，云计算、大数据应用越来越广泛，对于数据库来说也出现了一些需要面对的新情况：</p>
+<ul>
+<li>数据量呈指数级增长，存储也开始实现分布式。</li>
+<li>查询响应时间要求越来越快，需在1秒内完成查询操作。</li>
+<li>应用一般需要 7 × 24 小时连续运行，因此对稳定性要求越来越高，通常要求数据库支持热备份，并实现故障下快速无缝切换。</li>
+<li>在某些应用中，写数据比读数据更加频繁，对数据写的速度要求也越来越高。</li>
+<li>在实际应用中，并不是所有环境下的数据都是完整的结构化数据，非结构化数据普遍存在，因此如何实现对灵活多变的非结构化数据的支持是需要考虑的一个问题。</li>
+</ul>
+<p>正是在上述情况的催生下，2010年开始兴起了一场 NoSQL 运动，而 K-V 数据库作为 NoSQL 中一种重要的数据库也日益繁荣，因此催生出了许多成功的商业化产品，并得到了广泛应用。</p>
+<h2 id="bigtable与leveldb">BigTable与LevelDB</h2>
+<p>早在 2004 年，Google 开始研发一种结构化的分布式存储系统，它被设计用来处理海量数据，通常是分布在数千台普通服务器上的 PB 级的数据——这一系统就是风靡全球的 <strong>Bigtable</strong>。</p>
+<p>2006 年，Google 发表了一篇论文——《Bigtable: A Distributed Storage System for StructuredData》。这篇论文公布了 Bigtable 的具体实现方法，揭开了 Bigtable 的技术面纱。Bigtable 虽然也有行、列、表的概念，但不同于传统的关系数据库，从本质上讲，它是一个稀疏的、分布式的、持久化的、多维的排序键-值映射。</p>
+<p>虽然 Google 公布了 Bigtable 的实现论文，但 Bigtable 依赖于 Google 其他项目所开发的未开源的库，Google 一直没有将 Bigtable 的代码开源。然而这一切在 2011 年迎来了转机。Sanjay Ghemawat 和 Jeff Dean 这两位来自 Google 的重量级工程师，为了能将 Bigtable 的实现原理与技术细节分享给大众开发者，于2011年基于 Bigtable 的基本原理，采用 C++ 开发了一个高性能的 K-V 数据库——<strong>LevelDB</strong>。由于没有历史的产品包袱，LevelDB 结构简单，不依赖于任何第三方库，具有很好的独立性，虽然其有针对性地对 Bigtable 进行了一定程度的简化，然而Bigtable的主要技术思想与数据结构均在 LevelDB 予以体现了。<strong>因此 LevelDB 可看作 Bigtable 的简化版或单机版。</strong></p>
+<h2 id="特点">特点</h2>
+<p><!-- raw HTML omitted --><strong>优点</strong>：<!-- raw HTML omitted --></p>
+<ul>
+<li>key 与 value 采用字符串形式，且长度没有限制。</li>
+<li>数据能持久化存储，同时也能将数据缓存到内存，实现快速读取。</li>
+<li>基于 key 按序存放数据，并且 key 的排序比较函数可以根据用户需求进行定制。</li>
+<li>支持简易的操作接口 API，如 Put、Get、Delete，并支持批量写入。</li>
+<li>可以针对数据创建数据内存快照。</li>
+<li>支持前向、后向的迭代器。</li>
+<li>采用 Google 的 Snappy 压缩算法对数据进行压缩，以减少存储空间。</li>
+<li>基本不依赖其他第三方模块，可非常容易地移植到 Windows、Linux、UNIX、Android、iOS。</li>
+</ul>
+<p><!-- raw HTML omitted --><strong>缺点：</strong><!-- raw HTML omitted --></p>
+<ul>
+<li>不是传统的关系数据库，不支持SQL查询与索引。</li>
+<li>只支持单进程，不支持多进程。</li>
+<li>不支持多种数据类型。</li>
+<li>不支持 C/S 的访问模式。用户在应用时，需要自己进行网络服务的封装。</li>
+</ul>
+<h2 id="应用场景">应用场景</h2>
+<p>LevelDB主要应用于<strong>查少写多</strong>的场景，如：</p>
+<ul>
+<li>
+<p>常见的 Web 场景，可以存储用户的个人信息资料、对文章或博客的评论、邮件等。</p>
+</li>
+<li>
+<p>具体到电子商务领域，可以存储购物车中的商品、产品类别、产品评论。</p>
+</li>
+<li>
+<p>存储整个网页，其将网页的 URL 作为 key，网页的内容作为 value。</p>
+</li>
+<li>
+<p>构建更为复杂的存储系统，如日志系统、缓存、消息队列等。</p>
+</li>
+<li>
+<p>……</p>
+</li>
+</ul>
+<h2 id="rocksdb">RocksDB</h2>
+<p><a class="link" href="https://github.com/facebook/rocksdb"  target="_blank" rel="noopener"
+    >RocksDB</a> 是基于 LevelDB 开发的，并保留、继承了 LevelDB 原有的基本功能，也是一个嵌入式的 K-V 数据存储库。RocksDB 设计之初，正值 SSD 硬盘兴起。然而在当时，无论是传统的关系数据库如 MySQL，还是分布式数据库如 HDFS、HBase，均没有充分发挥 SSD 硬盘的数据读写性能。因而 Facebook 当时的目标就是开发一款针对 SSD 硬盘的数据存储产品，从而有了后面的 RocksDB。RocksDB 采用嵌入式的库模式，充分发挥了 SSD 的性能。</p>
+<blockquote>
+<p><strong>为什么要基于LevelDB实现RocksDB？</strong></p>
+<p>一般而言，数据库产品有两种访问模式可供选择。一种是直接访问本地挂载的硬盘，即嵌入式的库模式；另一种是客户端通过网络访问数据服务器，并获取数据。假设 SSD 硬盘的读写约 100 μs，机械硬盘的读写约 10 ms，两台 PC 间的网络传输延迟为 50 μs。可以分析得知，如果在机械硬盘时代，采用 C/S 的数据服务模式，客户端进行一次数据查询约为 10.05 ms，可见网络延迟对于数据查询速度的影响微乎其微；而在 SSD 硬盘时代，客户端进行一次数据查询约为 150 μs，但与直接访问 SSD 硬盘相比，整体速度慢了 50%，因而直接影响了整体性能。正是在这样的背景下，Facebook的工程师们选择了 LevelDB 来实现 RocksDB 的原型。</p>
+</blockquote>
+<p>RocksDB 使用了一个插件式的架构，这使得它能够通过简单的扩展适用于各种不同的场景。插件式架构主要体现在以下几个方面：</p>
+<ol>
+<li><strong>不同的压缩模块插件</strong>：例如 Snappy、Zlib、BZip 等（LevelDB 只使用 Snappy）。</li>
+<li><strong>Compaction 过滤器</strong>：一个应用能够定义自己的 Compaction 过滤器，从而可以在 Compaction 操作时处理键。例如，可以定义一个过滤器处理键过期，从而使 RocksDB 有了类似过期时间的概念。</li>
+<li><strong>MemTable 插件</strong>：LevelDB 中的 MemTable 是一个 SkipList，适用于写入和范围扫描，但并不是所有场景都同时需要良好的写入和范围扫描功能，此时用 SkipList 就有点大材小用了。因此 RocksDB 的 MemTable 定义为一个插件式结构，可以是 SkipList，也可以是一个数组，还可以是一个前缀哈希表（以字符串前缀进行哈希，哈希之后寻找桶，桶内的数据可以是一个 B 树）。因为数组是无序的，所以大批量写入比使用 SkipList 具有更好的性能，但不适用于范围查找，并且当内存中的数组需要生成为 SSTable 时，需要进行再排序后写入Level 0。前缀哈希表适用于读取、写入和在同一前缀下的范围查找。因此可以根据场景使用不同的MemTable。</li>
+<li><strong>SSTable 插件</strong>：SSTable 也可以自定义格式，使之更适用于 SSD 的读取和写入。除了插件式架构，RocksDB 还进行了一些写入以及 Compaction 操作方面的优化，主要有以下几个方面：
+<ul>
+<li><strong>线程池</strong>：可以定义一个线程池进行 Level 0～Level 5 的 Compaction 操作，另一个线程池进行将MemTable 生成为 SSTable 的操作。如果 Level 0～Level 5 的 Compaction 操作没有重叠的文件，可以并行操作，以加快 Compaction 操作的执行。</li>
+<li><strong>多个 Immutable MemTable</strong>：当 MemTable 写满之后，会将其赋值给一个 ImmutableMemTable，然后由后台线程生成一个 SSTable。但如果此时有大量的写入，MemTable 会迅速再次写满，此时如果Immutable MemTable 还未执行完 Compaction 操作就会阻塞写入。因此 RocksDB 使用一个队列将Immutable MemTable 放入，依次由后台线程处理，实现同时存在多个 ImmutableMemTable。以此优化写入，避免写放大，当使用慢速存储时也能够加大写吞吐量。</li>
+</ul>
+</li>
+</ol>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/leveldb/">LevelDB</a>
+        
+            <a href="/tags/kv%E5%AD%98%E5%82%A8/">KV存储</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 23:12 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/leveldb-dbimpl%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB DBImpl模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-compaction%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB Compaction模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB 版本管理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-wal%E6%97%A5%E5%BF%97%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB WAL日志模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-sstable%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB SSTable模块</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/leveldb-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'LevelDB 基本概念',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#为什么需求k-v数据库">为什么需求K-V数据库？</a></li>
+    <li><a href="#bigtable与leveldb">BigTable与LevelDB</a></li>
+    <li><a href="#特点">特点</a></li>
+    <li><a href="#应用场景">应用场景</a></li>
+    <li><a href="#rocksdb">RocksDB</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

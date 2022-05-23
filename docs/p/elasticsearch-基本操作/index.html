@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='基本操作 环境搭建 搭建Elasticsearch环境 下载docker镜像
+1  docker pull elasticsearch:7.4.2   映射配置文件
+1 2 3 4 5 6 7 8 9  # 配置映射文件夹 mkdir -p /mydata/elasticsearch/config mkdir -p /mydata/elasticsearch/data # 设置文件夹权限任何用户可读可写 chmod 777 /mydata/elasticsearch -R # 配置 http.host echo &amp;#34;http.host: 0.0.0.0&amp;#34; &amp;gt;&amp;gt; /mydata/elasticsearch/config/elasticsearch.yml   启动容器
+1 2 3 4 5 6 7  docker run --name elasticsearch -p 9200:9200 -p 9300:9300 \ -e &amp;#34;discovery.type&amp;#34;=&amp;#34;single-node&amp;#34; \	 # 设置为单节点 -e ES_JAVA_OPTS=&amp;#34;-Xms64m -Xmx128m&amp;#34; \ # 设置启动时ES的初始内存以及最大内存 -v /mydata/elasticsearch/config/elasticsearch.'><title>ElasticSearch 基本操作</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='ElasticSearch 基本操作'>
+<meta property='og:description' content='基本操作 环境搭建 搭建Elasticsearch环境 下载docker镜像
+1  docker pull elasticsearch:7.4.2   映射配置文件
+1 2 3 4 5 6 7 8 9  # 配置映射文件夹 mkdir -p /mydata/elasticsearch/config mkdir -p /mydata/elasticsearch/data # 设置文件夹权限任何用户可读可写 chmod 777 /mydata/elasticsearch -R # 配置 http.host echo &amp;#34;http.host: 0.0.0.0&amp;#34; &amp;gt;&amp;gt; /mydata/elasticsearch/config/elasticsearch.yml   启动容器
+1 2 3 4 5 6 7  docker run --name elasticsearch -p 9200:9200 -p 9300:9300 \ -e &amp;#34;discovery.type&amp;#34;=&amp;#34;single-node&amp;#34; \	 # 设置为单节点 -e ES_JAVA_OPTS=&amp;#34;-Xms64m -Xmx128m&amp;#34; \ # 设置启动时ES的初始内存以及最大内存 -v /mydata/elasticsearch/config/elasticsearch.'>
+<meta property='og:url' content='https://blog.orekilee.top/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='ElasticSearch' /><meta property='article:tag' content='搜索引擎' /><meta property='article:published_time' content='2022-05-23T22:17:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T22:35:00&#43;08:00'/>
+<meta name="twitter:title" content="ElasticSearch 基本操作">
+<meta name="twitter:description" content="基本操作 环境搭建 搭建Elasticsearch环境 下载docker镜像
+1  docker pull elasticsearch:7.4.2   映射配置文件
+1 2 3 4 5 6 7 8 9  # 配置映射文件夹 mkdir -p /mydata/elasticsearch/config mkdir -p /mydata/elasticsearch/data # 设置文件夹权限任何用户可读可写 chmod 777 /mydata/elasticsearch -R # 配置 http.host echo &amp;#34;http.host: 0.0.0.0&amp;#34; &amp;gt;&amp;gt; /mydata/elasticsearch/config/elasticsearch.yml   启动容器
+1 2 3 4 5 6 7  docker run --name elasticsearch -p 9200:9200 -p 9300:9300 \ -e &amp;#34;discovery.type&amp;#34;=&amp;#34;single-node&amp;#34; \	 # 设置为单节点 -e ES_JAVA_OPTS=&amp;#34;-Xms64m -Xmx128m&amp;#34; \ # 设置启动时ES的初始内存以及最大内存 -v /mydata/elasticsearch/config/elasticsearch.">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/elasticsearch/" style="background-color: #2a9d8f; color: #fff;">
+                ElasticSearch
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/">ElasticSearch 基本操作</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="基本操作">基本操作</h1>
+<h2 id="环境搭建">环境搭建</h2>
+<h3 id="搭建elasticsearch环境"><strong>搭建Elasticsearch环境</strong></h3>
+<p>下载docker镜像</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">docker pull elasticsearch:7.4.2
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>映射配置文件</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="c1"># 配置映射文件夹</span>
+</span></span><span class="line"><span class="cl">mkdir -p /mydata/elasticsearch/config
+</span></span><span class="line"><span class="cl">mkdir -p /mydata/elasticsearch/data
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 设置文件夹权限任何用户可读可写</span>
+</span></span><span class="line"><span class="cl">chmod <span class="m">777</span> /mydata/elasticsearch -R
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 配置 http.host</span>
+</span></span><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s2">&#34;http.host: 0.0.0.0&#34;</span> &gt;&gt; /mydata/elasticsearch/config/elasticsearch.yml
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>启动容器</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">docker run --name elasticsearch -p 9200:9200 -p 9300:9300 <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>-e <span class="s2">&#34;discovery.type&#34;</span><span class="o">=</span><span class="s2">&#34;single-node&#34;</span> <span class="se">\	</span> <span class="c1"># 设置为单节点</span>
+</span></span><span class="line"><span class="cl">-e <span class="nv">ES_JAVA_OPTS</span><span class="o">=</span><span class="s2">&#34;-Xms64m -Xmx128m&#34;</span> <span class="se">\ </span><span class="c1"># 设置启动时ES的初始内存以及最大内存</span>
+</span></span><span class="line"><span class="cl">-v /mydata/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>-v /mydata/elasticsearch/data:/usr/share/elasticsearch/data <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>-v /mydata/elasticsearch/plugins:/usr/share/elasticsearch/plugins <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>-d elasticsearch:7.4.2
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>访问ES服务，http://82.157.127.173:9200/</p>
+<p>得到相应体如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;name&#34;</span> <span class="p">:</span> <span class="s2">&#34;de85ed684243&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;cluster_name&#34;</span> <span class="p">:</span> <span class="s2">&#34;elasticsearch&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;cluster_uuid&#34;</span> <span class="p">:</span> <span class="s2">&#34;UeIP1PrXT2OFd7FlEEl3hQ&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span> <span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;number&#34;</span> <span class="p">:</span> <span class="s2">&#34;7.4.2&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;build_flavor&#34;</span> <span class="p">:</span> <span class="s2">&#34;default&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;build_type&#34;</span> <span class="p">:</span> <span class="s2">&#34;docker&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;build_hash&#34;</span> <span class="p">:</span> <span class="s2">&#34;2f90bbf7b93631e52bafb59b3b049cb44ec25e96&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;build_date&#34;</span> <span class="p">:</span> <span class="s2">&#34;2019-10-28T20:40:44.881551Z&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;build_snapshot&#34;</span> <span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;lucene_version&#34;</span> <span class="p">:</span> <span class="s2">&#34;8.2.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;minimum_wire_compatibility_version&#34;</span> <span class="p">:</span> <span class="s2">&#34;6.8.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;minimum_index_compatibility_version&#34;</span> <span class="p">:</span> <span class="s2">&#34;6.0.0-beta1&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;tagline&#34;</span> <span class="p">:</span> <span class="s2">&#34;You Know, for Search&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>可以通过/_cat来获取节点信息</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="c1"># 访问http://82.157.127.173:9200/_cat</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 属性列表</span>
+</span></span><span class="line"><span class="cl">/_cat/allocation
+</span></span><span class="line"><span class="cl">/_cat/shards
+</span></span><span class="line"><span class="cl">/_cat/shards/<span class="o">{</span>index<span class="o">}</span>
+</span></span><span class="line"><span class="cl">/_cat/master
+</span></span><span class="line"><span class="cl">/_cat/nodes
+</span></span><span class="line"><span class="cl">/_cat/tasks
+</span></span><span class="line"><span class="cl">/_cat/indices
+</span></span><span class="line"><span class="cl">/_cat/indices/<span class="o">{</span>index<span class="o">}</span>
+</span></span><span class="line"><span class="cl">/_cat/segments
+</span></span><span class="line"><span class="cl">/_cat/segments/<span class="o">{</span>index<span class="o">}</span>
+</span></span><span class="line"><span class="cl">/_cat/count
+</span></span><span class="line"><span class="cl">/_cat/count/<span class="o">{</span>index<span class="o">}</span>
+</span></span><span class="line"><span class="cl">/_cat/recovery
+</span></span><span class="line"><span class="cl">/_cat/recovery/<span class="o">{</span>index<span class="o">}</span>
+</span></span><span class="line"><span class="cl">/_cat/health
+</span></span><span class="line"><span class="cl">/_cat/pending_tasks
+</span></span><span class="line"><span class="cl">/_cat/aliases
+</span></span><span class="line"><span class="cl">/_cat/aliases/<span class="o">{</span>alias<span class="o">}</span>
+</span></span><span class="line"><span class="cl">/_cat/thread_pool
+</span></span><span class="line"><span class="cl">/_cat/thread_pool/<span class="o">{</span>thread_pools<span class="o">}</span>
+</span></span><span class="line"><span class="cl">/_cat/plugins
+</span></span><span class="line"><span class="cl">/_cat/fielddata
+</span></span><span class="line"><span class="cl">/_cat/fielddata/<span class="o">{</span>fields<span class="o">}</span>
+</span></span><span class="line"><span class="cl">/_cat/nodeattrs
+</span></span><span class="line"><span class="cl">/_cat/repositories
+</span></span><span class="line"><span class="cl">/_cat/snapshots/<span class="o">{</span>repository<span class="o">}</span>
+</span></span><span class="line"><span class="cl">/_cat/templates
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="搭建kibana环境"><strong>搭建Kibana环境</strong></h3>
+<p>下载docker镜像</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">docker pull kibana:7.4.2
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>启动容器</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">docker run --name kibana -e <span class="nv">ELASTICSEARCH_HOSTS</span><span class="o">=</span>http://192.168.0.128:9200 -p 5601:5601 -d kibana:7.4.2
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>访问Kibana服务，http://192.168.0.128:5601/</p>
+<h2 id="restful">RESTful</h2>
+<blockquote>
+<p>一种软件架构风格，而不是标准，只是提供了一组设计原则和约束条件。它主要用于客户端和服务器交互类的软件。基于这个风格设计的软件可以更简洁，更有层次，更易于实现缓存等机制。</p>
+</blockquote>
+<p>ES的基本REST命令：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">Method</th>
+<th style="text-align:center">Url</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">PUT</td>
+<td style="text-align:center">localhost:9200/索引名称/类型名称/文档id</td>
+<td style="text-align:center">创建文档（指定文档id）</td>
+</tr>
+<tr>
+<td style="text-align:center">GET</td>
+<td style="text-align:center">localhost:9200/索引名称/类型名称/文档id</td>
+<td style="text-align:center">通过文档id查询文档</td>
+</tr>
+<tr>
+<td style="text-align:center">POST</td>
+<td style="text-align:center">localhost:9200/索引名称/类型名称</td>
+<td style="text-align:center">创建文档（随机文档id）</td>
+</tr>
+<tr>
+<td style="text-align:center">POST</td>
+<td style="text-align:center">localhost:9200/索引名称/类型名称/文档id/_update</td>
+<td style="text-align:center">修改文档</td>
+</tr>
+<tr>
+<td style="text-align:center">POST</td>
+<td style="text-align:center">localhost:9200/索引名称/类型名称/_search</td>
+<td style="text-align:center">查询所有数据</td>
+</tr>
+<tr>
+<td style="text-align:center">DELETE</td>
+<td style="text-align:center">localhost:9200/索引名称/类型名称/文档id</td>
+<td style="text-align:center">删除文档</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="crud">CRUD</h2>
+<h3 id="创建索引">创建索引</h3>
+<p>在创建索引时，我们可以声明字段与数据类型的映射</p>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /test0
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;mappings&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;properties&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;name&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                &#34;type&#34;:&#34;text&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">            },
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;author&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                &#34;type&#34;:&#34;text&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">            }
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>响应:</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;acknowledged&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;shards_acknowledged&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;index&#34;</span><span class="p">:</span> <span class="s2">&#34;test0&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>即使如果我们没有配置类型，ES也会根据字段的内容来自行推导。</p>
+<blockquote>
+<p>注意⚠️：由于索引具有不变性，我们只能进行追加而不能更改已经存在的映射字段，必须创建新的索引后进行数据迁移。</p>
+</blockquote>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST _reindex
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;source&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;index&#34;: &#34;test0&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;dest&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;index&#34;: &#34;test1&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err"> }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="插入文档">插入文档</h3>
+<p>PUT和POST都可以插入文档：</p>
+<ul>
+<li><strong>POST</strong>：如果不指定 id，自动生成 id。如果指定 id，则修改这条记录，并新增版本号。</li>
+<li><strong>PUT</strong>：必须指定 id，如果没有这条记录，则新增，如果有，则更新。</li>
+</ul>
+<blockquote>
+<p>示例：在 <code>test1</code> 索引下的<code>books</code>类型中保存标识为 <code>1</code> 的文档。</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /test1/books/1
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">	&#34;name&#34;:&#34;three days to see&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;author&#34; : &#34;Daniel Defoe&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>响应:</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_index&#34;</span><span class="p">:</span> <span class="s2">&#34;test&#34;</span><span class="p">,</span>			<span class="c1">//索引
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nt">&#34;_type&#34;</span><span class="p">:</span> <span class="s2">&#34;book&#34;</span><span class="p">,</span>			<span class="c1">//类型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nt">&#34;_id&#34;</span><span class="p">:</span> <span class="s2">&#34;1&#34;</span><span class="p">,</span>						<span class="c1">//id
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nt">&#34;_version&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>				<span class="c1">//版本号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nt">&#34;result&#34;</span><span class="p">:</span> <span class="s2">&#34;updated&#34;</span><span class="p">,</span>	<span class="c1">//操作类型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nt">&#34;_shards&#34;</span><span class="p">:</span> <span class="p">{</span>					<span class="c1">//分片
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nt">&#34;total&#34;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;successful&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;failed&#34;</span><span class="p">:</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_seq_no&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>					<span class="c1">//并发控制字段，每次更新就会+1，用来做乐观锁
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nt">&#34;_primary_term&#34;</span><span class="p">:</span> <span class="mi">1</span>    <span class="c1">//同上，主分片重新分配，如重启，就会变化
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="查询文档">查询文档</h3>
+<blockquote>
+<p>示例：查询<code>test1</code>索引下的<code>books</code>类型中保存标识为 <code>1</code> 的文档的内容。</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test1/books/1
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>响应:</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_index&#34;</span><span class="p">:</span> <span class="s2">&#34;test1&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_type&#34;</span><span class="p">:</span> <span class="s2">&#34;books&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_id&#34;</span><span class="p">:</span> <span class="s2">&#34;1&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_version&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_seq_no&#34;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_primary_term&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;found&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_source&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;three days to see&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;author&#34;</span><span class="p">:</span> <span class="s2">&#34;Daniel Defoe&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="更新文档">更新文档</h3>
+<p>使用<code>POST</code>命令，在ID后面加_update，并把需要修改的内容放入doc属性中</p>
+<blockquote>
+<p>示例：更新<code>test1</code> 索引下的<code>books</code>类型中保存标识为 <code>1</code> 的文档的内容。</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /test1/books/1/_update
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">	&#34;doc&#34; : {
+</span></span></span><span class="line"><span class="cl"><span class="err">		&#34;name&#34;:&#34;three days to see&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  	&#34;author&#34; : &#34;Daniel Defoe&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  	&#34;country&#34; : &#34;England&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">	}
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>响应:</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_index&#34;</span><span class="p">:</span> <span class="s2">&#34;test1&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_type&#34;</span><span class="p">:</span> <span class="s2">&#34;books&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_id&#34;</span><span class="p">:</span> <span class="s2">&#34;1&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_version&#34;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;result&#34;</span><span class="p">:</span> <span class="s2">&#34;updated&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_shards&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;total&#34;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;successful&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;failed&#34;</span><span class="p">:</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_seq_no&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_primary_term&#34;</span><span class="p">:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="删除文档和索引">删除文档和索引</h3>
+<p>删除使用<code>DELETE</code>命令</p>
+<blockquote>
+<p>示例：删除文档/test1/books/1</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">DELETE /test1/books/1
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>响应:</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_index&#34;</span><span class="p">:</span> <span class="s2">&#34;test1&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_type&#34;</span><span class="p">:</span> <span class="s2">&#34;books&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_id&#34;</span><span class="p">:</span> <span class="s2">&#34;1&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_version&#34;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;result&#34;</span><span class="p">:</span> <span class="s2">&#34;deleted&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_shards&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;total&#34;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;successful&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;failed&#34;</span><span class="p">:</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_seq_no&#34;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;_primary_term&#34;</span><span class="p">:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p>示例：删除索引/test1</p>
+</blockquote>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">DELETE /test1
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>响应:</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;acknowledged&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h2 id="search">Search</h2>
+<p>为了方便测试，可以从官网导入测试数据https://download.elastic.co/demos/kibana/gettingstarted/accounts.zip</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /test_data/account/_bulk
+</span></span></span><span class="line"><span class="cl"><span class="err">{&#34;index&#34;:{&#34;_id&#34;:&#34;1&#34;}}
+</span></span></span><span class="line"><span class="cl"><span class="err">{&#34;account_number&#34;:1,&#34;balance&#34;:39225,&#34;firstname&#34;:&#34;Amber&#34;,&#34;lastname&#34;:&#34;Duke&#34;,&#34;age&#34;:32,&#34;gender&#34;:&#34;M&#34;,&#34;address&#34;:&#34;880 Holmes Lane&#34;,&#34;employer&#34;:&#34;Pyrami&#34;,&#34;email&#34;:&#34;amberduke@pyrami.com&#34;,&#34;city&#34;:&#34;Brogan&#34;,&#34;state&#34;:&#34;IL&#34;}
+</span></span></span><span class="line"><span class="cl"><span class="err">{&#34;index&#34;:{&#34;_id&#34;:&#34;6&#34;}}
+</span></span></span><span class="line"><span class="cl"><span class="err">{&#34;account_number&#34;:6,&#34;balance&#34;:5686,&#34;firstname&#34;:&#34;Hattie&#34;,&#34;lastname&#34;:&#34;Bond&#34;,&#34;age&#34;:36,&#34;gender&#34;:&#34;M&#34;,&#34;address&#34;:&#34;671 Bristol Street&#34;,&#34;employer&#34;:&#34;Netagy&#34;,&#34;email&#34;:&#34;hattiebond@netagy.com&#34;,&#34;city&#34;:&#34;Dante&#34;,&#34;state&#34;:&#34;TN&#34;}
+</span></span></span><span class="line"><span class="cl"><span class="err">....................
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="查询方式">查询方式</h3>
+<p>ES支持两种查询方式，一种是直接在URL后加上参数，另一种是在URL后加上JSON格式的请求体。</p>
+<blockquote>
+<p>示例：查找到收入最高的十条记录</p>
+</blockquote>
+<h4 id="url--参数">URL + 参数</h4>
+<p>常用的参数如下</p>
+<ul>
+<li><strong>q</strong>：用于指定搜索的关键词。</li>
+<li><strong>from &amp; size</strong>：类似于SQL中的<code>offset</code>和<code>limit</code>。</li>
+<li><strong>sort</strong>：对结果排序，默认为降序。</li>
+<li><strong>_source</strong>：指定想要返回的属性。</li>
+</ul>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search?q=*&amp;sort=balance:desc&amp;from=0&amp;size=10
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h4 id="url--querydsl">URL + QueryDSL</h4>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;query&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;match_all&#34; : {} 
+</span></span></span><span class="line"><span class="cl"><span class="err">    },
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;sort&#34; : [{
+</span></span></span><span class="line"><span class="cl"><span class="err">    		&#34;balance&#34; : &#34;desc&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">    }],
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;from&#34; : 0,
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;size&#34; : 10
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>虽然URL+参数的写法非常简洁，但是随着逻辑的复杂化，其可读性也越来越差，所以通常都会使用URL + QueryDSL的格式。</p>
+<h3 id="match-匹配">match 匹配</h3>
+<h4 id="match-匹配查询">match 匹配查询</h4>
+<p>无论你在任何字段上进行的是全文搜索还是精确查询，<code>match</code> 查询是你可用的标准查询。</p>
+<p>对于<code>not_analyzed</code>的字段，<code>match</code>能做到精确查询，而对于<code>analyzed</code>的字段，match能做到匹配查询（全文搜索）。</p>
+<blockquote>
+<p>示例：查找所有年龄为25岁的记录（精确查询）</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;query&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;match&#34; : {
+</span></span></span><span class="line"><span class="cl"><span class="err">        	&#34;age&#34;: 25
+</span></span></span><span class="line"><span class="cl"><span class="err">        } 
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p>示例：查询所有地址与976 Lawrence Street相关的记录（全文搜索）</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;query&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;match&#34; : {
+</span></span></span><span class="line"><span class="cl"><span class="err">        	&#34;address&#34;: &#34;976 Lawrence Street&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">        } 
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h4 id="match_all-全部匹配">match_all 全部匹配</h4>
+<p><code>match_all</code> 用于查询所有文档。在没有指定查询方式时，它是<strong>默认</strong>。</p>
+<blockquote>
+<p>示例：查询年龄最小的十条记录</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;query&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;match_all&#34; : {} 
+</span></span></span><span class="line"><span class="cl"><span class="err">    },
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;sort&#34; : [{
+</span></span></span><span class="line"><span class="cl"><span class="err">    		&#34;age&#34; : &#34;asc&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">    }],
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;from&#34; : 0,
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;size&#34; : 10
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h4 id="match_phase-短语匹配">match_phase 短语匹配</h4>
+<p><code>match_phase</code>用于进行短语的匹配，它查询时并不是像<code>term</code>一样不进行分词直接查询，而是借助分析器返回的查询词的相对顺序以及偏移量来做判断——满足所有查询词且顺序完全相同的记录才会被匹配上。</p>
+<blockquote>
+<p>示例：地址包含502 Baycliff Terrace的记录</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;query&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;match_phase&#34; : {
+</span></span></span><span class="line"><span class="cl"><span class="err">        	&#34;address&#34;: &#34;502 Baycliff Terrace&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">        } 
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h4 id="multi_match-多字段匹配">multi_match 多字段匹配</h4>
+<p><code>multi_match</code> 可以在多个字段上执行相同的 <code>match</code> 查询。</p>
+<blockquote>
+<p>示例：查找city或address字段中包含Dixie或Street的记录。</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;query&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;multi_match&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;query&#34;:&#34;Dixie Street&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;fields&#34;:[
+</span></span></span><span class="line"><span class="cl"><span class="err">                &#34;city&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">                &#34;address&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">            ]
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="term-精确查询">term 精确查询</h3>
+<p><code>term</code>即<strong>直接在倒排索引中查询</strong>，也就是<strong>精确查找</strong>，不进行分词器分析，文档中必须包含整个搜索的词汇。</p>
+<p><code>term</code>和<code>match</code>的区别:</p>
+<ul>
+<li><code>match</code>是经过分析处理的，查询词先被文本分析器处理后再进行查询。所以根据不同的文本分析器，分析出</li>
+</ul>
+<p>的结果也会不同。</p>
+<ul>
+<li><code>term</code>是不经过分析处理的，直接去倒排索引查找精确的值。</li>
+</ul>
+<blockquote>
+<p>由于text字段会被文本分析器处理，所以通常全文检索字段用match，其他非text字段（not_analyzed）匹配用term。</p>
+</blockquote>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;query&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;term&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;address&#34;: &#34;Street&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">// 虽然文档中存在”702 Quentin Street“，但是由于文本分析器默认会转为小写，无法搜到任何数据
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="布尔查询复合查询">布尔查询（复合查询）</h3>
+<p>借助布尔查询可以实现如SQL中（and、or、!=）等逻辑条件的判断，并且可以合并任何其他查询语句，包括复合语句。复合语句之间可以相互嵌套，可以表达复杂的逻辑。</p>
+<ul>
+<li>
+<p><strong>must（and）</strong>：文档<strong>必须匹配</strong>这些条件才能被包含进来。（影响相关性得分）</p>
+</li>
+<li>
+<p><strong>must_not（not）</strong>：文档<strong>必须不匹配</strong>这些条件才能被包含进来。（不影响相关性得分）</p>
+</li>
+<li>
+<p><strong>should（or）</strong>：如果<strong>满足</strong>这些语句中的<strong>任意</strong>语句，将增加得分 。（用于修正相关性得分）</p>
+</li>
+</ul>
+<blockquote>
+<p>示例：查找年龄不等于18的地址包含Street的男性，且优先展示居住在30岁以上的的记录</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;query&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;bool&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;must&#34;:[
+</span></span></span><span class="line"><span class="cl"><span class="err">                {
+</span></span></span><span class="line"><span class="cl"><span class="err">                    &#34;match&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                        &#34;address&#34;:&#34;Street&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">                    }
+</span></span></span><span class="line"><span class="cl"><span class="err">                },
+</span></span></span><span class="line"><span class="cl"><span class="err">                {
+</span></span></span><span class="line"><span class="cl"><span class="err">                    &#34;match&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                        &#34;gender&#34;:&#34;M&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">                    }
+</span></span></span><span class="line"><span class="cl"><span class="err">                }
+</span></span></span><span class="line"><span class="cl"><span class="err">            ],
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;must_not&#34;:[
+</span></span></span><span class="line"><span class="cl"><span class="err">                {
+</span></span></span><span class="line"><span class="cl"><span class="err">                    &#34;match&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                        &#34;age&#34;:&#34;18&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">                    }
+</span></span></span><span class="line"><span class="cl"><span class="err">                }
+</span></span></span><span class="line"><span class="cl"><span class="err">            ],
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;should&#34;:[
+</span></span></span><span class="line"><span class="cl"><span class="err">                {
+</span></span></span><span class="line"><span class="cl"><span class="err">                    &#34;range&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                        &#34;age&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                            &#34;gt&#34;:30
+</span></span></span><span class="line"><span class="cl"><span class="err">                        }
+</span></span></span><span class="line"><span class="cl"><span class="err">                    }
+</span></span></span><span class="line"><span class="cl"><span class="err">                }
+</span></span></span><span class="line"><span class="cl"><span class="err">            ]
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="filter-过滤器">Filter 过滤器</h3>
+<p><code>Filter</code>通常搭配布尔查询一起使用，用于过滤出所有满足<code>Filter</code>的记录，不影响相关性得分。</p>
+<blockquote>
+<p>示例：查找年龄在30～60之间的记录</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;query&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;bool&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;filter&#34;:[
+</span></span></span><span class="line"><span class="cl"><span class="err">                {
+</span></span></span><span class="line"><span class="cl"><span class="err">                    &#34;range&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                        &#34;age&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                            &#34;gte&#34;:30,
+</span></span></span><span class="line"><span class="cl"><span class="err">                            &#34;lte&#34;:60
+</span></span></span><span class="line"><span class="cl"><span class="err">                        }
+</span></span></span><span class="line"><span class="cl"><span class="err">                    }
+</span></span></span><span class="line"><span class="cl"><span class="err">                }
+</span></span></span><span class="line"><span class="cl"><span class="err">            ]
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="aggregations-聚合">Aggregations 聚合</h3>
+<p>要掌握聚合，你只需要明白两个主要的概念：</p>
+<ul>
+<li><strong>桶（Buckets）</strong>：满足特定条件的文档的集合</li>
+<li><strong>指标（Metrics）</strong>：对桶内的文档进行统计计算</li>
+</ul>
+<p>翻译成SQL的形式来理解的话：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="k">COUNT</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">MAX</span><span class="p">(</span><span class="n">balance</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">FROM</span><span class="w"> </span><span class="k">table</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">gender</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>桶在概念上类似于 SQL 的分组（<code>GROUP BY</code>，如上面的<code>GROUP BY gender</code>），而指标则类似于 <code>COUNT()</code> 、 <code>SUM()</code> 、 <code>MAX()</code> 等统计方法，如<code>MAX(balance)</code>。</p>
+<p>聚合的语法如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;aggregations&#34;</span> <span class="err">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;&lt;聚合名称 1&gt;&#34;</span> <span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;&lt;聚合类型&gt;&#34;</span> <span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="err">&lt;聚合体内容&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">[,</span><span class="s2">&#34;元数据&#34;</span> <span class="err">:</span> <span class="p">{</span>  <span class="err">[&lt;meta_data_body&gt;]</span> <span class="p">}]</span><span class="err">?</span>
+</span></span><span class="line"><span class="cl">        <span class="p">[,</span><span class="s2">&#34;aggregations&#34;</span> <span class="err">:</span> <span class="p">{</span> <span class="err">[&lt;sub_aggregation&gt;]+</span> <span class="p">}]</span><span class="err">?</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">[</span><span class="s2">&#34;聚合名称 2&gt;&#34;</span> <span class="err">:</span> <span class="p">{</span> <span class="err">...</span> <span class="p">}]</span><span class="err">*</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p>示例：按照性别进行分组，计算平均年龄和最高收入</p>
+</blockquote>
+<p>请求：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /test_data/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;query&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;match_all&#34;: {}
+</span></span></span><span class="line"><span class="cl"><span class="err">    },
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;aggs&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;group_gender&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;terms&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                &#34;field&#34;:&#34;gender&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">            },
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;aggs&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                &#34;avg_age&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                    &#34;avg&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                        &#34;field&#34;:&#34;age&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">                    }
+</span></span></span><span class="line"><span class="cl"><span class="err">                },
+</span></span></span><span class="line"><span class="cl"><span class="err">                &#34;max_balance&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                    &#34;max&#34;:{
+</span></span></span><span class="line"><span class="cl"><span class="err">                        &#34;field&#34;:&#34;balance&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">                    }
+</span></span></span><span class="line"><span class="cl"><span class="err">                }
+</span></span></span><span class="line"><span class="cl"><span class="err">            }
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">    },
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;size&#34;:0
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/elasticsearch/">ElasticSearch</a>
+        
+            <a href="/tags/%E6%90%9C%E7%B4%A2%E5%BC%95%E6%93%8E/">搜索引擎</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 22:35 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E5%88%86%E5%B8%83%E5%BC%8F%E5%8E%9F%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 分布式原理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E7%B4%A2%E5%BC%95%E5%8E%9F%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 索引原理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E6%9D%83%E9%87%8D%E8%AE%A1%E7%AE%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 权重计算</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">ElasticSearch 基本概念</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/elasticsearch-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'ElasticSearch 基本操作',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#环境搭建">环境搭建</a>
+      <ol>
+        <li><a href="#搭建elasticsearch环境"><strong>搭建Elasticsearch环境</strong></a></li>
+        <li><a href="#搭建kibana环境"><strong>搭建Kibana环境</strong></a></li>
+      </ol>
+    </li>
+    <li><a href="#restful">RESTful</a></li>
+    <li><a href="#crud">CRUD</a>
+      <ol>
+        <li><a href="#创建索引">创建索引</a></li>
+        <li><a href="#插入文档">插入文档</a></li>
+        <li><a href="#查询文档">查询文档</a></li>
+        <li><a href="#更新文档">更新文档</a></li>
+        <li><a href="#删除文档和索引">删除文档和索引</a></li>
+      </ol>
+    </li>
+    <li><a href="#search">Search</a>
+      <ol>
+        <li><a href="#查询方式">查询方式</a>
+          <ol>
+            <li><a href="#url--参数">URL + 参数</a></li>
+            <li><a href="#url--querydsl">URL + QueryDSL</a></li>
+          </ol>
+        </li>
+        <li><a href="#match-匹配">match 匹配</a>
+          <ol>
+            <li><a href="#match-匹配查询">match 匹配查询</a></li>
+            <li><a href="#match_all-全部匹配">match_all 全部匹配</a></li>
+            <li><a href="#match_phase-短语匹配">match_phase 短语匹配</a></li>
+            <li><a href="#multi_match-多字段匹配">multi_match 多字段匹配</a></li>
+          </ol>
+        </li>
+        <li><a href="#term-精确查询">term 精确查询</a></li>
+        <li><a href="#布尔查询复合查询">布尔查询（复合查询）</a></li>
+        <li><a href="#filter-过滤器">Filter 过滤器</a></li>
+        <li><a href="#aggregations-聚合">Aggregations 聚合</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='Git 基础 Git 的安装与配置 这里以 CentOS 8 举例。
+首先使用 yum 安装 Git
+1  sudo yum install git   检查是否安装成功并查看版本号
+1  git --version   接着开始配置用户信息
+1 2 3 4 5  # 配置用户名 git config --global user.name &amp;#34;yourname&amp;#34; # 配置邮箱 git config --global user.email &amp;#34;yourname@email.com&amp;#34;   接着列出所有配置，查看是否配置成功
+1  git config --list   获取仓库 获取 Git 项目仓库的方法有两种：
+ 在现有项目或目录下导入所有文件到 Git 中； 从一个服务器克隆一个现有的 Git 仓库。  初始化新仓库 如果打算使用当前已有的项目来初始化一个新仓库，你只需要进入该项目目录并输入：'><title>Git 基本操作</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/git-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Git 基本操作'>
+<meta property='og:description' content='Git 基础 Git 的安装与配置 这里以 CentOS 8 举例。
+首先使用 yum 安装 Git
+1  sudo yum install git   检查是否安装成功并查看版本号
+1  git --version   接着开始配置用户信息
+1 2 3 4 5  # 配置用户名 git config --global user.name &amp;#34;yourname&amp;#34; # 配置邮箱 git config --global user.email &amp;#34;yourname@email.com&amp;#34;   接着列出所有配置，查看是否配置成功
+1  git config --list   获取仓库 获取 Git 项目仓库的方法有两种：
+ 在现有项目或目录下导入所有文件到 Git 中； 从一个服务器克隆一个现有的 Git 仓库。  初始化新仓库 如果打算使用当前已有的项目来初始化一个新仓库，你只需要进入该项目目录并输入：'>
+<meta property='og:url' content='https://blog.orekilee.top/p/git-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='版本管理' /><meta property='article:tag' content='Git' /><meta property='article:published_time' content='2022-05-23T18:38:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-23T18:44:13&#43;08:00'/>
+<meta name="twitter:title" content="Git 基本操作">
+<meta name="twitter:description" content="Git 基础 Git 的安装与配置 这里以 CentOS 8 举例。
+首先使用 yum 安装 Git
+1  sudo yum install git   检查是否安装成功并查看版本号
+1  git --version   接着开始配置用户信息
+1 2 3 4 5  # 配置用户名 git config --global user.name &amp;#34;yourname&amp;#34; # 配置邮箱 git config --global user.email &amp;#34;yourname@email.com&amp;#34;   接着列出所有配置，查看是否配置成功
+1  git config --list   获取仓库 获取 Git 项目仓库的方法有两种：
+ 在现有项目或目录下导入所有文件到 Git 中； 从一个服务器克隆一个现有的 Git 仓库。  初始化新仓库 如果打算使用当前已有的项目来初始化一个新仓库，你只需要进入该项目目录并输入：">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/git/" style="background-color: #2a9d8f; color: #fff;">
+                Git
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/git-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/">Git 基本操作</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="git-基础">Git 基础</h1>
+<h2 id="git-的安装与配置">Git 的安装与配置</h2>
+<p>这里以 CentOS 8 举例。</p>
+<p>首先使用 yum 安装 Git</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">sudo yum install git
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>检查是否安装成功并查看版本号</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git --version
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>接着开始配置用户信息</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl"><span class="c1"># 配置用户名</span>
+</span></span><span class="line"><span class="cl">git config --global user.name <span class="s2">&#34;yourname&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 配置邮箱</span>
+</span></span><span class="line"><span class="cl">git config --global user.email <span class="s2">&#34;yourname@email.com&#34;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>接着列出所有配置，查看是否配置成功</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git config --list
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h2 id="获取仓库">获取仓库</h2>
+<p>获取 Git 项目仓库的方法有两种：</p>
+<ol>
+<li>在现有项目或目录下导入所有文件到 Git 中；</li>
+<li>从一个服务器克隆一个现有的 Git 仓库。</li>
+</ol>
+<h3 id="初始化新仓库">初始化新仓库</h3>
+<p>如果打算使用当前已有的项目来初始化一个新仓库，你只需要进入该项目目录并输入：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git init
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>该命令将创建一个名为 <code>.git</code> 的子目录，这个子目录含有你初始化的 Git 仓库中所有的必须文件。接下来使用 <code>git add</code> 来跟踪已有的文件，再使用 <code>git commit</code> 来进行提交，就可以完成当前仓库的构建。</p>
+<h3 id="克隆已有仓库">克隆已有仓库</h3>
+<p>如果想获得一份已经存在了的 Git 仓库的拷贝，可以使用下面这个命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git clone <span class="o">[</span>url<span class="o">]</span> <span class="o">(</span>可选，本地仓库名称<span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>其会在当前目录下创建一个与项目同名（默认）的目录，并在这个目录下初始化一个 <code>.git</code> 文件夹，从远程仓库拉取下所有数据放入 <code>.git</code> 文件夹，然后从中读取最新版本的文件的拷贝。此时所有的项目文件已经存放在本地仓库中，准备就绪等待后续的开发和使用。</p>
+<blockquote>
+<p>Git 克隆的是该 Git 仓库服务器上的几乎所有数据，而不是仅仅复制完成你的工作所需要文件。 当你执行 <code>git clone</code> 命令的时候，默认配置下远程 Git 仓库中的每一个文件的每一个版本都将被拉取下来。</p>
+</blockquote>
+<h2 id="记录更新至仓库">记录更新至仓库</h2>
+<h3 id="查看文件状态">查看文件状态</h3>
+<p>当我们要查看文件的状态时，可以使用 <code>git status</code> 命令。例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git status
+</span></span><span class="line"><span class="cl">On branch <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">Changes to be committed:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git restore --staged &lt;file&gt;...&#34;</span> to unstage<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        new file:   test.cpp
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Untracked files:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git add &lt;file&gt;...&#34;</span> to include in what will be committed<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        test2.cpp
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>我们可以看到，其说明了我们当前所处的分支，以及展示了当前未被跟踪的文件，以及暂存区中待提交的文件。</p>
+<p>我们还可以在后面加上 <code>-s</code> 或者 <code>--short</code> 参数来使输出更加简洁</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git status -s
+</span></span><span class="line"><span class="cl"> M README.md
+</span></span><span class="line"><span class="cl">A  test.cpp
+</span></span><span class="line"><span class="cl">?? test2.cpp
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>左边的状态码的含义如下；</p>
+<ul>
+<li>
+<p>新添加的未跟踪文件前面有 <code>??</code> 标记。</p>
+</li>
+<li>
+<p>新添加到暂存区中的文件前面有 <code>A</code> 标记。</p>
+</li>
+<li>
+<p>修改过的文件前面有 <code>M</code> 标记。出现在右边的 <code>M</code> 表示该文件被修改了但是还没放入暂存区，出现在靠左边的 <code>M</code> 表示该文件被修改了并放入了暂存区。</p>
+</li>
+</ul>
+<h3 id="跟踪新文件">跟踪新文件</h3>
+<blockquote>
+<p><code>git add</code> 是个多功能命令：可以用它开始跟踪新文件，或者把已跟踪的文件放到暂存区，还能用于合并时把有冲突的文件标记为已解决状态等。</p>
+</blockquote>
+<p>我们可以使用命令 <code>git add</code> 来跟踪一个文件，例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git add test.cpp
+</span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p><code>git add</code> 命令使用文件或目录的路径作为参数；如果参数是目录的路径，该命令将递归地跟踪该目录下的所有文件。</p>
+</blockquote>
+<p>此时用 git status 就可以看到文件已经被跟踪，并放入暂存区中：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git status
+</span></span><span class="line"><span class="cl">On branch <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">Changes to be committed:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git restore --staged &lt;file&gt;...&#34;</span> to unstage<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        new file:   test.cpp
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="暂存已修改文件">暂存已修改文件</h3>
+<p>如果我们修改了一个已经被跟踪的文件，此时它的状态如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git status
+</span></span><span class="line"><span class="cl">On branch <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">Changes to be committed:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git restore --staged &lt;file&gt;...&#34;</span> to unstage<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        new file:   test.cpp
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Changes not staged <span class="k">for</span> commit:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git add &lt;file&gt;...&#34;</span> to update what will be committed<span class="o">)</span>
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git restore &lt;file&gt;...&#34;</span> to discard changes in working directory<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        modified:   README.md
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时文件内容发生了变化，但是还没有被放入暂存区中，此时就需要我们使用 <code>git add</code> 将其添加到暂存区</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git add README.md
+</span></span><span class="line"><span class="cl">$ git status
+</span></span><span class="line"><span class="cl">On branch <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">Changes to be committed:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git restore --staged &lt;file&gt;...&#34;</span> to unstage<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        modified:   README.md
+</span></span><span class="line"><span class="cl">        new file:   test.cpp
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时文件已被加入到暂存区中，在下次使用 <code>git commit</code> 提交时就会被添加到仓库。但是，如果我们此时修改一个暂存区中的文件，会怎么样呢？</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="err">$</span> <span class="n">git</span> <span class="n">status</span>
+</span></span><span class="line"><span class="cl"><span class="n">On</span> <span class="n">branch</span> <span class="n">test</span>
+</span></span><span class="line"><span class="cl"><span class="n">Changes</span> <span class="n">to</span> <span class="n">be</span> <span class="nl">committed</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">  <span class="p">(</span><span class="n">use</span> <span class="s">&#34;git restore --staged &lt;file&gt;...&#34;</span> <span class="n">to</span> <span class="n">unstage</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nl">modified</span><span class="p">:</span>   <span class="n">README</span><span class="p">.</span><span class="n">md</span>
+</span></span><span class="line"><span class="cl">        <span class="k">new</span> <span class="nl">file</span><span class="p">:</span>   <span class="n">test</span><span class="p">.</span><span class="n">cpp</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Changes</span> <span class="n">not</span> <span class="n">staged</span> <span class="k">for</span> <span class="nl">commit</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">  <span class="p">(</span><span class="n">use</span> <span class="s">&#34;git add &lt;file&gt;...&#34;</span> <span class="n">to</span> <span class="n">update</span> <span class="n">what</span> <span class="n">will</span> <span class="n">be</span> <span class="n">committed</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">(</span><span class="n">use</span> <span class="s">&#34;git restore &lt;file&gt;...&#34;</span> <span class="n">to</span> <span class="n">discard</span> <span class="n">changes</span> <span class="n">in</span> <span class="n">working</span> <span class="n">directory</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nl">modified</span><span class="p">:</span>   <span class="n">README</span><span class="p">.</span><span class="n">md</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时看起来像是文件同时出现在了暂存区和非暂存区，但事实是这样吗？答案是否定的，git 中有版本的概念，此时存在暂存区中的是我们上一次提交的那个版本，而此时在非暂存区中的即是最新的版本。</p>
+<p>此时，我们就需要再次使用 <code>git add</code> 来将最新的版本暂存起来</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git add README.md
+</span></span><span class="line"><span class="cl">$ git status
+</span></span><span class="line"><span class="cl">On branch <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">Changes to be committed:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git restore --staged &lt;file&gt;...&#34;</span> to unstage<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        modified:   README.md
+</span></span><span class="line"><span class="cl">        new file:   test.cpp
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="忽略文件">忽略文件</h3>
+<p>文件 <code>.gitignore</code> 的格式规范如下：</p>
+<ul>
+<li>所有空行或者以 <code>＃</code> 开头的行都会被 Git 忽略。</li>
+<li>可以使用标准的 glob 模式匹配。</li>
+<li>匹配模式可以以（<code>/</code>）开头防止递归。</li>
+<li>匹配模式可以以（<code>/</code>）结尾指定目录。</li>
+<li>要忽略指定模式以外的文件或目录，可以在模式前加上惊叹号（<code>!</code>）取反。</li>
+</ul>
+<blockquote>
+<p>glob 模式是指 shell 所使用的简化了的正则表达式。</p>
+<ol>
+<li>星号（<code>*</code>）匹配零个或多个任意字符；</li>
+<li><code>[abc]</code> 匹配任何一个列在方括号中的字符；</li>
+<li>问号（<code>?</code>）只匹配一个任意字符；</li>
+<li>如果在方括号中使用短划线分隔两个字符，表示所有在这两个字符范围内的都可以匹配（比如 <code>[0-9]</code> 表示匹配所有 0 到 9 的数字）。</li>
+<li>使用两个星号（<code>*</code>) 表示匹配任意中间目录，比如<code>a/**/z</code> 可以匹配 <code>a/z</code>, <code>a/b/z</code> 或 <code>a/b/c/z</code>等。</li>
+</ol>
+</blockquote>
+<p>例如一个 C++ 的例子：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl"># Prerequisites
+</span></span><span class="line"><span class="cl">*.d
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># Compiled Object files
+</span></span><span class="line"><span class="cl">*.slo
+</span></span><span class="line"><span class="cl">*.lo
+</span></span><span class="line"><span class="cl">*.o
+</span></span><span class="line"><span class="cl">*.obj
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># Precompiled Headers
+</span></span><span class="line"><span class="cl">*.gch
+</span></span><span class="line"><span class="cl">*.pch
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># Compiled Dynamic libraries
+</span></span><span class="line"><span class="cl">*.so
+</span></span><span class="line"><span class="cl">*.dylib
+</span></span><span class="line"><span class="cl">*.dll
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># Fortran module files
+</span></span><span class="line"><span class="cl">*.mod
+</span></span><span class="line"><span class="cl">*.smod
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># Compiled Static libraries
+</span></span><span class="line"><span class="cl">*.lai
+</span></span><span class="line"><span class="cl">*.la
+</span></span><span class="line"><span class="cl">*.a
+</span></span><span class="line"><span class="cl">*.lib
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># Executables
+</span></span><span class="line"><span class="cl">*.exe
+</span></span><span class="line"><span class="cl">*.out
+</span></span><span class="line"><span class="cl">*.app
+</span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p>GitHub 有一个十分详细的针对数十种项目及语言的 <code>.gitignore</code> 文件列表：https://github.com/github/gitignore 。</p>
+</blockquote>
+<h3 id="差异比较">差异比较</h3>
+<p><code>git diff</code> 用于比较已写入暂存区和已经被修改但尚未写入暂存区文件的区别。</p>
+<p>例如此时我们修改了一个已写入暂存区的文件，此时结果如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git diff
+</span></span><span class="line"><span class="cl">diff --git a/README.md b/README.md
+</span></span><span class="line"><span class="cl">index d0e7d60..a261b14 <span class="m">100644</span>
+</span></span><span class="line"><span class="cl">--- a/README.md
+</span></span><span class="line"><span class="cl">+++ b/README.md
+</span></span><span class="line"><span class="cl">@@ -1 +1 @@
+</span></span><span class="line"><span class="cl">-HELLO WORLD
+</span></span><span class="line"><span class="cl">+HELLO WORLD !!!
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果要查看已暂存的将要添加到下次提交里的内容，可以用下面这些命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git diff --cached	   // 老版本
+</span></span><span class="line"><span class="cl">或者
+</span></span><span class="line"><span class="cl">git diff --staged      // 新版本
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong>请注意，git diff 本身只显示尚未暂存的改动，而不是自上次提交以来所做的所有改动。</strong></p>
+<h3 id="提交更新">提交更新</h3>
+<p>如果暂存区中的内容已经准备就绪了，此时就可以使用 <code>git commit</code> 来提交更新，例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git commit -m <span class="s2">&#34;commit&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># -m 用于将提交信息与命令放在同一行</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>提交完成后，它会告诉你当前是在哪个分支提交的，本次提交的完整 SHA-1 校验和是什么，以及在本次提交中，有多少文件修订过，多少行添加和删改过。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">[test da8f5f4] commit
+</span></span><span class="line"><span class="cl"> 1 file changed, 0 insertions(+), 0 deletions(-)
+</span></span><span class="line"><span class="cl"> delete mode 100644 test.md
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="跳过使用暂存区域">跳过使用暂存区域</h3>
+<p>如果觉得每次提交前都要将已跟踪的文件存入暂存区过于麻烦，可以为 <code>git commit</code> 加上一个 <code>-a</code> 参数，例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git commit -a -m README.md
+</span></span><span class="line"><span class="cl"><span class="o">[</span><span class="nb">test</span> fa38827<span class="o">]</span> README.md
+</span></span><span class="line"><span class="cl"> <span class="m">1</span> file changed, <span class="m">1</span> insertion<span class="o">(</span>+<span class="o">)</span>
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl"> $ git status
+</span></span><span class="line"><span class="cl">On branch <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">nothing to commit, working tree clean
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时 Git 就会自动把所有已经跟踪过的文件暂存起来一并提交，从而跳过 <code>git add</code> 步骤。</p>
+<h3 id="删除文件">删除文件</h3>
+<p>如果我们想要从 Git 中删除一个文件，就必须要将其从已跟踪文件清单移除，然后 commit 提交。</p>
+<p>我们可以用 <code>git rm</code> 命令完成此项工作，并连带从工作目录中删除指定的文件，这样以后就不会出现在未跟踪文件清单中了。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git rm test.md
+</span></span><span class="line"><span class="cl">rm <span class="s1">&#39;test.md&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">$ git status
+</span></span><span class="line"><span class="cl">On branch <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">Changes to be committed:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git restore --staged &lt;file&gt;...&#34;</span> to unstage<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        deleted:    test.md
+</span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p>如果我们直接删除文件，会怎么样呢？</p>
+</blockquote>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ rm test.md
+</span></span><span class="line"><span class="cl">$ git status
+</span></span><span class="line"><span class="cl">On branch <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">Changes not staged <span class="k">for</span> commit:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git add/rm &lt;file&gt;...&#34;</span> to update what will be committed<span class="o">)</span>
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git restore &lt;file&gt;...&#34;</span> to discard changes in working directory<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        deleted:    test.md
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">no changes added to commit <span class="o">(</span>use <span class="s2">&#34;git add&#34;</span> and/or <span class="s2">&#34;git commit -a&#34;</span><span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时这个操作会被加入未暂存清单中，我们仍然需要使用 <code>git rm</code> 来进行删除。</p>
+<blockquote>
+<p>如果只是想从仓库中删除文件（或者暂存区），而不想在本地删除，那该怎么做呢？</p>
+</blockquote>
+<p>此时可以使用 <code>–cached</code> 参数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git rm --cached <span class="o">[</span>file<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p>如果在删除前，这个文件就已经在暂存区中，那该怎么办呢？</p>
+</blockquote>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git status
+</span></span><span class="line"><span class="cl">On branch <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">Changes to be committed:
+</span></span><span class="line"><span class="cl">  <span class="o">(</span>use <span class="s2">&#34;git restore --staged &lt;file&gt;...&#34;</span> to unstage<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        modified:   test.md
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时文件已经存储在暂存区了，我们尝试使用 <code>git rm</code> 删除它：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git rm test.md
+</span></span><span class="line"><span class="cl">error: the following file has changes staged in the index:
+</span></span><span class="line"><span class="cl">    test.md
+</span></span><span class="line"><span class="cl"><span class="o">(</span>use --cached to keep the file, or -f to force removal<span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时我们发现其无法直接被删除，原因是 Git 为了防止误删还没有添加到快照中的数据（这种数据无法被 Git 恢复），为其添加了安全策略，需要使用强制删除的选项 <code>-f</code> 才行。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git rm -rf test.md 
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="移动重命名文件">移动/重命名文件</h3>
+<p>当我们想要将一个文件移动到其他目录时，可以使用下面命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git mv <span class="o">[</span>源文件<span class="o">]</span> <span class="o">[</span>新路径<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>同样，我们也可以使用 <code>git mv</code> 来完成文件的重命名，例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git mv <span class="o">[</span>原文件名<span class="o">]</span> <span class="o">[</span>新文件名<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>那它是如何做到既能移动，又能够重命名呢？其实运行 <code>git mv</code> 就相当于运行了下面三条命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">mv <span class="o">[</span>原文件名<span class="o">]</span> <span class="o">[</span>新文件名<span class="o">]</span>
+</span></span><span class="line"><span class="cl">git rm <span class="o">[</span>原文件名<span class="o">]</span>
+</span></span><span class="line"><span class="cl">git add <span class="o">[</span>新文件名<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong>此操作必须要在暂存区或者文件commit之后才能进行</strong></p>
+<h2 id="查看提交记录">查看提交记录</h2>
+<p>当我们想要查看提交记录时，可以使用 <code>git log</code> 命令，例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ git log
+</span></span><span class="line"><span class="cl">commit af1248beeb9de2b58d339441c5fccc2cbd652374 <span class="o">(</span>HEAD -&gt; master, origin/master, origin/HEAD<span class="o">)</span>
+</span></span><span class="line"><span class="cl">Author: HONGYU-LEE &lt;756687451@qq.com&gt;
+</span></span><span class="line"><span class="cl">Date:   Mon Apr <span class="m">11</span> 14:43:39 <span class="m">2022</span> +0800
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    update
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">commit 1801c1003b9250e7854eec43dd53c4974b5b04b2
+</span></span><span class="line"><span class="cl">Author: HONGYU-LEE &lt;756687451@qq.com&gt;
+</span></span><span class="line"><span class="cl">Date:   Sat Apr <span class="m">9</span> 18:13:42 <span class="m">2022</span> +0800
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    C++ <span class="m">20</span> <span class="k">done</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">commit 11ed22aab5099608427492711c560a2c967ba7d3
+</span></span><span class="line"><span class="cl">Author: HONGYU-LEE &lt;756687451@qq.com&gt;
+</span></span><span class="line"><span class="cl">Date:   Fri Apr <span class="m">8</span> 21:34:39 <span class="m">2022</span> +0800
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    Cpp <span class="m">17</span> <span class="k">done</span> <span class="m">20</span> doing
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">commit 9d519fa0ada5991fc8791012d98c736704ee3b68
+</span></span><span class="line"><span class="cl">Author: HONGYU-LEE &lt;756687451@qq.com&gt;
+</span></span><span class="line"><span class="cl">Date:   Thu Apr <span class="m">7</span> 21:49:42 <span class="m">2022</span> +0800
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>我们可以看到，其默认以提交时间降序排序，同时列出了每个提交的 SHA-1 校验和、作者和邮箱、提交时间以及提交说明。</p>
+<p>其常用选项如下：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">选项</th>
+<th style="text-align:center">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">-p</td>
+<td style="text-align:center">按补丁格式显示每个更新之间的差异。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;stat</td>
+<td style="text-align:center">显示每次更新的文件修改统计信息。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;shortstat</td>
+<td style="text-align:center">只显示 &ndash;stat 中最后的行数修改添加移除统计。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;name-only</td>
+<td style="text-align:center">仅在提交信息后显示已修改的文件清单。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;name-status</td>
+<td style="text-align:center">显示新增、修改、删除的文件清单。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;abbrev-commit</td>
+<td style="text-align:center">仅显示 SHA-1 的前几个字符，而非所有的 40 个字符。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;relative-date</td>
+<td style="text-align:center">使用较短的相对时间显示（比如，“2 weeks ago”）。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;graph</td>
+<td style="text-align:center">显示 ASCII 图形表示的分支合并历史。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;pretty</td>
+<td style="text-align:center">使用其他格式显示历史提交信息。可用的选项包括 oneline，short，full，fuller 和 format（后跟指定格式）。</td>
+</tr>
+</tbody>
+</table></div>
+<p>其常用的限制输出的参数如下：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">选项</th>
+<th style="text-align:center">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">-(n)</td>
+<td style="text-align:center">仅显示最近的 n 条提交</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;since, &ndash;after</td>
+<td style="text-align:center">仅显示指定时间之后的提交。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;until, &ndash;before</td>
+<td style="text-align:center">仅显示指定时间之前的提交。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;author</td>
+<td style="text-align:center">仅显示指定作者相关的提交。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;committer</td>
+<td style="text-align:center">仅显示指定提交者相关的提交。</td>
+</tr>
+<tr>
+<td style="text-align:center">&ndash;grep</td>
+<td style="text-align:center">仅显示含指定关键字的提交</td>
+</tr>
+<tr>
+<td style="text-align:center">-S</td>
+<td style="text-align:center">仅显示添加或移除了某个关键字的提交</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="撤销操作">撤销操作</h2>
+<h3 id="补充文件信息">补充文件/信息</h3>
+<p>如果我们已经 <code>git commit</code> 提交之后，才发现可能有几个文件忘记提交，又或者是提交的信息写错了。这时可以使用下列命令来尝试重新提交</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git commit --amend
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>这个命令会将暂存区中的文件提交。 如果自上次提交以来你还未做任何修改，那么快照会保持不变，而你所修改的只是提交信息。而如果进行了修改，则第二次提交将代替第一次提交的结果。</p>
+<h3 id="撤销暂存的文件">撤销暂存的文件</h3>
+<p>如果我们不小心使用 <code>git add</code> 将不必要的文件加入暂存区，如何将这些文件撤销呢？这时候就要用到下述命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git reset HEAD &lt;file&gt;...	   // 老版本
+</span></span><span class="line"><span class="cl">或者
+</span></span><span class="line"><span class="cl">git restore --staged &lt;file&gt;... // 新版本
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>在调用时加上 &ndash;hard 选项会令 git reset 成为一个危险的命令，<strong>即可能导致工作目录中所有当前进度丢失。</strong></p>
+<h3 id="撤销对文件的修改">撤销对文件的修改</h3>
+<p>当我们对一个文件进行修改后，如果不满意刚才的修改，像将其回滚到上次提交的状态时，可以使用如下命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git checkout -- &lt;file&gt;...	   // 老版本
+</span></span><span class="line"><span class="cl">或者
+</span></span><span class="line"><span class="cl">git restore &lt;file&gt;... 		   // 新版本
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><code>git checkout -- [file]</code> 是一个危险的命令。 <strong>你对那个文件做的任何修改都会消失， 除非确定不想要那个文件，否则不要使用这个命令。</strong></p>
+<h2 id="远程仓库">远程仓库</h2>
+<h3 id="查看远程仓库">查看远程仓库</h3>
+<p>如果想查看你已经配置的远程仓库服务器，可以运行 <code>git remote</code> 命令。 它会列出你指定的每一个远程服务器的简写。也可以指定选项 <code>-v</code>，会显示需要读写远程仓库使用的 Git 保存的简写与其对应的 URL。例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git remote -v
+</span></span><span class="line"><span class="cl">origin  https://gitee.com/HONGYU-LEE/git-tes.git <span class="o">(</span>fetch<span class="o">)</span>
+</span></span><span class="line"><span class="cl">origin  https://gitee.com/HONGYU-LEE/git-tes.git <span class="o">(</span>push<span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果还想要查看某一个远程仓库的更多信息，可以使用 <code>git remote show [remote-name]</code> 命令。例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git remote show origin
+</span></span><span class="line"><span class="cl">* remote origin
+</span></span><span class="line"><span class="cl">  Fetch URL: https://gitee.com/HONGYU-LEE/git-tes.git
+</span></span><span class="line"><span class="cl">  Push  URL: https://gitee.com/HONGYU-LEE/git-tes.git
+</span></span><span class="line"><span class="cl">  HEAD branch: master
+</span></span><span class="line"><span class="cl">  Remote branch:
+</span></span><span class="line"><span class="cl">    master tracked
+</span></span><span class="line"><span class="cl">  Local branch configured <span class="k">for</span> <span class="s1">&#39;git pull&#39;</span>:
+</span></span><span class="line"><span class="cl">    master merges with remote master
+</span></span><span class="line"><span class="cl">  Local ref configured <span class="k">for</span> <span class="s1">&#39;git push&#39;</span>:
+</span></span><span class="line"><span class="cl">    master pushes to master <span class="o">(</span><span class="nb">local</span> out of date<span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>它同样会列出远程仓库的 URL 与跟踪分支的信息，并且告诉你正处于 master 分支，并且如果运行 <code>git pull</code>，就会抓取所有的远程引用，然后将远程 master 分支合并到本地 master 分支。 它也会列出拉取到的所有远程引用。</p>
+<h3 id="添加远程仓库并拉取数据">添加远程仓库并拉取数据</h3>
+<p>可以通过以下命令来添加一个新的远程 Git 仓库：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git remote add &lt;shortname&gt; &lt;url&gt;
+</span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p>如果你使用 <code>clone</code> 命令克隆了一个仓库，命令会自动将其添加为远程仓库并默认以 “origin” 为简写。</p>
+</blockquote>
+<h3 id="从远程仓库中拉取数据">从远程仓库中拉取数据</h3>
+<p>使用下面这个命令，就可以从远端仓库中获得数据：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git fetch <span class="o">[</span>remote-name<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>这个命令会访问远程仓库，从中拉取所有你还没有的数据。 执行完成后，你将会拥有那个远程仓库中所有分支的引用，可以随时合并或查看。</p>
+<p>虽然 <code>git fetch</code> 命令会将数据拉取到你的本地仓库，<strong>但是它并不会自动合并或修改你当前的工作，所以在准备好时必须手动将其合并入你的工作。</strong></p>
+<p>如果你有一个分支设置为跟踪一个远程分支，可以使用 <code>git pull</code> 命令来自动的抓取然后合并远程分支到当前分支。</p>
+<h3 id="推送到远程仓库">推送到远程仓库</h3>
+<p>如果我们想分享项目时，必须将其推送到上游。此时可以使用下面这个命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git push <span class="o">[</span>remote-name<span class="o">]</span> <span class="o">[</span>branch-name<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong>只有当你有所克隆服务器的写入权限，并且之前没有人推送过时，这条命令才能生效。</strong> 当你和其他人在同一时间克隆，他们先推送到上游然后你再推送到上游，你的推送就会毫无疑问地被拒绝。 你必须先将他们的工作拉取下来并将其合并进你的工作后才能推送。</p>
+<h3 id="远端仓库移除重命名">远端仓库移除/重命名</h3>
+<p>如果想要修改一个远程仓库的简写名，可以使用以下命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git remote rename <span class="o">[</span>old_name<span class="o">]</span> <span class="o">[</span>new_name<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><strong>值得注意的是这同样也会修改你的远程分支名字。</strong> 例如那些过去引用 <code>old_name/master</code> 的现在会引用 <code>new_name/master</code>。</p>
+<p>如果因为一些原因想要移除一个远程仓库，可以使用以下命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git remote rm <span class="o">[</span>remote-name<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h2 id="标签tag">标签（Tag）</h2>
+<p>与其他版本控制系统一样，Git 可以给历史中的某一个提交打上标签，以示重要。 Git 使用两种主要类型的标签：<strong>轻量标签（lightweight）<strong>与</strong>附注标签（annotated）</strong>。</p>
+<h3 id="查看标签">查看标签</h3>
+<p>在 Git 中列出已有的标签是非常简单直观的， 只需要输入 <code>git tag</code>，就会以字典序排列出所有的标签：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git tag
+</span></span><span class="line"><span class="cl">1.21
+</span></span><span class="line"><span class="cl">1.22
+</span></span><span class="line"><span class="cl">1.23
+</span></span><span class="line"><span class="cl">v1.10
+</span></span><span class="line"><span class="cl">v1.11
+</span></span><span class="line"><span class="cl">v1.12
+</span></span><span class="line"><span class="cl">v1.13
+</span></span><span class="line"><span class="cl">v1.14
+</span></span><span class="line"><span class="cl">v1.15
+</span></span><span class="line"><span class="cl">v1.16
+</span></span><span class="line"><span class="cl">v1.17
+</span></span><span class="line"><span class="cl">v1.18
+</span></span><span class="line"><span class="cl">v1.19
+</span></span><span class="line"><span class="cl">v1.20
+</span></span><span class="line"><span class="cl">v1.3
+</span></span><span class="line"><span class="cl">v1.4
+</span></span><span class="line"><span class="cl">v1.5
+</span></span><span class="line"><span class="cl">v1.6
+</span></span><span class="line"><span class="cl">v1.7
+</span></span><span class="line"><span class="cl">v1.8
+</span></span><span class="line"><span class="cl">v1.9
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>也可以使用特定的模式查找标签，例如想查找 v1.10 ~ v1.13 版本的标签，则可以使用正则表达式：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git tag -l <span class="s1">&#39;v1.1[0-3]&#39;</span>
+</span></span><span class="line"><span class="cl">v1.10
+</span></span><span class="line"><span class="cl">v1.11
+</span></span><span class="line"><span class="cl">v1.12
+</span></span><span class="line"><span class="cl">v1.13
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="附注标签">附注标签</h3>
+<p>附注标签是存储在 Git 数据库中的一个完整对象。 它有自身的校验和信息，包含着标签的名字，电子邮件地址和日期，以及标签说明，标签本身也允许使用 GNU Privacy Guard (GPG) 来签署或验证。</p>
+<blockquote>
+<p>通常建议创建附注标签，这样你可以拥有以上所有信息；但是如果你只是想用一个临时的标签，或者因为某些原因不想要保存那些信息，轻量标签也是可用的。</p>
+</blockquote>
+<p>它的创建也非常简单，只需要加上参数 <code>-a</code> 即可：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git tag -a v1.0 -m <span class="s1">&#39;version 1.0&#39;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果是想要对过去的提交打上标签，只需要在末尾指定已提交的校验和（部分校验和也可以，会自动识别）即可：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">$ git tag -a v0.8 fa38827eb9d27a2559e8178aa67189105d882fca
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时查看 <code>git tag</code>，发现已经给那个位置追加上了标签</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git tag
+</span></span><span class="line"><span class="cl">v0.8
+</span></span><span class="line"><span class="cl">v1.0
+</span></span><span class="line"><span class="cl">v1.0-test
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>通过使用 <code>git show</code> 命令可以看到标签信息与对应的提交信息：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git show
+</span></span><span class="line"><span class="cl">commit da8f5f463cad799940543c7304df4d436a9efb2d <span class="o">(</span>HEAD -&gt; test, tag: v1.0<span class="o">)</span>
+</span></span><span class="line"><span class="cl">Author: HONGYU-LEE &lt;756687451@qq.com&gt;
+</span></span><span class="line"><span class="cl">Date:   Mon Apr <span class="m">18</span> 17:35:08 <span class="m">2022</span> +0800
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    commit
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">diff --git a/test.md b/test.md
+</span></span><span class="line"><span class="cl">deleted file mode <span class="m">100644</span>
+</span></span><span class="line"><span class="cl">index e69de29..0000000
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>输出显示了打标签者的信息、打标签的日期时间、附注信息，然后显示具体的提交信息。</p>
+<h3 id="轻量标签">轻量标签</h3>
+<p>轻量标签就像是个不会变化的分支，实际上它就是个指向特定提交对象的引用。 本质上是将提交校验和存储到一个文件中（没有保存任何其他信息）。</p>
+<p>创建一个轻量标签时只需要使用 <code>git tag</code>，而不需要加别的参数，例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">$ git tag v1.0-test
+</span></span><span class="line"><span class="cl">$ git show
+</span></span><span class="line"><span class="cl">commit da8f5f463cad799940543c7304df4d436a9efb2d <span class="o">(</span>HEAD -&gt; test, tag: v1.0-test, tag: v1.0<span class="o">)</span>
+</span></span><span class="line"><span class="cl">Author: HONGYU-LEE &lt;756687451@qq.com&gt;
+</span></span><span class="line"><span class="cl">Date:   Mon Apr <span class="m">18</span> 17:35:08 <span class="m">2022</span> +0800
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    commit
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">diff --git a/test.md b/test.md
+</span></span><span class="line"><span class="cl">deleted file mode <span class="m">100644</span>
+</span></span><span class="line"><span class="cl">index e69de29..0000000
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时不会看到额外的标签信息， 命令只会显示出提交信息。</p>
+<h3 id="发布标签">发布标签</h3>
+<p>默认情况下，<code>git push</code> 命令并不会传送标签到远程仓库服务器上。 在创建完标签后你必须显式地推送标签到共享服务器上。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git push origin <span class="o">[</span>tagname<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果想要一次性推送很多标签，也可以使用带有 <code>--tags</code> 选项的 <code>git push</code> 命令。 这将会把所有不在远程仓库服务器上的标签全部传送到那里。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">git push origin --tags
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="tag-与-commit">Tag 与 Commit</h3>
+<p>Git 的标签虽然是版本库的快照，但其实它就是指向某个 commit 的指针，但是它与 commit 又有些不同（分支可以移动，标签不能移动）。</p>
+<p>那么为什么有了 commit 后，还要引入 tag 呢？</p>
+<blockquote>
+<p>&ldquo;请把上周一的那个版本打包发布，commit号是6a5819e…&rdquo;</p>
+<p>&ldquo;一串乱七八糟的数字不好找！&rdquo;</p>
+<p>如果换一个办法：</p>
+<p>&ldquo;请把上周一的那个版本打包发布，版本号是v1.2&rdquo;</p>
+<p>&ldquo;好的，按照tag v1.2查找commit就行！&rdquo;</p>
+<p>所以，tag就是一个让人容易记住的有意义的名字，它跟某个commit绑在一起。</p>
+</blockquote>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86/">版本管理</a>
+        
+            <a href="/tags/git/">Git</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 23, 2022 18:44 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/git-%E5%88%86%E6%94%AF/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Git 分支</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/git-%E5%9F%BA%E7%A1%80/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Git 基础</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/git-%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'Git 基本操作',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#git-的安装与配置">Git 的安装与配置</a></li>
+    <li><a href="#获取仓库">获取仓库</a>
+      <ol>
+        <li><a href="#初始化新仓库">初始化新仓库</a></li>
+        <li><a href="#克隆已有仓库">克隆已有仓库</a></li>
+      </ol>
+    </li>
+    <li><a href="#记录更新至仓库">记录更新至仓库</a>
+      <ol>
+        <li><a href="#查看文件状态">查看文件状态</a></li>
+        <li><a href="#跟踪新文件">跟踪新文件</a></li>
+        <li><a href="#暂存已修改文件">暂存已修改文件</a></li>
+        <li><a href="#忽略文件">忽略文件</a></li>
+        <li><a href="#差异比较">差异比较</a></li>
+        <li><a href="#提交更新">提交更新</a></li>
+        <li><a href="#跳过使用暂存区域">跳过使用暂存区域</a></li>
+        <li><a href="#删除文件">删除文件</a></li>
+        <li><a href="#移动重命名文件">移动/重命名文件</a></li>
+      </ol>
+    </li>
+    <li><a href="#查看提交记录">查看提交记录</a></li>
+    <li><a href="#撤销操作">撤销操作</a>
+      <ol>
+        <li><a href="#补充文件信息">补充文件/信息</a></li>
+        <li><a href="#撤销暂存的文件">撤销暂存的文件</a></li>
+        <li><a href="#撤销对文件的修改">撤销对文件的修改</a></li>
+      </ol>
+    </li>
+    <li><a href="#远程仓库">远程仓库</a>
+      <ol>
+        <li><a href="#查看远程仓库">查看远程仓库</a></li>
+        <li><a href="#添加远程仓库并拉取数据">添加远程仓库并拉取数据</a></li>
+        <li><a href="#从远程仓库中拉取数据">从远程仓库中拉取数据</a></li>
+        <li><a href="#推送到远程仓库">推送到远程仓库</a></li>
+        <li><a href="#远端仓库移除重命名">远端仓库移除/重命名</a></li>
+      </ol>
+    </li>
+    <li><a href="#标签tag">标签（Tag）</a>
+      <ol>
+        <li><a href="#查看标签">查看标签</a></li>
+        <li><a href="#附注标签">附注标签</a></li>
+        <li><a href="#轻量标签">轻量标签</a></li>
+        <li><a href="#发布标签">发布标签</a></li>
+        <li><a href="#tag-与-commit">Tag 与 Commit</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

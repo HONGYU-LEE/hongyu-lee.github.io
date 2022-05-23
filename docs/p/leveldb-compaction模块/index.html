@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='Compaction模块 LevelDB 中的 Level 代表层级，有 0～6 共 7 个层级，每个层级都由一定数量的 SSTable 文件组成。其中，高层级文件是由低层级的一个文件与高层级中与该文件有键重叠的所有文件使用归并排序算法生成，该过程称为Compaction。
+LevelDB 通过 Compaction 将冷数据逐层下移，并且在 Compaction 过程中重复写入的键只会保留一个最终值，已经删除的键不再写入，因此可以减少磁盘空间占用。
+结构 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47  // https://github.com/google/leveldb/blob/master/db/version_set.h  class Compaction { public: ~Compaction(); int level() const { return level_; } VersionEdit* edit() { return &amp;amp;edit_; } int num_input_files(int which) const { return inputs_[which].'><title>LevelDB Compaction模块</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/leveldb-compaction%E6%A8%A1%E5%9D%97/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='LevelDB Compaction模块'>
+<meta property='og:description' content='Compaction模块 LevelDB 中的 Level 代表层级，有 0～6 共 7 个层级，每个层级都由一定数量的 SSTable 文件组成。其中，高层级文件是由低层级的一个文件与高层级中与该文件有键重叠的所有文件使用归并排序算法生成，该过程称为Compaction。
+LevelDB 通过 Compaction 将冷数据逐层下移，并且在 Compaction 过程中重复写入的键只会保留一个最终值，已经删除的键不再写入，因此可以减少磁盘空间占用。
+结构 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47  // https://github.com/google/leveldb/blob/master/db/version_set.h  class Compaction { public: ~Compaction(); int level() const { return level_; } VersionEdit* edit() { return &amp;amp;edit_; } int num_input_files(int which) const { return inputs_[which].'>
+<meta property='og:url' content='https://blog.orekilee.top/p/leveldb-compaction%E6%A8%A1%E5%9D%97/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='LevelDB' /><meta property='article:tag' content='KV存储' /><meta property='article:published_time' content='2022-05-23T23:47:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-24T00:04:26&#43;08:00'/>
+<meta name="twitter:title" content="LevelDB Compaction模块">
+<meta name="twitter:description" content="Compaction模块 LevelDB 中的 Level 代表层级，有 0～6 共 7 个层级，每个层级都由一定数量的 SSTable 文件组成。其中，高层级文件是由低层级的一个文件与高层级中与该文件有键重叠的所有文件使用归并排序算法生成，该过程称为Compaction。
+LevelDB 通过 Compaction 将冷数据逐层下移，并且在 Compaction 过程中重复写入的键只会保留一个最终值，已经删除的键不再写入，因此可以减少磁盘空间占用。
+结构 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47  // https://github.com/google/leveldb/blob/master/db/version_set.h  class Compaction { public: ~Compaction(); int level() const { return level_; } VersionEdit* edit() { return &amp;amp;edit_; } int num_input_files(int which) const { return inputs_[which].">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/leveldb/" style="background-color: #2a9d8f; color: #fff;">
+                LevelDB
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/leveldb-compaction%E6%A8%A1%E5%9D%97/">LevelDB Compaction模块</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 23, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="compaction模块">Compaction模块</h1>
+<p>LevelDB 中的 Level 代表层级，有 0～6 共 7 个层级，每个层级都由一定数量的 SSTable 文件组成。其中，高层级文件是由低层级的一个文件与高层级中与该文件有键重叠的所有文件使用归并排序算法生成，该过程称为Compaction。</p>
+<p>LevelDB 通过 Compaction 将冷数据逐层下移，并且在 Compaction 过程中重复写入的键只会保留一个最终值，已经删除的键不再写入，因此可以减少磁盘空间占用。</p>
+<h2 id="结构">结构</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_set.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Compaction</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="o">~</span><span class="n">Compaction</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="nf">level</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">level_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">VersionEdit</span><span class="o">*</span> <span class="nf">edit</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="o">&amp;</span><span class="n">edit_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="nf">num_input_files</span><span class="p">(</span><span class="kt">int</span> <span class="n">which</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">inputs_</span><span class="p">[</span><span class="n">which</span><span class="p">].</span><span class="n">size</span><span class="p">();</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">FileMetaData</span><span class="o">*</span> <span class="nf">input</span><span class="p">(</span><span class="kt">int</span> <span class="n">which</span><span class="p">,</span> <span class="kt">int</span> <span class="n">i</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">inputs_</span><span class="p">[</span><span class="n">which</span><span class="p">][</span><span class="n">i</span><span class="p">];</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="nf">MaxOutputFileSize</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">max_output_file_size_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="nf">IsTrivialMove</span><span class="p">()</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">AddInputDeletions</span><span class="p">(</span><span class="n">VersionEdit</span><span class="o">*</span> <span class="n">edit</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="nf">IsBaseLevelForKey</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">user_key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">bool</span> <span class="nf">ShouldStopBefore</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">internal_key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">ReleaseInputs</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="k">friend</span> <span class="k">class</span> <span class="nc">Version</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">friend</span> <span class="k">class</span> <span class="nc">VersionSet</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Compaction</span><span class="p">(</span><span class="k">const</span> <span class="n">Options</span><span class="o">*</span> <span class="n">options</span><span class="p">,</span> <span class="kt">int</span> <span class="n">level</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">level_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">uint64_t</span> <span class="n">max_output_file_size_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Version</span><span class="o">*</span> <span class="n">input_version_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">VersionEdit</span> <span class="n">edit_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">FileMetaData</span><span class="o">*&gt;</span> <span class="n">inputs_</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>  <span class="c1">// The two sets of inputs
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">FileMetaData</span><span class="o">*&gt;</span> <span class="n">grandparents_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">size_t</span> <span class="n">grandparent_index_</span><span class="p">;</span>  <span class="c1">// Index in grandparent_starts_
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">bool</span> <span class="n">seen_key_</span><span class="p">;</span>             <span class="c1">// Some output key has been seen
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">int64_t</span> <span class="n">overlapped_bytes_</span><span class="p">;</span>  <span class="c1">// Bytes of overlap between current output
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="c1">// and grandparent files
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="n">size_t</span> <span class="n">level_ptrs_</span><span class="p">[</span><span class="n">config</span><span class="o">::</span><span class="n">kNumLevels</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>在 LevelDB 中，Compaction 共有两种，分别叫 Minor Compaction 和 Major Compaction。</p>
+<ul>
+<li>
+<p><strong>Minor Compaction</strong>：将 Immtable dump 到 SStable 。</p>
+</li>
+<li>
+<p><strong>Major Compaction</strong>：Level 之间的 SSTable Compaction。</p>
+</li>
+</ul>
+<p>这两类compaction负责在不同的场景下进行不同的数据整理。</p>
+<h2 id="minor-compaction">Minor Compaction</h2>
+<h3 id="定义">定义</h3>
+<p>Minor Compaction 非常简单，其本质就是<strong>将一个内存数据库（Memtable）中的所有数据持久化到一个磁盘文件中（SSTable）</strong>。整体流程如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/leveldb/leveldb13.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="触发时机">触发时机</h3>
+<p>在 LSM 树的实现中，会先将数据写入 MemTable，当 MemTable 大小超过 options_.write_buffer_size （默认4M）时，需要将其作为 SSTable 写入磁盘，此时就会采取 Minor Compaction。</p>
+<h3 id="核心要点">核心要点</h3>
+<ul>
+<li>每次 Minor Compaction 结束后，都会生成一个新的 SSTable 文件，也意味着 <strong>Leveldb 的版本状态发生了变化，会进行一个版本的更替</strong>。</li>
+<li>Minor Compaction 是一个时效性要求非常高的过程，要求其在尽可能短的时间内完成，否则就会堵塞正常的写入操作，因此 <strong>Minor Compaction 的优先级高于 Major Compaction</strong>。当进行 Minor Compaction 的时候有 Major Compaction正在进行，则会首先暂停  Major Compaction。</li>
+</ul>
+<h2 id="major-compaction">Major Compaction</h2>
+<h3 id="定义-1">定义</h3>
+<p><strong>Major Compaction 是将不同层级的 SSTable 文件进行合并。</strong></p>
+<p>如下图，可以看出其比 Minor Compaction 复杂的多。</p>
+<p><img src="http://img.orekilee.top//imgbed/leveldb/leveldb14.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="触发时机-1">触发时机</h3>
+<p>那么什么时候，会触发 LevelDB 进行 Major Compaction 呢？总的来说为以下三个条件：</p>
+<ul>
+<li>当 0 层文件数超过预定的上限（默认为 4 个）。</li>
+<li>当 Level i层文件的总大小超过 10 ^ i MB。</li>
+<li>当某个文件无效读取的次数过多。</li>
+</ul>
+<p>这也就引出了 <strong>Size Compaction</strong> 与 <strong>Seek Compaction</strong> 两种判断策略。LevelDB先按 Size Compaction 判断是否需要进行 Compaction ，如果 Size Compaction 不满足则通过 Seek Compaction 继续判断，如果仍不满足，则表明暂时不需要进行 Compaction。</p>
+<h4 id="size-compaction">Size Compaction</h4>
+<p><strong>size_compaction 通过判断 Level 0 中的文件个数（Level 0 会被频繁访问）或者 Level 1 ～ Level 5 的文件总大小来计算得出需要进行 Compaction 的 Level。</strong></p>
+<p>该赋值逻辑位于 VersionSet 中的 <code>Finalize</code>，代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_set.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">VersionSet</span><span class="o">::</span><span class="n">Finalize</span><span class="p">(</span><span class="n">Version</span><span class="o">*</span> <span class="n">v</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">best_level</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">double</span> <span class="n">best_score</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">level</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">level</span> <span class="o">&lt;</span> <span class="n">config</span><span class="o">::</span><span class="n">kNumLevels</span> <span class="o">-</span> <span class="mi">1</span><span class="p">;</span> <span class="n">level</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="kt">double</span> <span class="n">score</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//对于Level 0来说，其分数为文件个数 / 4
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">if</span> <span class="p">(</span><span class="n">level</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">score</span> <span class="o">=</span> <span class="n">v</span><span class="o">-&gt;</span><span class="n">files_</span><span class="p">[</span><span class="n">level</span><span class="p">].</span><span class="n">size</span><span class="p">()</span> <span class="o">/</span>
+</span></span><span class="line"><span class="cl">              <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">(</span><span class="n">config</span><span class="o">::</span><span class="n">kL0_CompactionTrigger</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="c1">//对于Level 1~5的分数由该层所有文件总大小除以每层允许的最大大小决定
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>          <span class="k">const</span> <span class="kt">uint64_t</span> <span class="n">level_bytes</span> <span class="o">=</span> <span class="n">TotalFileSize</span><span class="p">(</span><span class="n">v</span><span class="o">-&gt;</span><span class="n">files_</span><span class="p">[</span><span class="n">level</span><span class="p">]);</span>
+</span></span><span class="line"><span class="cl">          <span class="n">score</span> <span class="o">=</span>
+</span></span><span class="line"><span class="cl">              <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">(</span><span class="n">level_bytes</span><span class="p">)</span> <span class="o">/</span> <span class="n">MaxBytesForLevel</span><span class="p">(</span><span class="n">options_</span><span class="p">,</span> <span class="n">level</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="c1">//选取最高分的一个level
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">if</span> <span class="p">(</span><span class="n">score</span> <span class="o">&gt;</span> <span class="n">best_score</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">best_level</span> <span class="o">=</span> <span class="n">level</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">best_score</span> <span class="o">=</span> <span class="n">score</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//更新level与score
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">v</span><span class="o">-&gt;</span><span class="n">compaction_level_</span> <span class="o">=</span> <span class="n">best_level</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">v</span><span class="o">-&gt;</span><span class="n">compaction_score_</span> <span class="o">=</span> <span class="n">best_score</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>compaction_score_ 的赋值逻辑如下：</p>
+<ol>
+<li><strong>Level 0</strong>：将当前 Level 0 包含的文件个数除以 4 并赋值给 compaction_score_ ，如果 Level 0 的文件个数大于等于 4，则此时 compaction_score_ 会大于等于 1。</li>
+<li><strong>Level 1～Level 5</strong>：通过该层文件的总大小除以该层文件允许的最大大小并赋值给 compaction_score_。</li>
+</ol>
+<p>每次当版本中的 compaction_score_  大于等于 1 时，则需要进行一次 Compaction 操作。</p>
+<h4 id="seek-compaction">Seek Compaction</h4>
+<p>Seek compaction 主要通过记录某个 SSTable 的 Seek 次数，当其无效读取次数到达阈值（allowed_seeks）之后，将会记录下它的 level，参与下一次压缩。</p>
+<p>阈值 allowed_seeks 是每个文件允许的最大无效读取次数，该值的计算代码在 VersionSet::Build 中的 <code>Apply</code>，代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="n">f</span><span class="o">-&gt;</span><span class="n">allowed_seeks</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">((</span><span class="n">f</span><span class="o">-&gt;</span><span class="n">file_size</span> <span class="o">/</span> <span class="mi">16384U</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">f</span><span class="o">-&gt;</span><span class="n">allowed_seeks</span> <span class="o">&lt;</span> <span class="mi">100</span><span class="p">)</span> <span class="n">f</span><span class="o">-&gt;</span><span class="n">allowed_seeks</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>allowed_seeks 计算逻辑为文件大小除以 16384 后取值。但如果计算得到的值小于 100，则将其设置为 100。</p>
+<blockquote>
+<p><strong>为什么是除以16384呢？LevelDB作者给出了这样的解释：</strong></p>
+<ol>
+<li>硬盘中的一次查找操作耗费10ms。</li>
+<li>硬盘读取速度为100MB/s，因此读取或者写入1MB数据需要10ms。</li>
+<li>执行Compaction操作时，1MB的数据需要25MB数据的I/O，因为从当前层级读取1MB后，相应地需要从下一个层级读取10MB～12MB（因为每一层的最大大小为前一层的10倍，并且考虑到边界重叠的情况，因此执行Compaction操作时需要读取下一层的10MB～12MB数据），然后执行归并排序后写入的10MB～12MB的数据到下一个层级，因此读取加写入最大需要25MB数据的I/O。</li>
+<li>因此25次查找（约耗费250ms）约略等于一次执行Compaction操作时处理1MB数据的时间（1MB的当前层读取加10MB～12MB的下一层读取，再加10MB～12MB的下一层写入，约为25MB的数据读取和写入总量，因此也是消耗250ms）。那么一次查找的数据量约略等于处理Compaction操作时的40KB数据（1MB除以25）。进一步保守处理，取16384（16K）这个值，即当查找次数超出allowed_seeks时，执行一次Compaction操作是一个更加合理的选择。</li>
+</ol>
+</blockquote>
+<p>file_to_compact_level_ 的赋值逻辑位于 Version 的 <code>UpdateStats</code>，代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_set.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">bool</span> <span class="n">Version</span><span class="o">::</span><span class="n">UpdateStats</span><span class="p">(</span><span class="k">const</span> <span class="n">GetStats</span><span class="o">&amp;</span> <span class="n">stats</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//此时的f为无效查找的文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">FileMetaData</span><span class="o">*</span> <span class="n">f</span> <span class="o">=</span> <span class="n">stats</span><span class="p">.</span><span class="n">seek_file</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">f</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//当前查找无效，allowed_seeks-1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">f</span><span class="o">-&gt;</span><span class="n">allowed_seeks</span><span class="o">--</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//如果此时allowed_seeks小于等于0，则说明此时到达阈值，则将当前层级记录下来，待进行Compaction
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">if</span> <span class="p">(</span><span class="n">f</span><span class="o">-&gt;</span><span class="n">allowed_seeks</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">file_to_compact_</span> <span class="o">==</span> <span class="k">nullptr</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">file_to_compact_</span> <span class="o">=</span> <span class="n">f</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">file_to_compact_level_</span> <span class="o">=</span> <span class="n">stats</span><span class="p">.</span><span class="n">seek_file_level</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="k">return</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>假设进行无效查找的文件为f（FileMetaData结构），先将 f 的 allowed_seeks 次数减 1，此时判断如果allowed_seeks 变量已经小于等于 0 且 Version 中的 file_to_compact_ 成员变量为空，则将 f 赋值给file_to_compact_ ，并且将 f 所属层级赋值给 file_to_compact_level_ 变量。</p>
+<h4 id="manual-compaction">Manual Compaction</h4>
+<p><strong>Manual Compaction 是指人工触发的 Compaction，由外部接口调用产生</strong>。</p>
+<p>实际其内部触发调用的接口是 DBImpl 中的 <code>CompactRange</code>，代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/db_impl.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">DBImpl</span><span class="o">::</span><span class="n">CompactRange</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">begin</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">end</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">max_level_with_files</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">MutexLock</span> <span class="nf">l</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mutex_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">Version</span><span class="o">*</span> <span class="n">base</span> <span class="o">=</span> <span class="n">versions_</span><span class="o">-&gt;</span><span class="n">current</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">      <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">level</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">level</span> <span class="o">&lt;</span> <span class="n">config</span><span class="o">::</span><span class="n">kNumLevels</span><span class="p">;</span> <span class="n">level</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">base</span><span class="o">-&gt;</span><span class="n">OverlapInLevel</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">max_level_with_files</span> <span class="o">=</span> <span class="n">level</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//略过所有没有重叠的文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">TEST_CompactMemTable</span><span class="p">();</span>  
+</span></span><span class="line"><span class="cl">  <span class="c1">//一层层压缩存在重叠的文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">level</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">level</span> <span class="o">&lt;</span> <span class="n">max_level_with_files</span><span class="p">;</span> <span class="n">level</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">TEST_CompactRange</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>在 Manual Compaction 中会指定的 begin 和 end，它将会一个层层的分次的 Compact 所有 Level 中与 begin 和 end 有重叠（overlap）的 SSTable 文件。</p>
+<h2 id="文件选取">文件选取</h2>
+<p><strong>每次进行 Compaction 时，首先决定在哪个层级进行该次操作，假设为Level n，接着选取 Level n 层参与的文件，然后选取 Level n+1 层需要参与的文件，最后对选中的文件使用归并排序生成一个新文件。</strong></p>
+<h3 id="pickcompaction">PickCompaction</h3>
+<p>决定层级 n 以及选取 Level n 层参与文件的方法为 VersionSet 中的 <code>PickCompaction</code>。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_set.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Compaction</span><span class="o">*</span> <span class="n">VersionSet</span><span class="o">::</span><span class="n">PickCompaction</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Compaction</span><span class="o">*</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">level</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//根据current_判断是size_compaction还是seek_compaction
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">const</span> <span class="kt">bool</span> <span class="n">size_compaction</span> <span class="o">=</span> <span class="p">(</span><span class="n">current_</span><span class="o">-&gt;</span><span class="n">compaction_score_</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="kt">bool</span> <span class="n">seek_compaction</span> <span class="o">=</span> <span class="p">(</span><span class="n">current_</span><span class="o">-&gt;</span><span class="n">file_to_compact_</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="cm">/*
+</span></span></span><span class="line"><span class="cl"><span class="cm">  如果根据size_compaction触发，则根据每个层级的compact_pointer_选取本次Compaction的
+</span></span></span><span class="line"><span class="cl"><span class="cm">  level n层文件（记录每个层级下一次开始进行Compaction操作时需要从哪个键开始。）
+</span></span></span><span class="line"><span class="cl"><span class="cm">  */</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">size_compaction</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//获取当前层级
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">level</span> <span class="o">=</span> <span class="n">current_</span><span class="o">-&gt;</span><span class="n">compaction_level_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">assert</span><span class="p">(</span><span class="n">level</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">assert</span><span class="p">(</span><span class="n">level</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="n">config</span><span class="o">::</span><span class="n">kNumLevels</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">c</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Compaction</span><span class="p">(</span><span class="n">options_</span><span class="p">,</span> <span class="n">level</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="c1">//选出第一个在compact_pointer_之后的文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">for</span> <span class="p">(</span><span class="n">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">current_</span><span class="o">-&gt;</span><span class="n">files_</span><span class="p">[</span><span class="n">level</span><span class="p">].</span><span class="n">size</span><span class="p">();</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">FileMetaData</span><span class="o">*</span> <span class="n">f</span> <span class="o">=</span> <span class="n">current_</span><span class="o">-&gt;</span><span class="n">files_</span><span class="p">[</span><span class="n">level</span><span class="p">][</span><span class="n">i</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">compact_pointer_</span><span class="p">[</span><span class="n">level</span><span class="p">].</span><span class="n">empty</span><span class="p">()</span> <span class="o">||</span>
+</span></span><span class="line"><span class="cl">              <span class="n">icmp_</span><span class="p">.</span><span class="n">Compare</span><span class="p">(</span><span class="n">f</span><span class="o">-&gt;</span><span class="n">largest</span><span class="p">.</span><span class="n">Encode</span><span class="p">(),</span> <span class="n">compact_pointer_</span><span class="p">[</span><span class="n">level</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">push_back</span><span class="p">(</span><span class="n">f</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">              <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//如果通过compact_pointer_没有选取到文件（Compaction已遍历本层），则选取本层第一个文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">if</span> <span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="c1">// Wrap-around to the beginning of the key space
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>          <span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">push_back</span><span class="p">(</span><span class="n">current_</span><span class="o">-&gt;</span><span class="n">files_</span><span class="p">[</span><span class="n">level</span><span class="p">][</span><span class="mi">0</span><span class="p">]);</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">seek_compaction</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//如果根据seek_compaction触发，则直接将无效查找次数超限的文件选取为本次的Level n层文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">level</span> <span class="o">=</span> <span class="n">current_</span><span class="o">-&gt;</span><span class="n">file_to_compact_level_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">c</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Compaction</span><span class="p">(</span><span class="n">options_</span><span class="p">,</span> <span class="n">level</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">push_back</span><span class="p">(</span><span class="n">current_</span><span class="o">-&gt;</span><span class="n">file_to_compact_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">c</span><span class="o">-&gt;</span><span class="n">input_version_</span> <span class="o">=</span> <span class="n">current_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">c</span><span class="o">-&gt;</span><span class="n">input_version_</span><span class="o">-&gt;</span><span class="n">Ref</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//对level 0特殊处理
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="n">level</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">InternalKey</span> <span class="n">smallest</span><span class="p">,</span> <span class="n">largest</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//取出Level 0中参与本次Compaction操作的文件的最小键和最大键
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">GetRange</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">smallest</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">largest</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//根据最小键和最大键对比Level 0中的所有文件，如果存在文件与[Lkey,Hkey]有重叠，则扩大最小键和最大键范围，并继续查找。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">current_</span><span class="o">-&gt;</span><span class="n">GetOverlappingInputs</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">smallest</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">largest</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">assert</span><span class="p">(</span><span class="o">!</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">empty</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//调用SetupOtherInputs选取level n+1层需要参与的文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">SetupOtherInputs</span><span class="p">(</span><span class="n">c</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>执行逻辑如下：</p>
+<ol>
+<li>根据 current_ 判断是 size_compaction 还是 seek_compaction：
+<ul>
+<li><strong>根据 size_compaction 触发</strong>：则根据每个层级的 compact_pointer_ 选取本次 Compaction 的
+level n 层文件（记录每个层级下一次开始进行 Compaction 时需要从哪个键开始）。</li>
+<li><strong>根据 seek_compaction 触发</strong>：则直接将无效查找次数超限的文件选取为本次的 Level n 层文件。</li>
+</ul>
+</li>
+<li>对 level 0 特殊处理：
+<ul>
+<li>取出 Level 0 中参与本次 Compaction 的文件的最小键和最大键，假设其范围为 [Lkey,Hkey]。</li>
+<li>根据最小键和最大键对比 Level 0 中的所有文件，如果存在文件与 [Lkey,Hkey] 有重叠，则扩大最小键和最大键范围，并继续查找。</li>
+</ul>
+</li>
+<li>调用 <code>SetupOtherInputs</code> 选取 level n+1 层需要参与的文件。</li>
+</ol>
+<blockquote>
+<p><strong>为何Level 0中需要扩展有键重叠的文件呢？</strong></p>
+<p>举例说明，假设Level 0有4个文件：f1、f2、f3、f4，每个文件的键范围分别为[c,e]，[a,f]，[a,b]，[i,z]。</p>
+<p>通过第一步选取的inputs_ [0]文件是f1，f1中的键范围和f2有重叠，则扩大最小键和最大键范围到[a,f]，此时发现f3的键范围也和f2有重叠，因此最终inputs_[0]中的文件包括f1、f2、f3三个文件。</p>
+<p>假设有这样一种情况，我们首先写了d这个键，在f2中的序列号为10，然后删除了d，删除操作在f1中的序列号为100，假设Compaction操作时只是选取了f1，则下次查找d这个键时先从Level 0选取，会读取到f2中序列号为10的值（实际上该键已经删除），此时会出现错误。</p>
+</blockquote>
+<h3 id="setupotherinputs">SetupOtherInputs</h3>
+<p><code>PickCompaction</code> 会选定进行 Compaction 操作的层级 n 以及 Level n 层的参与文件，之后会调用<code>SetupOtherInputs</code> 进行 Level n+1 层文件的选取，<code>SetupOtherInputs</code> 的代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/version_set.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">VersionSet</span><span class="o">::</span><span class="n">SetupOtherInputs</span><span class="p">(</span><span class="n">Compaction</span><span class="o">*</span> <span class="n">c</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="kt">int</span> <span class="n">level</span> <span class="o">=</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">level</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="n">InternalKey</span> <span class="n">smallest</span><span class="p">,</span> <span class="n">largest</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">AddBoundaryInputs</span><span class="p">(</span><span class="n">icmp_</span><span class="p">,</span> <span class="n">current_</span><span class="o">-&gt;</span><span class="n">files_</span><span class="p">[</span><span class="n">level</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//获取input_[0]所有文件的最大键和最小键
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">GetRange</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">smallest</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">largest</span><span class="p">);</span> 
+</span></span><span class="line"><span class="cl">  <span class="c1">//根据input_[0]中的最大键/最小键查找level n+1层的文件，并分别赋值到input_[1]中
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">current_</span><span class="o">-&gt;</span><span class="n">GetOverlappingInputs</span><span class="p">(</span><span class="n">level</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">smallest</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">largest</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                 <span class="o">&amp;</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">1</span><span class="p">]);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">AddBoundaryInputs</span><span class="p">(</span><span class="n">icmp_</span><span class="p">,</span> <span class="n">current_</span><span class="o">-&gt;</span><span class="n">files_</span><span class="p">[</span><span class="n">level</span> <span class="o">+</span> <span class="mi">1</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">1</span><span class="p">]);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">InternalKey</span> <span class="n">all_start</span><span class="p">,</span> <span class="n">all_limit</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//继续获取input_[0]和[1]的所有文件的最大键和最小键
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">GetRange2</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">all_start</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">all_limit</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//在不扩大level n+1层的前提下，尝试扩大level n层的文件，并且扩大后的文件总大小不超过50M
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">1</span><span class="p">].</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">FileMetaData</span><span class="o">*&gt;</span> <span class="n">expanded0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">current_</span><span class="o">-&gt;</span><span class="n">GetOverlappingInputs</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">all_start</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">all_limit</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">expanded0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="n">AddBoundaryInputs</span><span class="p">(</span><span class="n">icmp_</span><span class="p">,</span> <span class="n">current_</span><span class="o">-&gt;</span><span class="n">files_</span><span class="p">[</span><span class="n">level</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">expanded0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="k">const</span> <span class="kt">int64_t</span> <span class="n">inputs0_size</span> <span class="o">=</span> <span class="n">TotalFileSize</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+</span></span><span class="line"><span class="cl">      <span class="k">const</span> <span class="kt">int64_t</span> <span class="n">inputs1_size</span> <span class="o">=</span> <span class="n">TotalFileSize</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">1</span><span class="p">]);</span>
+</span></span><span class="line"><span class="cl">      <span class="k">const</span> <span class="kt">int64_t</span> <span class="n">expanded0_size</span> <span class="o">=</span> <span class="n">TotalFileSize</span><span class="p">(</span><span class="n">expanded0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">      <span class="k">if</span> <span class="p">(</span><span class="n">expanded0</span><span class="p">.</span><span class="n">size</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">size</span><span class="p">()</span> <span class="o">&amp;&amp;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">inputs1_size</span> <span class="o">+</span> <span class="n">expanded0_size</span> <span class="o">&lt;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">ExpandedCompactionByteSizeLimit</span><span class="p">(</span><span class="n">options_</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="n">InternalKey</span> <span class="n">new_start</span><span class="p">,</span> <span class="n">new_limit</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">GetRange</span><span class="p">(</span><span class="n">expanded0</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">new_start</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">new_limit</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">          <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">FileMetaData</span><span class="o">*&gt;</span> <span class="n">expanded1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="n">current_</span><span class="o">-&gt;</span><span class="n">GetOverlappingInputs</span><span class="p">(</span><span class="n">level</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">new_start</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">new_limit</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                         <span class="o">&amp;</span><span class="n">expanded1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">          <span class="n">AddBoundaryInputs</span><span class="p">(</span><span class="n">icmp_</span><span class="p">,</span> <span class="n">current_</span><span class="o">-&gt;</span><span class="n">files_</span><span class="p">[</span><span class="n">level</span> <span class="o">+</span> <span class="mi">1</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">expanded1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">expanded1</span><span class="p">.</span><span class="n">size</span><span class="p">()</span> <span class="o">==</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">1</span><span class="p">].</span><span class="n">size</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">Log</span><span class="p">(</span><span class="n">options_</span><span class="o">-&gt;</span><span class="n">info_log</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                  <span class="s">&#34;Expanding@%d %d+%d (%ld+%ld bytes) to %d+%d (%ld+%ld bytes)</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">level</span><span class="p">,</span> <span class="kt">int</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">size</span><span class="p">()),</span> <span class="kt">int</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">1</span><span class="p">].</span><span class="n">size</span><span class="p">()),</span>
+</span></span><span class="line"><span class="cl">                  <span class="kt">long</span><span class="p">(</span><span class="n">inputs0_size</span><span class="p">),</span> <span class="kt">long</span><span class="p">(</span><span class="n">inputs1_size</span><span class="p">),</span> <span class="kt">int</span><span class="p">(</span><span class="n">expanded0</span><span class="p">.</span><span class="n">size</span><span class="p">()),</span>
+</span></span><span class="line"><span class="cl">                  <span class="kt">int</span><span class="p">(</span><span class="n">expanded1</span><span class="p">.</span><span class="n">size</span><span class="p">()),</span> <span class="kt">long</span><span class="p">(</span><span class="n">expanded0_size</span><span class="p">),</span> <span class="kt">long</span><span class="p">(</span><span class="n">inputs1_size</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">              <span class="n">smallest</span> <span class="o">=</span> <span class="n">new_start</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="n">largest</span> <span class="o">=</span> <span class="n">new_limit</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">expanded0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">expanded1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="n">GetRange2</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">inputs_</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">all_start</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">all_limit</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">level</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">&lt;</span> <span class="n">config</span><span class="o">::</span><span class="n">kNumLevels</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">current_</span><span class="o">-&gt;</span><span class="n">GetOverlappingInputs</span><span class="p">(</span><span class="n">level</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">all_start</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">all_limit</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                     <span class="o">&amp;</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">grandparents_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//将本次Compaction的最大键保存到compact_pointer_中，下次Compaction时根据该值选取level n层文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">compact_pointer_</span><span class="p">[</span><span class="n">level</span><span class="p">]</span> <span class="o">=</span> <span class="n">largest</span><span class="p">.</span><span class="n">Encode</span><span class="p">().</span><span class="n">ToString</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="n">c</span><span class="o">-&gt;</span><span class="n">edit_</span><span class="p">.</span><span class="n">SetCompactPointer</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">largest</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>当 Level n 层和 Level n+1 层的文件都已经选定，LevelDB 的实现中有一个优化点，<strong>即判断是否可以在不扩大 Level n+1 层文件个数的情况下，将 Level n 层的文件个数扩大</strong>，优化逻辑如下：</p>
+<pre><code>1. inputs_ [1] 选取完毕之后，首先计算 inputs_ [0] 和 inputs_ [1] 所有文件的最大/最小键范围，然后通过该范围重新去 Level n 层计算 inputs_ [0]，此时有可能选取到新的文件进入 inputs_ [0]。
+2. 通过新的 inputs_ [0] 的键范围重新选取 inputs_ [1] 中的文件，如果 inputs_ [1] 中的文件个数不变并且扩大范围后所有文件的总大小不超过50MB，则使用新的 inputs_ [0] 进行本次 Compaction ，否则继续使用原来的inputs_ [0]。50 MB 的限制是防止执行一次 Compaction 导致大量的 I/O 操作，从而影响系统性能。
+3. 如果扩大 Level n 层的文件个数之后导致 Level n+1 层的文件个数也进行了扩大，则不能进行此次优化。因为Level 1到 Level 6 的所有文件键范围不能有重叠，如果继续执行该优化，会导致 Compaction 之后 Level n+1 层的文件有键重叠的情况产生。
+</code></pre>
+<h2 id="整体流程">整体流程</h2>
+<p>其代码实现在 DBImpl 中的 <code>DoCompactionWork</code>，其代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span><span class="lnt">69
+</span><span class="lnt">70
+</span><span class="lnt">71
+</span><span class="lnt">72
+</span><span class="lnt">73
+</span><span class="lnt">74
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/db_impl.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Status</span> <span class="n">DBImpl</span><span class="o">::</span><span class="n">DoCompactionWork</span><span class="p">(</span><span class="n">CompactionState</span><span class="o">*</span> <span class="n">compact</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="c1">//计算最小序列号，如果Compaction中存在重复写入或者删除的键，则根据序列号判断是否需要删除
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//如果没有快照，则将当前版本的last_sequence赋值为最小的序列号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="n">snapshots_</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">compact</span><span class="o">-&gt;</span><span class="n">smallest_snapshot</span> <span class="o">=</span> <span class="n">versions_</span><span class="o">-&gt;</span><span class="n">LastSequence</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//如果有则根据最老的快照获取序列号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">compact</span><span class="o">-&gt;</span><span class="n">smallest_snapshot</span> <span class="o">=</span> <span class="n">snapshots_</span><span class="p">.</span><span class="n">oldest</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">sequence_number</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//获取一个归并排序迭代器，每次选取最小的键写入文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">Iterator</span><span class="o">*</span> <span class="n">input</span> <span class="o">=</span> <span class="n">versions_</span><span class="o">-&gt;</span><span class="n">MakeInputIterator</span><span class="p">(</span><span class="n">compact</span><span class="o">-&gt;</span><span class="n">compaction</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="n">input</span><span class="o">-&gt;</span><span class="n">SeekToFirst</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//遍历迭代器
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">while</span> <span class="p">(</span><span class="n">input</span><span class="o">-&gt;</span><span class="n">Valid</span><span class="p">()</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="n">shutting_down_</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//用于标记一个文件是否需要删除
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="kt">bool</span> <span class="n">drop</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//如果需要写入新文件，则写入到SSTable中
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">drop</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">compact</span><span class="o">-&gt;</span><span class="n">builder</span> <span class="o">==</span> <span class="k">nullptr</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">status</span> <span class="o">=</span> <span class="n">OpenCompactionOutputFile</span><span class="p">(</span><span class="n">compact</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">status</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">compact</span><span class="o">-&gt;</span><span class="n">builder</span><span class="o">-&gt;</span><span class="n">NumEntries</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">compact</span><span class="o">-&gt;</span><span class="n">current_output</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">smallest</span><span class="p">.</span><span class="n">DecodeFrom</span><span class="p">(</span><span class="n">key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">          <span class="n">compact</span><span class="o">-&gt;</span><span class="n">current_output</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">largest</span><span class="p">.</span><span class="n">DecodeFrom</span><span class="p">(</span><span class="n">key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">          <span class="n">compact</span><span class="o">-&gt;</span><span class="n">builder</span><span class="o">-&gt;</span><span class="n">Add</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">input</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="k">if</span> <span class="p">(</span><span class="n">compact</span><span class="o">-&gt;</span><span class="n">builder</span><span class="o">-&gt;</span><span class="n">FileSize</span><span class="p">()</span> <span class="o">&gt;=</span>
+</span></span><span class="line"><span class="cl">              <span class="n">compact</span><span class="o">-&gt;</span><span class="n">compaction</span><span class="o">-&gt;</span><span class="n">MaxOutputFileSize</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">status</span> <span class="o">=</span> <span class="n">FinishCompactionOutputFile</span><span class="p">(</span><span class="n">compact</span><span class="p">,</span> <span class="n">input</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">              <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">status</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//继续查找归并排序中下一个最小的键
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">input</span><span class="o">-&gt;</span><span class="n">Next</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//生成一个SSTable文件并刷新到磁盘
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="n">status</span><span class="p">.</span><span class="n">ok</span><span class="p">()</span> <span class="o">&amp;&amp;</span> <span class="n">compact</span><span class="o">-&gt;</span><span class="n">builder</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">status</span> <span class="o">=</span> <span class="n">FinishCompactionOutputFile</span><span class="p">(</span><span class="n">compact</span><span class="p">,</span> <span class="n">input</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//调用VersionSet中的LogAndApply生成新的版本
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="n">status</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">status</span> <span class="o">=</span> <span class="n">InstallCompactionResults</span><span class="p">(</span><span class="n">compact</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><code>DoCompactionWork</code> 的执行步骤如下：</p>
+<ol>
+<li>计算一个本次 Compaction 的最小序列号值，如果有快照，则取最老的快照的序列号，如果没有快照，则选取当前版本 current_ 的序列号。因为快照存在时需要有一个一致性的读取视图，因此如果一个键的序列号比该值大，则该键不能够删除。</li>
+<li>生成一个归并排序的迭代器，该迭代器会遍历 inputs_ [0] 和 inputs_ [1] 中的所有文件，每次选取一个最小的键写入新生成的文件。</li>
+<li>选取键之后，判断该键是否可以删除，两种情况下可以删除一个键：
+<ul>
+<li>第一种情况为重复写入一个键，因为新键的序列号更大，因此之前被覆盖的键可以删除（当然被删除键的序列号需要小于第一步中计算得到的最小序列号）。</li>
+<li>第二种情况为删除了一个键（实际上也是写入该键，不过被标记为删除操作），并且更高层级没有该键，则该键可以彻底删除（前提也是该键的序列号需要小于第 1 步中计算得到的最小序列号），即不需要写入新生成的 SSTable。</li>
+</ul>
+</li>
+<li>如果该键不需要删除，则将其写入新生成的 SSTable，并且当一个 SSTable 大小大于 2 MB 时，将该文件刷新到磁盘并且重新打开一个新的 SSTable。</li>
+<li>执行 VersionSet 的 <code>LogAndApply</code>，生成一个新的版本并挂载到 VersionSet 中，并且将新版本赋值为当前版本。</li>
+</ol>
+<h2 id="垃圾回收">垃圾回收</h2>
+<p>随着 Compaction 操作的进行，会有新文件生成，生成新文件之后可以进行旧文件清理。每次当一个 MemTable生成 SSTable 并刷新到磁盘之后，该 MemTable 对应的日志也可以进行删除。</p>
+<p>LevelDB 中负责清理文件的是 <code>RemoveObsoleteFiles</code>，代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span><span class="lnt">69
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="c1">// https://github.com/google/leveldb/blob/master/db/db_impl.cc
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">DBImpl</span><span class="o">::</span><span class="n">RemoveObsoleteFiles</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">mutex_</span><span class="p">.</span><span class="n">AssertHeld</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">bg_error_</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//将所有正在Compaction和versionset中的版本文件放入live集合
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">std</span><span class="o">::</span><span class="n">set</span><span class="o">&lt;</span><span class="kt">uint64_t</span><span class="o">&gt;</span> <span class="n">live</span> <span class="o">=</span> <span class="n">pending_outputs_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">versions_</span><span class="o">-&gt;</span><span class="n">AddLiveFiles</span><span class="p">(</span><span class="o">&amp;</span><span class="n">live</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">//将所有数据目录下的文件放入filenames数组中
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;</span> <span class="n">filenames</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">env_</span><span class="o">-&gt;</span><span class="n">GetChildren</span><span class="p">(</span><span class="n">dbname_</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">filenames</span><span class="p">);</span>  <span class="c1">// Ignoring errors on purpose
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">uint64_t</span> <span class="n">number</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">FileType</span> <span class="n">type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;</span> <span class="n">files_to_delete</span><span class="p">;</span> <span class="c1">//保存可以删除的文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="c1">//遍历所有文件，判断是否可以删除
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">for</span> <span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="nl">filename</span> <span class="p">:</span> <span class="n">filenames</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">//解析出每个文件的序列号和类型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="k">if</span> <span class="p">(</span><span class="n">ParseFileName</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">number</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">type</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="c1">//keep标记文件是否需要保留
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>          <span class="kt">bool</span> <span class="n">keep</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="k">switch</span> <span class="p">(</span><span class="n">type</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="c1">//删除序列号小于versionset的log_number，且不等于prev_log_number的日志
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>              <span class="k">case</span> <span class="nl">kLogFile</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">keep</span> <span class="o">=</span> <span class="p">((</span><span class="n">number</span> <span class="o">&gt;=</span> <span class="n">versions_</span><span class="o">-&gt;</span><span class="n">LogNumber</span><span class="p">())</span> <span class="o">||</span>
+</span></span><span class="line"><span class="cl">                          <span class="p">(</span><span class="n">number</span> <span class="o">==</span> <span class="n">versions_</span><span class="o">-&gt;</span><span class="n">PrevLogNumber</span><span class="p">()));</span>
+</span></span><span class="line"><span class="cl">                  <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                  <span class="c1">//删除版本较低的Manifest
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>              <span class="k">case</span> <span class="nl">kDescriptorFile</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">keep</span> <span class="o">=</span> <span class="p">(</span><span class="n">number</span> <span class="o">&gt;=</span> <span class="n">versions_</span><span class="o">-&gt;</span><span class="n">ManifestFileNumber</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">                  <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                  <span class="c1">//删除没有参与Compaction的且不在versionset中的sstable
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>              <span class="k">case</span> <span class="nl">kTableFile</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">keep</span> <span class="o">=</span> <span class="p">(</span><span class="n">live</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">number</span><span class="p">)</span> <span class="o">!=</span> <span class="n">live</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">                  <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                  <span class="c1">//临时文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>              <span class="k">case</span> <span class="nl">kTempFile</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">keep</span> <span class="o">=</span> <span class="p">(</span><span class="n">live</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">number</span><span class="p">)</span> <span class="o">!=</span> <span class="n">live</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">                  <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">              <span class="k">case</span> <span class="nl">kCurrentFile</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">case</span> <span class="nl">kDBLockFile</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">              <span class="k">case</span> <span class="nl">kInfoLogFile</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">keep</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">                  <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">          <span class="c1">//将keep为false的放入files_to_delete，后续删除。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>          <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">keep</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">              <span class="n">files_to_delete</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">filename</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">              <span class="c1">//如果是sstable文件则从缓存中删除
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>              <span class="k">if</span> <span class="p">(</span><span class="n">type</span> <span class="o">==</span> <span class="n">kTableFile</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                  <span class="n">table_cache_</span><span class="o">-&gt;</span><span class="n">Evict</span><span class="p">(</span><span class="n">number</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">              <span class="p">}</span>
+</span></span><span class="line"><span class="cl">              <span class="n">Log</span><span class="p">(</span><span class="n">options_</span><span class="p">.</span><span class="n">info_log</span><span class="p">,</span> <span class="s">&#34;Delete type=%d #%lld</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">(</span><span class="n">type</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">                  <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span> <span class="kt">long</span> <span class="kt">long</span><span class="o">&gt;</span><span class="p">(</span><span class="n">number</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">//删除所有files_to_delete中的文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">mutex_</span><span class="p">.</span><span class="n">Unlock</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="k">for</span> <span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="nl">filename</span> <span class="p">:</span> <span class="n">files_to_delete</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">env_</span><span class="o">-&gt;</span><span class="n">RemoveFile</span><span class="p">(</span><span class="n">dbname_</span> <span class="o">+</span> <span class="s">&#34;/&#34;</span> <span class="o">+</span> <span class="n">filename</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="n">mutex_</span><span class="p">.</span><span class="n">Lock</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>执行逻辑如下：</p>
+<ol>
+<li>将正在进行 Compaction 操作的 SSTable 文件和 VersionSet 的所有版本中的 SSTable 文件放入 live 集合中。</li>
+<li>通过 filename 找到对应的文件，解析出文件序列号和文件类型。</li>
+<li>遍历所有文件，判断是否需要删除，如果需要删除则将 keep 标记为 false，并放入 files_to_delete 中。</li>
+<li>遍历 files_to_delete 数组，调用 <code>RemoveObsoleteFiles</code> 删除文件。</li>
+</ol>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/leveldb/">LevelDB</a>
+        
+            <a href="/tags/kv%E5%AD%98%E5%82%A8/">KV存储</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 24, 2022 00:04 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/leveldb-dbimpl%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB DBImpl模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB 版本管理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-wal%E6%97%A5%E5%BF%97%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB WAL日志模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-sstable%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB SSTable模块</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/leveldb-memtable%E6%A8%A1%E5%9D%97/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">LevelDB MemTable模块</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <div id="remark42"></div>
+<script>
+    var remark_config = {
+        host: "",
+        site_id: '',
+        components: ['embed'],
+        url: "https:\/\/blog.orekilee.top\/p\/leveldb-compaction%E6%A8%A1%E5%9D%97\/",
+        max_shown_comments:  15 ,
+        theme: document.documentElement.dataset.scheme,
+        page_title: 'LevelDB Compaction模块',
+        locale: 'en',
+        show_email_subscription:  true 
+    };
+
+    (function (c) {
+        for (var i = 0; i < c.length; i++) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[i] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        }
+    })(remark_config.components || ['embed']);
+
+    window.addEventListener('onColorSchemeChange', (e) => {
+        window.REMARK42.changeTheme(e.detail);
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#结构">结构</a></li>
+    <li><a href="#minor-compaction">Minor Compaction</a>
+      <ol>
+        <li><a href="#定义">定义</a></li>
+        <li><a href="#触发时机">触发时机</a></li>
+        <li><a href="#核心要点">核心要点</a></li>
+      </ol>
+    </li>
+    <li><a href="#major-compaction">Major Compaction</a>
+      <ol>
+        <li><a href="#定义-1">定义</a></li>
+        <li><a href="#触发时机-1">触发时机</a>
+          <ol>
+            <li><a href="#size-compaction">Size Compaction</a></li>
+            <li><a href="#seek-compaction">Seek Compaction</a></li>
+            <li><a href="#manual-compaction">Manual Compaction</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#文件选取">文件选取</a>
+      <ol>
+        <li><a href="#pickcompaction">PickCompaction</a></li>
+        <li><a href="#setupotherinputs">SetupOtherInputs</a></li>
+      </ol>
+    </li>
+    <li><a href="#整体流程">整体流程</a></li>
+    <li><a href="#垃圾回收">垃圾回收</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

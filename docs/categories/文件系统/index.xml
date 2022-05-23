@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>文件系统 on 凌桓&#39;s BLOG</title>
+        <link>https://blog.orekilee.top/categories/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/</link>
+        <description>Recent content in 文件系统 on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language><atom:link href="https://blog.orekilee.top/categories/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>分布式文件系统</title>
+        <link>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/</link>
+        <pubDate>Mon, 23 May 2022 18:55:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/</guid>
+        <description>&lt;h1 id=&#34;分布式文件系统&#34;&gt;分布式文件系统&lt;/h1&gt;
+&lt;h2 id=&#34;基本概念&#34;&gt;基本概念&lt;/h2&gt;
+&lt;p&gt;分布式文件系统（Distributed File System）是网络文件系统的延伸，其关键点在于存储端可以灵活地横向扩展。也就是可以通过增加设备（主要是服务器）数量的方法来扩充存储系统的容量和性能。同时，分布式文件系统还要对客户端提供统一的视图。也就是说，虽然分布式文件系统服务由多个节点构成，但客户端并不感知。在客户端来看就好像只有一个节点提供服务，而且是一个统一的分布式文件系统。&lt;/p&gt;
+&lt;h2 id=&#34;分布式文件系统-vs-网络文件系统&#34;&gt;分布式文件系统 VS 网络文件系统&lt;/h2&gt;
+&lt;p&gt;从本质上来说，分布式文件系统其实也是网络文件系统的一种，其与网络文件系统的差异在于&lt;strong&gt;服务端包含多个节点，也就是服务端是可以横向扩展的&lt;/strong&gt;，其可以通过增加节点的方式增加文件系统的容量，提升性能。&lt;/p&gt;
+&lt;p&gt;由于其数据被存储在多个节点上，因此还有其他特点：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;支持按照既定策略在多个节点上放置数据。&lt;/li&gt;
+&lt;li&gt;可以保证在出现硬件故障时，仍然可以访问数据。&lt;/li&gt;
+&lt;li&gt;可以保证在出现硬件故障时，不丢失数据。&lt;/li&gt;
+&lt;li&gt;可以在硬件故障恢复时，保证数据的同步。&lt;/li&gt;
+&lt;li&gt;可以保证多个节点访问的数据一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;横向拓展结构&#34;&gt;横向拓展结构&lt;/h2&gt;
+&lt;p&gt;对于存储集群端主要有两种类型的架构模式：一种是以有中心控制节点的分布式架构，另一种是对等的分布式架构，也就是没有中心控制节点的架构。&lt;/p&gt;
+&lt;h3 id=&#34;中心架构&#34;&gt;中心架构&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;中心架构是指在存储集群中有一个或多个中心节点，中心节点维护整个文件系统的元数据，为客户端提供统一的命名空间。&lt;/strong&gt; 在实际生产环境中，中心节点通常是多于一个的，其主要目的是保证系统的可用性和可靠性。&lt;/p&gt;
+&lt;p&gt;在中心架构中，集群节点的角色分为两种：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;控制节点&lt;/strong&gt;：这种类型的节点会存储文件系统的元数据信息，并对请求进行协调与处理，根据元数据将请求转发只对应的节点上。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;数据节点&lt;/strong&gt;：这种类型的节点用于存储文件系统的用户数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;架构示意图如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem14_1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;当客户端需要对一个文件进行读/写时，首先会访问控制节点，控制节点通过对一些元数据进行处理（鉴权、文件锁、位置计算等），并将文件所在的数据节点的位置响应给客户端。此时客户端再与数据节点交互，完成数据的访问。&lt;/p&gt;
+&lt;h3 id=&#34;对等架构&#34;&gt;对等架构&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;对等架构是没有中心节点的架构，集群中并没有一个特定的节点负责文件系统元数据的管理。在集群中所有节点既是元数据节点，也是数据节点。&lt;/strong&gt; 在实际实现中，其实并不进行角色的划分，只是作为一个普通的存储节点。&lt;/p&gt;
+&lt;p&gt;由于在对等架构中没有中心节点，因此主要需要解决两个问题：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;客户端需要一种位置计算算法来计算数据应该存储的位置。&lt;/li&gt;
+&lt;li&gt;需要将元数据存储在各个存储节点，在某些情况下需要客户端来汇总。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;关键原理&#34;&gt;关键原理&lt;/h2&gt;
+&lt;p&gt;分布式文件系统本身也是文件系统，因此它与本地文件系统和网络文件系统等具备一些公共技术。除此之外，鉴于其分布式的特点，还涉及一些分布式的技术。&lt;/p&gt;
+&lt;h3 id=&#34;数据布局&#34;&gt;数据布局&lt;/h3&gt;
+&lt;p&gt;分布式文件系统的数据布局与本地文件系统不同，其关注的不是数据在磁盘的布局，而是数据在存储集群各个节点的放置问题。&lt;/p&gt;
+&lt;p&gt;在分布式文件系统中，数据布局解决的主要问题是性能和负载均衡的问题。其解决方案就是通过多个节点来均摊客户端的负载，也就是实现存储集群的横向扩展。因此数据布局的核心，就是要保证&lt;strong&gt;数据量均衡&lt;/strong&gt;与&lt;strong&gt;负载均衡&lt;/strong&gt;。&lt;/p&gt;
+&lt;h4 id=&#34;基于动态监测的数据布局&#34;&gt;基于动态监测的数据布局&lt;/h4&gt;
+&lt;p&gt;&lt;strong&gt;基于动态监测的数据布局是指通过监测存储集群各个节点的负载、存储容量和网络带宽等系统信息来决定新数据放置的位置。&lt;/strong&gt; 另外，集群节点之间还要有一些心跳信息，这样当有数据节点故障的情况下，控制节点可以及时发现，保证在决策时剔除。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem18.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;由于需要汇总各个节点的信息进行决策，因此基于动态监测的数据布局通常需要一个中心节点。中心节点负责汇总各种信息并进行决策，并且会记录数据的位置信息等元数据信息。当客户端需要写入数据时，客户端首先与控制节点交互；控制节点根据汇总的信息计算出新数据的位置，然后反馈给客户端；客户端根据位置信息，直接与对应的数据节点交互。&lt;/p&gt;
+&lt;h4 id=&#34;基于计算位置的数据布局&#34;&gt;基于计算位置的数据布局&lt;/h4&gt;
+&lt;p&gt;&lt;strong&gt;基于计算位置的数据布局是一种固定的数据分配方式。在该架构中通过一个算法来计算文件或数据存储的具体位置。&lt;/strong&gt; 当客户端要访问某个文件时，请求在客户端或经过的某个代理节点计算出数据的具体位置，然后将请求路由到该节点进行处理。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem17.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;当客户端访问集群数据时，首先计算出数据的位置（根据请求的特征来计算数据具体应该放到哪个节点，例如一致性哈希算法），然后与该节点交互。&lt;/p&gt;
+&lt;h3 id=&#34;数据可靠性&#34;&gt;数据可靠性&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;分布式数据的可靠性是指在出现组件故障的情况下依然能够能提供正常服务的能力。&lt;/strong&gt;&lt;/p&gt;
+&lt;h4 id=&#34;复制replication&#34;&gt;复制（Replication）&lt;/h4&gt;
+&lt;p&gt;&lt;strong&gt;复制技术是通过将数据复制到多个节点的方式来实现系统的高可靠。&lt;/strong&gt; 由于同一份数据会被复制到多个节点，这样同一个数据就存在多个副本，因此也称为多副本技术，这样当出现节点故障时就不会影响数据的完整性和可访问性。&lt;/p&gt;
+&lt;p&gt;复制技术有两种不同的模式：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;主从节点复制&lt;/strong&gt;：&lt;strong&gt;即在副本节点中有一个节点是主节点，所有的数据请求先经过主节点&lt;/strong&gt;。对于一个写数据请求，客户端将请求发送到主节点，主节点将数据复制到从节点，再给客户端应答。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem15.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;无主节点复制&lt;/strong&gt;：&lt;strong&gt;即在集群端并没有一个主节点，副本逻辑在客户端或代理层完成。&lt;/strong&gt; 当客户端发送一个写数据请求时，客户端会根据策略自行（或者通过代理层）找到副本服务器，并将多个副本发送到副本服务器上。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem16.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;纠删码erasure-code&#34;&gt;纠删码（Erasure Code）&lt;/h4&gt;
+&lt;p&gt;副本技术的本质就是冗余存储，因此需要消耗很多额外的存储空间。以 3 个副本为例，需要额外消耗 2 倍的存储空间来保证数据的可靠性。虽然副本技术在性能和可靠性方面优势明显，但成本明显比较高。为了降低存储的成本，很多公司采用&lt;strong&gt;纠删码&lt;/strong&gt;技术来保证数据的可靠性。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;纠删码是一种通过校验数据来保证数据可靠性的技术，也就是该技术通过保存额外的一个或多个校验块来提供数据冗余。&lt;strong&gt;与副本技术不同，这种数据冗余技术不能通过简单复制来恢复数据，而是&lt;/strong&gt;经过计算来得到丢失的数据&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;纠删码的基本原理是采用&lt;strong&gt;矩阵运算&lt;/strong&gt;，将 n 个数据转换为 n+m 个数据进行存储。其基本流程如下：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;校验数据生成&lt;/strong&gt;：找到一个生成矩阵，通过该矩阵与原始数据的运算可以得到最终要存储的校验数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;数据恢复&lt;/strong&gt;：由于生成矩阵是可逆的，因此可利用生成矩阵和剩余可用数据来计算出原始数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;数据一致性&#34;&gt;数据一致性&lt;/h3&gt;
+&lt;p&gt;在分布式文件系统中，由于同一个数据块被放置在不同的节点上，我们无法保证多个节点的数据时时刻刻是相同的，因此会出现一致性的问题。这里的一致性包括两个方面：一个方面是各个节点数据的一致性问题；另一个方面是从客户端访问角度一致性的问题。&lt;/p&gt;
+&lt;p&gt;通常来说，我们是无法保证各个节点上数据是完全一致的（故障、宕机、延迟、网络分区等原因），只能保证客户端访问的一致性。为了保证客户端访问数据的一致性，通常需要对存储系统进行特殊的设计，从而在系统层面保证数据的一致性。通常提供的一致性保证有如下两种：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;强一致性&lt;/strong&gt;：当数据的写入操作反馈给客户端后，任何对该数据的读操作都会读到刚刚写入的数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;最终一致性&lt;/strong&gt;：在执行一个写入操作后，如果没有新的写入操作的情况下， 该写入的数据会最终同步到所有副本节点上，但中间会有时间窗口。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;故障与容错&#34;&gt;故障与容错&lt;/h3&gt;
+&lt;p&gt;在分布式文件系统中必须要解决设备故障的问题。这是因为在大规模分布式文件系统中设备的总量达到数万个甚至数十万个，设备发生故障就会成为常态。&lt;/p&gt;
+&lt;p&gt;设备的故障分为两种类型：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;临时故障&lt;/strong&gt;：指短时间可以恢复的故障，如服务器重启、网线松动或交换机掉电等。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;永久故障&lt;/strong&gt;：指设备下线，且永远不会恢复，如硬盘损坏等。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;为了应对系统随时出现的故障，分布式文件系统在设计时必须要考虑容错处理。容错主要包括以下几方面内容：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;故障预测&lt;/strong&gt;：在故障发生前，预知设备故障，然后有计划地将该设备下线，避免突然下线导致的性能等问题。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;故障检测&lt;/strong&gt;：在故障发生时，及时发现故障原因，方便进行问题的修复。如检测磁盘、通信链路或服务的故障等。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;故障恢复&lt;/strong&gt;：在故障发生后，快速进行响应，保证系统仍然能够对外提供无损的服务。如通过部件冗余、主备链路等。当系统发生故障时，可以通过切换链路，或者通过冗余节点来提供服务。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>网络文件系统</title>
+        <link>https://blog.orekilee.top/p/%E7%BD%91%E7%BB%9C%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/</link>
+        <pubDate>Mon, 23 May 2022 18:54:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E7%BD%91%E7%BB%9C%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/</guid>
+        <description>&lt;h1 id=&#34;网络文件系统&#34;&gt;网络文件系统&lt;/h1&gt;
+&lt;h2 id=&#34;基本概念&#34;&gt;基本概念&lt;/h2&gt;
+&lt;p&gt;网络文件系统（Network File System）是基于 TCP/IP 协议（整个协议可能会跨层）的文件系统，它可以将远端服务器文件系统的目录挂载到本地文件系统的目录上，允许用户或者应用程序像访问本地文件系统的目录结构一样，访问远端服务器文件系统的目录结构，而无需理会远端服务器文件系统和本地文件系统的具体类型，非常方便地实现了目录和文件在不同机器上进行共享。&lt;/p&gt;
+&lt;p&gt;网络文件系统通常分为客户端和服务端，其中客户端类似本地文件系统，差异是在读/写数据时不是访问磁盘等设备，而是通过网络将请求传输到服务端。而服务端则是对数据进行管理的系统，将数据存储到磁盘等存储介质上。&lt;/p&gt;
+&lt;h2 id=&#34;网络文件系统-vs-本地文件系统&#34;&gt;网络文件系统 VS 本地文件系统&lt;/h2&gt;
+&lt;p&gt;网络文件系统与本地文件系统主要存在以下差异：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;数据的访问过程。&lt;/strong&gt; 本地文件系统的数据是持久化存储到磁盘上的，而网络文件系统则需要将数据传输到服务端进行持久化处理。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;是否需要格式化。&lt;/strong&gt; 本地文件系统需要进行格式化处理才可以使用。而网络文件系统则不需要客户端进行格式化操作，通常只需要挂载到客户端就可以直接使用。当然在服务端通常是要做一些配置工作的，包括格式化操作。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;网络文件系统最主要的特性是实现了数据的共享。&lt;/strong&gt; 基于数据共享的特性，使得网络文件系统有很多优势，如增大存储空间的利用效率（降低成本）、方便组织之间共享数据和易于实现系统的高可用等。&lt;/p&gt;
+&lt;h2 id=&#34;关键原理&#34;&gt;关键原理&lt;/h2&gt;
+&lt;p&gt;由于网络文件系统基于网络实现，其分为本地的客户端与远端的服务端。因此其除了之前提到的本地文件系统相关的技术，还引入文件系统协议、RPC，网络文件锁等机制。&lt;/p&gt;
+&lt;h3 id=&#34;文件系统协议&#34;&gt;文件系统协议&lt;/h3&gt;
+&lt;p&gt;网络文件系统本质上是一个基于 C/S（客户端/服务端）架构的应用，其大部分功能是通过客户端与服务端交互来实现的。因此，对于网络文件系统来说，其核心之一是客户端与服务端的交互语言——&lt;strong&gt;文件系统协议&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;网络文件系统的协议的定义类似函数调用，包含 ID（可以理解为函数名称），参数和返回值。这里以 NFS v3 协议举例：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem13.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上图可以看出，协议语义与文件系统操作的语义基本上一一对应，因此客户端对网络文件系统的访问都可以通过协议传输到服务端进行相应的处理。&lt;/p&gt;
+&lt;h3 id=&#34;远程过程调用rpc&#34;&gt;远程过程调用（RPC）&lt;/h3&gt;
+&lt;p&gt;由于在客户端与服务端都要实现对协议数据的封装和解析，因此实现起来比较复杂。为了降低复杂性，通常会在文件系统业务层与 TCP/IP 层之间实现一层交互层，这就是 RPC 协议。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;RPC（Remote Procedure Call，远程过程调用）&lt;/strong&gt; 是 TCP/IP 模型中应用层的网络协议（OSI 模型中会话层的协议）。&lt;strong&gt;RPC 协议通过一种类似函数调用的方式实现了客户端对服务端功能的访问，简化了客户端访问服务端功能的复杂度。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;RPC 协议通常架构如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem12.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;客户端&lt;/strong&gt;：文件系统。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;服务端&lt;/strong&gt;：文件系统服务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;存根&lt;/strong&gt;：定义的函数集。以网络文件系统为例，函数集包括创建文件、删除文件、写数据和读数据等。函数集通常需要分别在客户端和服务端定义一套接口。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;RPC 运行时库&lt;/strong&gt;：实现了 RPC 协议的公共功能，如请求的封装与解析、消息收发和网络层面的错误处理等。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在客户端调用 RPC 函数时，会调用 RPC 库的接口将该函数调用转化为一个网络消息转发到服务端，而服务端的 RPC 库则对网络数据包进行反向解析，调用服务端注册的函数集（存根）中的函数实现功能，最后将执行的结果反馈给客户端。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;对于客户端的应用，这个函数调用与本地函数调用并没有明显的差异。&lt;/strong&gt;&lt;/p&gt;
+&lt;h3 id=&#34;网络文件锁&#34;&gt;网络文件锁&lt;/h3&gt;
+&lt;p&gt;本地文件系统可以在文件系统内实现文件锁。但由于网络文件系统会有多个不同的客户端文件系统访问同一个服务端的文件系统，文件锁是无法在客户端的文件系统中实现的，只能在服务端实现。这样就需要一个协议将客户端的加锁、解锁等请求传输到服务端，并且在服务端维护文件锁的状态。&lt;/p&gt;
+&lt;p&gt;在 NFS 协议族中，其通过 &lt;strong&gt;NLM（Network Lock Manager）&lt;/strong&gt; 协议实现了一个网络文件锁服务。由于网络文件锁需要考虑到网络分区、丢包、服务端/客户端宕机等多方面因素，实现要比本地文件锁服务复杂得多，但其核心原理还是与本地文件锁一样：&lt;strong&gt;维护一个数据结构，负责记录每个文件的加锁情况。当客户端传来新的加锁请求时查找该结构，判断是否存在锁冲突，来考虑是允许加锁还是报错返回。&lt;/strong&gt;&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>本地文件系统</title>
+        <link>https://blog.orekilee.top/p/%E6%9C%AC%E5%9C%B0%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/</link>
+        <pubDate>Mon, 23 May 2022 18:53:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E6%9C%AC%E5%9C%B0%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/</guid>
+        <description>&lt;h1 id=&#34;本地文件系统&#34;&gt;本地文件系统&lt;/h1&gt;
+&lt;h2 id=&#34;关键技术&#34;&gt;关键技术&lt;/h2&gt;
+&lt;h3 id=&#34;虚拟文件系统&#34;&gt;虚拟文件系统&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;虚拟文件系统（Virtual File System，VFS）&lt;/strong&gt; 是具体文件系统（如 Ext2、Ext4 和 XFS 等）与应用程序之间的一个接口层，它对 Linux 的每个文件系统的所有细节进行抽象，使得不同的文件系统在 Linux 核心以及系统中运行的其他进程看来都是相同的。&lt;strong&gt;以此达到使操作系统能够适配多种文件系统的目的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;VFS 提供了一个文件系统框架，本地文件系统可以基于 VFS 实现，其主要做了如下几方面的工作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;作为抽象层为应用层提供了统一的接口（ &lt;code&gt;read&lt;/code&gt;、&lt;code&gt;write&lt;/code&gt; 和 &lt;code&gt;chmod&lt;/code&gt; 等）。&lt;/li&gt;
+&lt;li&gt;实现了一些公共的功能，如 Inode 缓存（Inode Cache）和页缓存（Page Cache）等。&lt;/li&gt;
+&lt;li&gt;规范了具体文件系统应该实现的接口。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem19.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;基于上述设定，其他具体的文件系统只需要按照 VFS 的约定实现相应的接口及内部逻辑，并注册在系统中，就可以完成文件系统的功能了。当用户调用操作系统提供的文件系统 API 时，会通过软中断的方式调用内核 VFS 实现的函数。&lt;/p&gt;
+&lt;h3 id=&#34;磁盘空间布局&#34;&gt;磁盘空间布局&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;文件系统的核心功能是实现对磁盘空间的管理。&lt;strong&gt;对磁盘空间的管理是指&lt;/strong&gt;要知道哪些空间被使用了，哪些空间没有被使用&lt;/strong&gt;。这样，在用户层需要使用磁盘空间时，文件系统就可以从未使用的区域分配磁盘空间。&lt;/p&gt;
+&lt;p&gt;为了对磁盘空间进行管理，文件系统往往将磁盘空间通常被划分为&lt;strong&gt;元数据区&lt;/strong&gt;与&lt;strong&gt;数据区&lt;/strong&gt;两个区域。数据区就是存储数据的地方，用户在文件中的数据都会存储在该区域；而元数据区则是对数据区进行管理的地方。&lt;/p&gt;
+&lt;h4 id=&#34;基于固定功能区的磁盘空间布局&#34;&gt;基于固定功能区的磁盘空间布局&lt;/h4&gt;
+&lt;p&gt;&lt;strong&gt;基于固定功能区的磁盘空间布局是指将磁盘的空间按照功能划分为不同的子空间，每种子空间有具体的功能。&lt;/strong&gt; 以 Linux 中的 Ext 文件系统为例，其空间被划分为数据区和元数据区，而元数据区又被划分为数据块位图、inode 位图和 inode 表等区域。如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem5.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;基于功能分区的磁盘空间布局空间职能清晰，便于手动进行丢失数据的恢复。但是由于元数据功能区大小固定，因此容易出现资源不足的情况==（位图长度有限）==。比如，在海量小文件的应用场景下，有可能会出现磁盘剩余空间充足，但 inode 不够用的情况&lt;/p&gt;
+&lt;h4 id=&#34;基于非固定功能区的磁盘空间布局&#34;&gt;基于非固定功能区的磁盘空间布局&lt;/h4&gt;
+&lt;p&gt;&lt;strong&gt;在磁盘空间管理中有一种非固定功能区的磁盘空间管理方法。这种方法也分为元数据和数据，但是元数据和数据的区域并非固定的，而是随着文件系统对资源的需求而动态分配的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;例如比较经典的实现 XFS，其它不是通过固定的位图区域来管理磁盘空间的，而是通过 B+ 树管理磁盘空间。这样做就可以动态的去分配元数据空间，而不是像位图一样具有限制。但是这也带来了新的问题，就是 B+ 树无法根据 inode 的偏移量来确定编号，因此 XFS 又引入复杂的编号机制来解决这个问题。&lt;/p&gt;
+&lt;h4 id=&#34;基于数据追加的磁盘空间布局&#34;&gt;基于数据追加的磁盘空间布局&lt;/h4&gt;
+&lt;p&gt;前文介绍的磁盘空间布局方式对于数据的变化都是原地修改的，也就是对于已经分配的逻辑块，当对应的文件数据改动时都是在该逻辑块进行修改的。在文件随机 I/O 比较多的情况下，不太适合使用 SSD 设备，这主要由 SSD 设备的修改和擦写特性所决定。&lt;/p&gt;
+&lt;p&gt;有一种基于数据追加的磁盘空间布局方式，也被称为基于日志（Log structured）的磁盘空间布局方式。这种磁盘空间布局方式对数据的变更并非在原地修改，而是以追加写的方式写到后面的剩余空间。这样，所有的随机写都转化为顺序写，非常适合用于 SSD 设备。&lt;/p&gt;
+&lt;h3 id=&#34;文件数据管理&#34;&gt;文件数据管理&lt;/h3&gt;
+&lt;p&gt;对于文件系统来说，无论文件是什么格式，存储的是什么内容，它都不关心。文件就是一个线性空间，类似一个大数组。而且文件的空间被文件系统划分为与文件系统块一样大小的若干个逻辑块。文件系统要做的事情就是将文件的逻辑块与磁盘的物理块建立关系。这样当应用访问文件的数据时，文件系统可以找到具体的位置，进行相应的操作。&lt;/p&gt;
+&lt;h4 id=&#34;基于连续区域的文件数据管理&#34;&gt;基于连续区域的文件数据管理&lt;/h4&gt;
+&lt;p&gt;&lt;strong&gt;基于连续区域的文件数据管理方式是一次性为文件分配其所需要的空间，且空间在磁盘上是连续的。&lt;/strong&gt; 由于文件数据在磁盘上是连续存储的，因此只要知道文件的起始位置所对应的磁盘位置和文件的长度就可以知道文件数据在磁盘上是如何存储的。如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem6.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;这种文件数据管理方式的最大缺点是不够灵活，特别是&lt;strong&gt;对文件进行追加写操作非常困难&lt;/strong&gt;。如果该文件后面没有剩余磁盘空间，那么需要先将该文件移动到新的位置，然后才能追加写操作。如果整个磁盘的可用空间没有能够满足要求的空间，那么会导致写入失败。&lt;/p&gt;
+&lt;p&gt;除了追加写操作不够灵活，该文件数据管理方式还有另一个缺点就是&lt;strong&gt;容易形成碎片空间&lt;/strong&gt;。由于文件需要占用连续的空间，因此很多小的可用空间就可能无法被使用，从而降低磁盘空间利用率。&lt;/p&gt;
+&lt;h4 id=&#34;基于链表的文件数据管理&#34;&gt;基于链表的文件数据管理&lt;/h4&gt;
+&lt;p&gt;&lt;strong&gt;基于链表的文件数据管理方式将磁盘空间划分为大小相等的逻辑块。&lt;/strong&gt; 在目录项中包含文件名、数据的起始位置和终止位置。在每个数据块的后面用一个指针来指向下一个数据块。如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem7.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;这种方式可以有效地解决连续区域的碎片问题，但是对文件的随机读/写却无能为力。这主要是因为在文件的元数据中没有足够的信息描述每块数据的位置。为了实现随机读写，还需要在实现时附加一些额外的机制。&lt;/p&gt;
+&lt;h4 id=&#34;基于索引的文件数据管理&#34;&gt;基于索引的文件数据管理&lt;/h4&gt;
+&lt;p&gt;&lt;strong&gt;索引方式的数据管理是指通过索引项来实现对文件内数据的管理。&lt;/strong&gt; 如下图所示，与文件名称对应的是索引块在磁盘的位置，索引块中存储的并非用户数据，而是索引列表。当读/写数据时，根据文件名可以找到索引块的位置，然后根据索引块中记录的索引项可以找到数据块的位置，并访问数据。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem8.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;常见的索引方式有以下两种：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;基于间接块的文件数据管理&lt;/strong&gt;：在索引方式中，最为直观、简单的就是对文件的每个逻辑块都有一个对应的索引项，并将索引项用一个数组进行管理。当想要访问文件某个位置的数据时，就可以根据该文件逻辑偏移计算出数组的索引值，然后根据数组的索引值找到索引项，进而找到磁盘上的数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem9_1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;基于 Extent 的文件数据管理&lt;/strong&gt;：在 Extent 文件数据管理方式中，每一个索引项记录的值不是一个数据块的地址，而是数据块的起始地址和长度。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem10.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;缓存&#34;&gt;缓存&lt;/h3&gt;
+&lt;p&gt;文件系统的缓存（Cache）的作用主要用来解决磁盘访问速度慢的问题。缓存技术是指在内存中存储文件系统的部分数据和元数据而提升文件系统性能的技术。由于内存的访问延时是机械硬盘访问延时的十万分之一，因此采用缓存技术可以大幅提升文件系统的性能。&lt;/p&gt;
+&lt;p&gt;文件系统缓存的原理主要还是基于数据访问的&lt;strong&gt;时间局部性&lt;/strong&gt;和&lt;strong&gt;空间局部性&lt;/strong&gt;特性。时间局部性就是如果一块数据之前被访问过，那么最近很有可能会被再次访问。空间局部性则是指在访问某一个区域之后，通常会访问临近的区域。&lt;/p&gt;
+&lt;h4 id=&#34;缓存置换算法&#34;&gt;缓存置换算法&lt;/h4&gt;
+&lt;p&gt;由于内存的容量要比磁盘的容量小得多，当用户持续写入数据时就会面临缓存不足的情况，此时就涉及如何将缓存数据刷写到磁盘，然后存储新数据的问题。而将缓存数据落盘，并置换新数据的这一过程被称为&lt;strong&gt;缓存置换&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;在文件系统中通常会采取以下这些缓存置换算法：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;LRU（Least Recently Used）&lt;/strong&gt;：LRU 基于时间局部性原理。将最久没有使用的数据淘汰出缓存。因此，当空间满时，最久没有使用的数据即被淘汰。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LFU（Least Frequently Used）&lt;/strong&gt;：LFU 基于缓存命中频次作为置换依据。如果一个数据在最近一段时间很少被访问到，那么可以认为在将来它被访问的可能性也很小。因此，当空间满时，将命中频次最少的数据淘汰掉。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;预读算法&#34;&gt;预读算法&lt;/h4&gt;
+&lt;p&gt;预读算法是针对读数据的一种缓存算法。预读算法通过识别 I/O 模式方式来提前将数据从磁盘读到缓存中。这样，应用读取数据时就可以直接从缓存读取数据，从而极大地提高读数据的性能。&lt;/p&gt;
+&lt;p&gt;通常有两种情况会触发预读操作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;当有多个地址连续地读请求时会触发预读操作。&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;应用访问到有预读标记的缓存时会触发预读操作&lt;/strong&gt;。这里，预读标记的缓存是在预读操作完成时在缓存页做的标记，当应用读到有该标记的缓存时会触发下一次的预读，从而省略对 I/O 模式的识别。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;快照与克隆&#34;&gt;快照与克隆&lt;/h3&gt;
+&lt;p&gt;快照（Snapshot）和克隆（Clone）技术可以应用于整个文件系统或单个文件。快照技术可以实现文件的可读备份，而克隆技术则可以实现文件的可写备份。针对文件，用的更多的是克隆技术。&lt;/p&gt;
+&lt;h4 id=&#34;快照&#34;&gt;快照&lt;/h4&gt;
+&lt;p&gt;目前快照技术有两种实现方式：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;写时拷贝（Copy-On-Write，COW）&lt;/strong&gt;：刚开始创建快照时原始文件和快照文件指向相同的存储区域。当原始文件被修改时，就需要将该位置的原始数据拷贝到新的位置，并且更新快照文件中的地址信息。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;写时重定向（Redirect-On-Write，ROW）&lt;/strong&gt;：当原始文件写数据时并不在原始位置写入数据，而是分配一个新的位置写入。在读取时，创建快照前的数据从源卷读，创建快照后产生的数据，从快照卷读。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;可以看出 COW 在写入时需要拷贝一份数据到快照卷的动作，而 ROW 是直接重定向到快照卷写入，所以 ROW 适合写密集型；相反，由于 ROW 不断进行指针重定向，读性能会有较大影响，而 COW 不会，所以 COW 适合读密集型。对文件系统而言，用得最多的是 ROW 方式。&lt;/p&gt;
+&lt;h4 id=&#34;克隆&#34;&gt;克隆&lt;/h4&gt;
+&lt;p&gt;克隆技术的原理与快照技术的原理类似，其相同点在于其实现方式依然是 ROW 或 COW，而差异点则主要表现在两个方面：一个方面，克隆生成的克隆文件是可以写的；另一个方面，克隆的数据最终会与原始文件的数据完全隔离。&lt;/p&gt;
+&lt;h3 id=&#34;日志&#34;&gt;日志&lt;/h3&gt;
+&lt;p&gt;在文件系统中，一个简单的写操作在底层可能会分解为多个步骤的修改。如果不能保证操作的原子性，那么倘若出现宕机、断电的情况，此时就会导致数据的丢失、不一致，甚至是文件系统的不可用。为了解决这个问题，在文件系统中引入了日志机制。&lt;/p&gt;
+&lt;p&gt;日志通常是一块独立的空间，其采用环形缓冲区的结构，当进行文件修改操作时，相关数据块会被打包成一组操作写入日志空间，再更新实际数据。这里的一组操作被称为一个事务。&lt;/p&gt;
+&lt;p&gt;由于实际数据的更新在写入日志之后，如果在数据更新过程中出现了系统崩溃，那么通过读取日志来更新。这样就能保证数据是我们所期望的数据。还有一种异常场景是日志数据刷写过程中。由于此时日志完成标记还没有置位，而且实际数据还没有更新，那么只需要放弃该条日志即可。&lt;/p&gt;
+&lt;h3 id=&#34;权限管理&#34;&gt;权限管理&lt;/h3&gt;
+&lt;p&gt;在多用户操作系统中，由于多个用户的存在，就必须实现用户之间资源访问的隔离。这种管理用户可访问资源的特性就是权限管理。&lt;/p&gt;
+&lt;h4 id=&#34;rwx-权限管理&#34;&gt;RWX 权限管理&lt;/h4&gt;
+&lt;p&gt;Linux最常用的权限管理就是 RWX-UGO 权限管理。其中，RWX 是 Read、Write 和 eXecute 的缩写。而 UGO 则是 User、Group 和 Other 的缩写。通过该机制建立用户和组实现对文件的不同的访问权限。&lt;/p&gt;
+&lt;p&gt;如下图所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem2.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;当我们对文件进行操作时，首先会调用 &lt;code&gt;inode_permission()&lt;/code&gt; 函数来判断执行用户的访问权限，如果权限不足则阻止对应操作的执行。&lt;/p&gt;
+&lt;h4 id=&#34;acl-权限管理&#34;&gt;ACL 权限管理&lt;/h4&gt;
+&lt;p&gt;ACL（Access Control List，访问控制列表），是一个针对文件/目录的访问控制列表。它在 RWX-UGO 权限管理的基础上为文件系统提供一个额外的、更灵活的权限管理机制。ACL 允许给任何用户或用户组设置任何文件/目录的访问权限，这样就能形成网状的交叉访问关系。&lt;/p&gt;
+&lt;p&gt;根据是否继承父目录的 ACL 属性，ACL 分为以下两类：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;access ACL&lt;/strong&gt;：每一个对象（文件/目录）都可以关联一个 ACL 来控制其访问权限，这样的 ACL 被称为 access ACL。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;default ACL&lt;/strong&gt;：目录关联的一种 ACL。当目录具备该属性时，在该目录中创建的对象（文件或子目录）默认具有相同的 ACL。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;ACL 在操作系统内部是通过文件的扩展属性实现的。&lt;/strong&gt; 当用户为文件添加一个 ACL 规则时，其实就是为该文件添加一个扩展属性。如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem3.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;strong&gt;需要注意的是，ACL 的数据与文件的普通扩展属性数据存储在相同的位置，只不过通过特殊的标记进行了区分，这样就可以屏蔽普通用户对 ACL 的访问。&lt;/strong&gt;&lt;/p&gt;
+&lt;h4 id=&#34;selinux-权限管理&#34;&gt;SELinux 权限管理&lt;/h4&gt;
+&lt;p&gt;SELinux（Security-Enhanced Linux）是一个在内核中实现的强制存取控制（MAC）安全性机制。SELinux 与 RWX、ACL 最大的区别是&lt;strong&gt;基于访问者（应用程序）与资源的规则，而不是用户与资源的规则&lt;/strong&gt;，因此其安全性更高。这里基于应用程序与资源的规则是指规定了哪些应用程序可以访问哪些资源，而与运行该应用程序的用户无关。&lt;/p&gt;
+&lt;p&gt;SELinux 通过将权限从用户收缩到应用，即使应用被攻破，黑客也只能访问应用程序所限定的资源，而不会扩散到其他地方。&lt;/p&gt;
+&lt;p&gt;其原理图如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem4.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;当访问者访问被访问者（资源）时，需要调用内核的接口，此时会经过 SELinux 内核的判断逻辑，该判断逻辑根据策略数据库的内容确定访问者是否有权访问被访问者，如果允许访问则放行，否则拒绝该请求并记录审计日志&lt;/p&gt;
+&lt;h3 id=&#34;配额管理&#34;&gt;配额管理&lt;/h3&gt;
+&lt;p&gt;在多用户环境中，不仅要防止用户对其他用户数据的非法访问，还要确保某些用户所使用的存储空间不能太多。在这种情况下，就需要一种配额 （Quota）管理技术。&lt;/p&gt;
+&lt;p&gt;配额管理是一种对使用空间进行限制的技术，其主要包括&lt;strong&gt;针对用户（或组）的限制&lt;/strong&gt;和&lt;strong&gt;针对目录的限制&lt;/strong&gt;两种方式。针对用户（或组）的限制是指某一个用户（或组）对该文件系统的空间使用不能超过设置的上限，如果超过上限则无法写入新的数据。针对目录的限制是指该目录中的内容总量不能超过设置的上限。&lt;/p&gt;
+&lt;p&gt;在配额管理中，通常涉及三个基本概念：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;软上限（Soft Limit）&lt;/strong&gt;：指数据总量可以超过该上限。如果超过该上限则会有一个告警信息。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;硬上限（Hard Limit）&lt;/strong&gt;：指数据总量不可以超过该上限，如果超过该上限则无法写入新的数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;宽限期（Grace Period）&lt;/strong&gt;：宽限期通常是针对软上限而言的。如果设置了该值（如 3 天），则在 3 天内允许数据量超过软上限，当超过3天后，无法写入新的数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;其实现的原理非常简单，当有新的写入请求时，配额模块就会去分析该请求。如果需要计入配额管理中，则进行配额上限的检查，在小于上限的情况下会更新配额管理数据，否则将阻止新的数据写入，并发出告警信息。&lt;/p&gt;
+&lt;h3 id=&#34;文件锁&#34;&gt;文件锁&lt;/h3&gt;
+&lt;p&gt;文件锁的基本作用就是保证多个进程对某个文件并发访问时数据的一致性。如果没有文件锁，就有可能出现多个进程同时访问文件相同位置数据的问题，从而导致文件数据的不一致性。&lt;/p&gt;
+&lt;p&gt;文件锁分为以下两种类型：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;劝告锁（Advisory Lock）&lt;/strong&gt;：劝告锁是一种建议性的锁，通过该锁告诉访问者现在该文件被其他进程访问，但不强制阻止访问。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;强制锁（Mandatory Lock）&lt;/strong&gt;：强制锁则是在有进程对文件锁定的情况下，其他进程是无法访问该文件的。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;为了提高性能，减少等待锁时间，以上两种锁都引入了共享锁、排他锁机制。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;共享锁（Shared Lock）&lt;/strong&gt;：在任意时间内，一个文件的共享锁可以被多个进程拥有，共享锁不会导致系统进程的阻塞。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;排他锁（Exclusive Lock）&lt;/strong&gt;：在任意时间内，一个文件的排他锁只能被一个进程拥有。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;当有新的加锁请求到来时，其会与已有的锁信息逐一比对，判断是否存在锁冲突。如果存在，则将该进程置为休眠状态（阻塞，如果为非阻塞则返回直接错误码）。如果不存在，则将锁信息记录下来后允许用户访问。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>文件系统 基础</title>
+        <link>https://blog.orekilee.top/p/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F-%E5%9F%BA%E7%A1%80/</link>
+        <pubDate>Mon, 23 May 2022 18:52:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F-%E5%9F%BA%E7%A1%80/</guid>
+        <description>&lt;h1 id=&#34;文件系统-基础&#34;&gt;文件系统 基础&lt;/h1&gt;
+&lt;h2 id=&#34;什么是文件系统&#34;&gt;什么是文件系统？&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;文件系统是一种存储和组织计算机数据的方法，它使得对其访问和查找变得容易，文件系统使用&lt;strong&gt;文件&lt;/strong&gt;和&lt;strong&gt;树形目录&lt;/strong&gt;的抽象逻辑概念代替了硬盘和光盘等物理设备使用数据块的概念，用户使用文件系统来保存数据不必关心数据实际保存在硬盘（或者光盘）的地址为多少的数据块上，只需要记住这个文件的所属目录和文件名。在写入新数据之前，用户不必关心硬盘上的那个块地址没有被使用，硬盘上的存储空间管理（分配和释放）功能由文件系统自动完成，用户只需要记住数据被写入到了哪个文件中。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem11.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;上文是维基百科对于文件系统的描述，我们将其精炼一下，得到以下结论：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;文件系统是一套实现了数据的存储、分级组织、访问和获取等操作的抽象数据类型（Abstract data type）。其可以构建在磁盘、内存、甚至是网络上。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;用于解决什么问题&#34;&gt;用于解决什么问题？&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;我们为什么要使用文件系统呢？换句话说，文件系统它解决了什么问题呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;strong&gt;文件系统解决的是对磁盘空间使用的问题。&lt;/strong&gt; 如果我们不抽象出一个文件系统，而是每个应用程序都独立去访问磁盘空间，那会出现什么样的情况呢？&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;磁盘空间的访问会存在冲突。&lt;/strong&gt; 如果没有一个第三方去统一管理磁盘空间，那么此时应用程序的数据访问并不会进行隔离，而是会互相影响，产生冲突。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;磁盘空间的管理会非常复杂。&lt;/strong&gt; 由于文件有不同格式、大小，存储的设备与位置也有所不同（本地磁盘、内存、甚至远端机器）。直接管理磁盘空间将会非常的复杂。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;文件系统正是为了解决这两个问题，而在应用程序与磁盘空间之间抽象出的一层。&lt;strong&gt;文件系统对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;基于文件系统，应用程序只需要创建、删除或读取文件即可，他们并不需要关注磁盘空间的细节，所有磁盘空间管理相关的动作交由文件系统来处理。&lt;/p&gt;
+&lt;h2 id=&#34;相关概念&#34;&gt;相关概念&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;目录&lt;/strong&gt;：在文件系统中目录是一种容器，它可以容纳子目录和普通文件。但同时目录本身也是一种文件。只不过目录中存储的数据是特殊的数据，这些数据就是关于文件名称等元数据（管理数据的数据）的信息。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;文件&lt;/strong&gt;：在文件系统中，最基本的概念是文件，文件是存储数据的实体。从用户的角度来看，文件是文件系统中最小粒度的单元。为了便于用户对文件进行识别和管理，文件系统为每个文件都分配了一个名称，称为文件名。同时为了方便用户辨别文件的类型，每个文件都会有一个拓展名来标识其类型。（但在文件系统中都以字节流存储）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;链接&lt;/strong&gt;：Linux 中的链接分为软链接（Soft Link）和硬链接（Hard Link）两种。其中，软链接又被称为符号链接（Symbolic Link），它是文件的另外一种形态，其内容指向另外一个文件路径（相对路径或绝对路径）。硬链接则不同，它是一个已经存在文件的附加名称，也就是同一个文件的第 2 个或第 N 个名称。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;基本原理&#34;&gt;基本原理&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;文件系统的主要核心就是对下实现了对磁盘空间的管理，对上为应用程序呈现层级数据组织形式和统一的访问接口。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;在文件系统中，为了简化用户对数据的访问，向用户屏蔽数据的存储方式，其会对磁盘空间进行规划、组织和编号处理。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;以 Ext4 文件系统为例，它会将磁盘空间进行划分。&lt;/strong&gt; 首先将磁盘空间划分为若干个子空间，这些子空间称为块组。然后将每个子空间划分为等份的逻辑块，&lt;strong&gt;逻辑块是最小的管理单元。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;为了管理这些逻辑块，需要一些区域来记录哪些逻辑块已经被使用了，哪些还没有被使用。记录这些数据的数据通常在磁盘的特殊区域，我们称这些数据为文件系统的&lt;strong&gt;元数据（Metadata）&lt;/strong&gt;。通过元数据，文件系统实现了对磁盘空间的管理，最终为用户提供了简单易用的接口。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;当我们调用这些接口时，用户对文件的操作就转化为文件系统对磁盘空间的操作。&lt;/strong&gt; 比如，当用户向某个文件写入数据时，文件系统会将该请求转换为对磁盘的操作，包括分配磁盘空间、写入数据等。而对文件的读操作则转换为定位到磁盘的某个位置、从磁盘读取数据等。&lt;/p&gt;
+&lt;h2 id=&#34;分类&#34;&gt;分类&lt;/h2&gt;
+&lt;p&gt;目前，常见的文件系统有几十种。虽然文件系统的具体实现形式纷繁复杂，具体特性也各不相同，但是有一定规律可循。下面将介绍一下常见的文件系统都有哪些。&lt;/p&gt;
+&lt;h3 id=&#34;本地文件系统&#34;&gt;本地文件系统&lt;/h3&gt;
+&lt;p&gt;本地文件系统是对磁盘空间进行管理的文件系统，也是最常见的文件系统形态。从呈现形态上来看，本地文件系统就是一个树形的目录结构。&lt;strong&gt;本地文件系统本质上就是实现对磁盘空间的管理，实现磁盘线性空间与目录层级结构的转换。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;从普通用户的角度来说，本地文件系统主要方便了对磁盘空间的使用，降低了使用难度，提高了利用效率。常见的本地文件系统有 ExtX、Btrfs、XFS 和 ZFS 等。&lt;/p&gt;
+&lt;h3 id=&#34;伪文件系统&#34;&gt;伪文件系统&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;伪文件系统是 Linux 中的概念，它是对传统文件系统的延伸。伪文件系统存在于内存，不占用硬盘。它以文件系统的形态实现用户与内核数据交互的接口，其通过文件的形式向用户提供一些系统信息，用户通过读写这些文件就可以读取、修改系统的一些信息。&lt;/strong&gt; 常见的伪文件系统有 proc、sysfs 和 configfs 等。&lt;/p&gt;
+&lt;p&gt;例如我们在 Linux 中通常用来检测性能的一些工具（如 iostat、top 等），其本质上就是通过访问 &lt;code&gt;/proc/cpuinfo&lt;/code&gt;、&lt;code&gt;/proc/diskstats&lt;/code&gt;、&lt;code&gt;/proc/meminfo&lt;/code&gt; 等文件来获取内核信息。&lt;/p&gt;
+&lt;h3 id=&#34;网络文件系统&#34;&gt;网络文件系统&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;网络文件系统（Network File System）是基于 TCP/IP 协议（整个协议可能会跨层）的文件系统，它可以将远端服务器文件系统的目录挂载到本地文件系统的目录上，允许用户或者应用程序像访问本地文件系统的目录结构一样，访问远端服务器文件系统的目录结构，而无需理会远端服务器文件系统和本地文件系统的具体类型，非常方便地实现了目录和文件在不同机器上进行共享。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;网络文件系统通常分为客户端和服务端，其中客户端类似本地文件系统，而服务端则是对数据进行管理的系统。网络文件系统的使用与本地文件系统的使用没有任何差别，只需要执行 &lt;code&gt;mount&lt;/code&gt; 命令挂载远端文件系统即可。常见的网络文件系统如 NFS、SMB 等。&lt;/p&gt;
+&lt;h3 id=&#34;集群文件系统&#34;&gt;集群文件系统&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;集群文件系统（Clustered File System）是指运行在多台计算机之上，之间通过某种方式相互通信从而将集群内所有存储空间资源整合、虚拟化并对外提供文件访问服务的文件系统。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;其本质上还是一种本地文件系统，但与 NTFS、EXT 等本地文件系统的目的不同，它通常构建在基于网络的 区域存储网络（SAN） 设备上，且在多个节点中共享 SAN 磁盘。前者是为了扩展性，后者运行在单机环境，纯粹管理块和文件之间的映射以及文件属性。&lt;/p&gt;
+&lt;p&gt;集群文件系统最大的特点是&lt;strong&gt;可以实现客户端节点对磁盘介质的共同访问，且视图具有一致性&lt;/strong&gt;。其访问模式如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/filesystem1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;其最大的特点是多个节点可以同时为应用层提供文件系统服务，特别适合用于业务多活的场景，通过集群文件系统提供高可用集群机制，避免因为宕机造成服务失效。&lt;/p&gt;
+&lt;h3 id=&#34;分布式文件系统&#34;&gt;分布式文件系统&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;分布式文件系统（Distributed File System）是指文件系统管理的物理存储资源不一定直接连接在本地节点上，而是通过计算机网络与节点（可简单的理解为一台计算机）相连；或是若干不同的逻辑磁盘分区或卷标组合在一起而形成的完整的有层次的文件系统。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;从本质上来说，分布式文件系统其实也是网络文件系统的一种，其与网络文件系统的差异在于服务端包含多个节点，也就是服务端是可以横向扩展的。&lt;/p&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>
