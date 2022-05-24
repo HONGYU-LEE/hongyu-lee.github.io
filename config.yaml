@@ -234,3 +234,7 @@ frontmatter:
   lastmod:
   - :fileModTime
   - :defaultte
+
+markup.goldmark:
+    markup.goldmark.renderer:
+        nsafe: true
