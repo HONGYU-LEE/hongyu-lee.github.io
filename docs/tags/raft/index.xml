@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Raft on 凌桓&#39;s BLOG</title>
+        <link>https://blog.orekilee.top/tags/raft/</link>
+        <description>Recent content in Raft on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language>
+        <lastBuildDate>Tue, 24 May 2022 15:59:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/raft/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>一致性协议：Raft</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEraft/</link>
+        <pubDate>Tue, 24 May 2022 15:59:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEraft/</guid>
+        <description>&lt;h1 id=&#34;一致性协议raft&#34;&gt;一致性协议：Raft&lt;/h1&gt;
+&lt;p&gt;由于Paxos算法相对来说较为复杂且难以理解，因此在后来又出现了一种用于替代Paxos的算法——Raft&lt;/p&gt;
+&lt;p&gt;Raft 算法是一种简单易懂的共识算法，所谓共识，就是多个节点对某个事情达成一致的看法，即使是在部分节点故障、网络延时、网络分割的情况下。它依靠&lt;strong&gt;状态机&lt;/strong&gt;和&lt;strong&gt;主从同步&lt;/strong&gt;的方式，在各个节点之间实现数据的一致性。&lt;/p&gt;
+&lt;p&gt;Raft算法的核心主要为以下两部分，下面将进行具体讲解&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;主节点选举&lt;/strong&gt;（Leader Election）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;数据同步&lt;/strong&gt;（Log Replication）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;状态机&#34;&gt;状态机&lt;/h2&gt;
+&lt;p&gt;在Raft中节点中存在三种状态，状态之间可以相互进行转换&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Leader（主节点）&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Follower（从节点）&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Candidate（竞选节点）&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;同时，每个节点上会存放一个&lt;strong&gt;倒计时器&lt;/strong&gt;（Election Timeout），时间&lt;strong&gt;随机&lt;/strong&gt;在150ms到300ms之间。Leader节点会周期性的向所有Follower发送一个心跳包（Heartbeat），收到心跳包的节点会将其计时器清零后重新计时，如果在倒计时结束前没有收到Leader的心跳包，此时Follower就会变为Candidate，开始进入竞选状态。&lt;/p&gt;
+&lt;p&gt;具体的状态转移如下图&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed19.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;执行流程&#34;&gt;执行流程&lt;/h2&gt;
+&lt;h3 id=&#34;主节点选举&#34;&gt;主节点选举&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;介绍了状态机后，下面就来看看主节点的选举流程&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第一步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，在一开始时，由于没有Leader，所以此时所有节点的身份都是Follower，每一个节点上都有着自己的计数器，当计时器达到了超时时间后，该节点就会转换为Candidate，开始选举过程。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed20.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第二步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，成为Candidate的节点首先会给自己投一张票，然后向集群中的其他所有节点发起投票请求。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed21.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第三步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，收到投票请求并且还未投票的Follower节点会向发起者回复投票反馈，如果收到了超过半数的回复，此时Candidate选举成功，状态转变为Leader。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed22.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第四步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，Leader节点会立刻向其他节点发出通告，告知其他节点它已成功选举成Leader，收到通知的节点会转换为Follower。并且Leader会周期性的发送心跳包给所有Follower来表明它还存活，当Follower接收到心跳包时，就会重置计时器。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed23.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;一旦Leader节点挂掉，它就无法发出心跳包来重置Follower的倒计时器，那么当Follower的超时时间到达后，其就会转换成Candidate节点，再次重复以上过程。&lt;/p&gt;
+&lt;p&gt;上面介绍的是单节点的选举，倘若同时有多个Follower同时倒计时结束后成为Candidate，同时开始选举，并且在选举过程中所获得的票数相同，此时就陷入了僵局，谁都无法成为Leader。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed24.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;在重新选举时，由于每个节点设置的超时时间都是随机的，因此下一次同时出现多个Candidate并获得同样票数导致选举失败的情况的概率则非常低。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed25.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h3 id=&#34;数据同步&#34;&gt;数据同步&lt;/h3&gt;
+&lt;p&gt;Raft中数据同步的方式与之前写过的2PC（二阶段提交协议）有一些相似，也是分为投票和提交两个阶段，具体流程如下。&lt;/p&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第一步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，客户端将修改传入Leader中（此时修改并没有提交，只是写入日志中）。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed26.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第二步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，Leader将修改复制到集群内的所有Follower节点上，如果复制失败，会不断进行重试直至成功。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed27.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第三步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，Follow节点们成功接收到复制的数据后，会反馈结果给Leader节点，如果Leader节点接收到超过半数的Follower反馈，则表明复制成功，于是提交自己的数据，并且通知客户端数据提交成功。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed28.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第四步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，提交成功后，Leader会通知所有的Follower让它们也提交修改，此时所有节点的值达成一致，完成数据同步流程。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed29.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;为了便于理解，可以结合下面的Raft原理动画一同学习。&lt;/p&gt;
+&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;http://thesecretlivesofdata.com/raft/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Raft原理动画&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

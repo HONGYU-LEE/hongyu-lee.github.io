@@ -444,12 +444,12 @@
             
                 
 <article class="">
-    <a href="/p/zab-%E5%8D%8F%E8%AE%AE/">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/">
         
         
 
         <div class="article-details">
-            <h2 class="article-title">ZAB 协议</h2>
+            <h2 class="article-title">一致性协议：ZAB</h2>
         </div>
     </a>
 </article>
@@ -485,32 +485,21 @@
      
     
         
-    <div id="remark42"></div>
-<script>
-    var remark_config = {
-        host: "",
-        site_id: '',
-        components: ['embed'],
-        url: "https:\/\/blog.orekilee.top\/p\/zookeeper-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5\/",
-        max_shown_comments:  15 ,
-        theme: document.documentElement.dataset.scheme,
-        page_title: 'ZooKeeper 基本概念',
-        locale: 'en',
-        show_email_subscription:  true 
-    };
-
-    (function (c) {
-        for (var i = 0; i < c.length; i++) {
-            var d = document, s = d.createElement('script');
-            s.src = remark_config.host + '/web/' + c[i] + '.js';
-            s.defer = true;
-            (d.head || d.body).appendChild(s);
-        }
-    })(remark_config.components || ['embed']);
-
-    window.addEventListener('onColorSchemeChange', (e) => {
-        window.REMARK42.changeTheme(e.detail);
-    })
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
 </script>
 
     

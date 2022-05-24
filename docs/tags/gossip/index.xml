@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Gossip on 凌桓&#39;s BLOG</title>
+        <link>https://blog.orekilee.top/tags/gossip/</link>
+        <description>Recent content in Gossip on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language>
+        <lastBuildDate>Tue, 24 May 2022 16:30:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/gossip/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>一致性协议：Gossip</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEgossip/</link>
+        <pubDate>Tue, 24 May 2022 16:30:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEgossip/</guid>
+        <description>&lt;h1 id=&#34;一致性协议gossip&#34;&gt;一致性协议：Gossip&lt;/h1&gt;
+&lt;p&gt;Gossip协议（Gossip Protocol）又称Epidemic协议（Epidemic Protocol），是基于谣言传播方式的节点或者进程之间信息交换的协议，在分布式系统中被广泛使用，比如我们可以使用Gossip协议来确保网络中所有节点的数据一致。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;说到社交网络，就不得不提著名的&lt;strong&gt;六度分隔理论&lt;/strong&gt;。1967年，哈佛大学的心理学教授Stanley Milgram想要描绘一个连结人与社区的人际连系网。做过一次连锁信实验，结果发现了“六度分隔”现象。简单地说：“你和任何一个陌生人之间所间隔的人不会超过六个，也就是说，最多通过六个人你就能够认识任何一个陌生人。&lt;/p&gt;
+&lt;p&gt;数学解释该理论：若每个人平均认识260人，其六度就是260↑6 =1,188,137,600,000。消除一些节点重复，那也几乎&lt;strong&gt;覆盖&lt;/strong&gt;了整个地球人口若干多多倍，这也是Gossip协议的雏形。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Gossip基于&lt;strong&gt;六度分隔理论&lt;/strong&gt;，每个节点像谣言传播一样，随机的将信息传播到其他节点上，不断重复这个过程，直到将信息传播到整个网络中，并在一定时间内，使得系统内的所有节点数据一致。&lt;/p&gt;
+&lt;p&gt;Gossip主要有以下三个功能：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;直接邮寄（Direct Mail）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反熵（Anti-entropy）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;谣言传播（Rumor mongering）&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;直接邮寄&#34;&gt;直接邮寄&lt;/h2&gt;
+&lt;p&gt;直接发送需要更新的数据到其他节点，当数据发送失败时，将数据缓存到队列中，然后进行重传。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上面可以看出，这种方法实现简单切数据同步及时，但是可能会因为重试的缓存队列满了而丢数据，从而无法实现最终一致性。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;那么我们如何实现最终一致性呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;这时候就需要借助到了Gossip协议中的&lt;strong&gt;反熵&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;反熵&#34;&gt;反熵&lt;/h2&gt;
+&lt;p&gt;熵指混乱程度，反熵就是消除不同节点间数据的差异，提升节点间数据的相似度。&lt;/p&gt;
+&lt;p&gt;反熵的过程如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;集群中的节点每隔一段时间就随机选取某个其他节点&lt;/li&gt;
+&lt;li&gt;互相交换数据来消除两个节点之间的差异&lt;/li&gt;
+&lt;li&gt;实现数据的最终一致性&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;反熵主要通过三种方式进行：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;推（Push）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;节点A将数据（key,value,version）推送给节点B，节点B将A中比自己新的数据更新过来。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed3.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;拉（Pull）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;节点A仅将数据（key,version）推送给 B，B将本地比A新的数据（key, value, version）推送给A，A更新本地数据。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed4.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;推拉（Push/Pull）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;同时执行上述两个步骤，同时修复两个节点的数据。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed5.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;blockquote&gt;
+&lt;p&gt;从上面的三种反熵方式可以看出，反熵是需要节点两两交换和比对自己所有的数据，这样来看的话，通讯成本是很高的，而在实际场景下这种频繁的交换会大大影响性能。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;那有没有办法来减少反熵的次数呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;我们可以通过引入如校验和、奇偶校验、CRC校验和格雷码校验等机制来降低需要对比的数据量和通讯信息。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;执行反熵时，相关节点都是已知的，且节点数量不能太多。如果节点动态变化或节点数过多，反熵就不合适。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;那在这种场景下，有没有办法来解决动态、多节点的最终一致性呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;答案是有的，那这时候就要用到Gossip协议中的&lt;strong&gt;谣言传播&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;谣言传播&#34;&gt;谣言传播&lt;/h2&gt;
+&lt;p&gt;谣言传播，就像是一个谣言的产生流程一样，每个人都会向自己身边的人传播，知道谣言散布各地。&lt;/p&gt;
+&lt;p&gt;在分布式系统中，当一个节点有了新数据后，这个节点变成活跃状态，并周期性地联系其他节点向其发送新数据，直到所有节点都存储了该数据，可以理解为之前讲的反熵中的推的方式。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed6.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上面可以看出，谣言传播仍然具有以下缺点：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;时间随机&lt;/strong&gt;：所有节点达到一致性是一个随机性的概率。可以使用&lt;strong&gt;闭环反熵&lt;/strong&gt;修复。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;消息冗余&lt;/strong&gt;：同一节点会多次接收同一消息，增加了消息处理的压力，每一次通信都会对网络带宽、CPU等资源造成负载，进而影响达到最终一致性的时间。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;拜占庭问题&lt;/strong&gt;：如果有恶意节点出现，那么其他节点也会出问题。所以需要先修复故障节点。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;闭环反熵&#34;&gt;闭环反熵&lt;/h2&gt;
+&lt;p&gt;对于谣言传播，所有节点达到一致性是一个随机性的概率，其达到最终一致性的时间并不可控，这并不满足我们的期望，我们更希望能在一个确定的时间范围内实现数据副本的最终一致性，因此Gossip协议又引入了&lt;strong&gt;闭环反熵&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;它按&lt;strong&gt;照一定顺序来修复节点的数据差异，先随机选择一个节点，顺着这个节点往下循环修复&lt;/strong&gt;。每个节点都会对比自身与下一个节点，将本节点存在而下个节点不存在的缺失数据发送给下一个节点来进行修复，如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed7.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;与上面的反熵不同，闭环反熵不再是一个节点不断随机选择另一个节点，来修复副本上的熵，而是设计了一个闭环的流程，一次修复所有节点的副本数据不一致。通过这种方法我们就能够将最终一致性的时间范围明确下来，使其可控。&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;上面说了那么多缺点，下面也来讲讲Gossip的几个优点&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;拓展性&lt;/strong&gt;：网络可以允许节点的动态增加和减少，新增加的节点的状态最终会与其他节点一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;容错&lt;/strong&gt;：网络中任何节点的宕机和重启都不会影响 Gossip 消息的传播，Gossip 协议具有天然的分布式系统容错特性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;去中心化&lt;/strong&gt;：Gossip协议不要求任何中心节点，所有节点都可以是对等的，任何一个节点无需知道整个网络状况，只要网络是连通的，任意一个节点就可以把消息散播到全网。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实现简单&lt;/strong&gt;：Gossip 协议中的消息会以一传十、十传百一样的指数级速度在网络中快速传播，因此系统状态的不一致可以在很快的时间内收敛到一致。消息传播速度达到了 logN。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;高性能&lt;/strong&gt;：Gossip 协议的过程极其简单，实现起来几乎没有太多复杂性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Gossip的三种功能其实都是为了实现反熵，第一种用消息队列，第二种用推拉消息，第三种用散播谣言，下面给出三个功能的使用场景&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;功能&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;应用场景&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;直接邮寄&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;实际场景，&lt;code&gt;直接邮寄&lt;/code&gt;一定要实现，性能损耗最低。通过发送更新数据或缓存重传就能修复数据的不一致。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;反熵&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;在存储组件中，节点都是已知的，采用&lt;code&gt;反熵&lt;/code&gt;修复数据副本的不一致。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;谣言传播&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;集群节点变化时，或节点较多时，采用&lt;code&gt;谣言传播&lt;/code&gt;方式，来同步更新多节点的数据，来实现最终一致性。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

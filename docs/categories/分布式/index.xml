@@ -6,12 +6,546 @@
         <description>Recent content in 分布式 on 凌桓&#39;s BLOG</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en-us</language><atom:link href="https://blog.orekilee.top/categories/%E5%88%86%E5%B8%83%E5%BC%8F/index.xml" rel="self" type="application/rss+xml" /><item>
-        <title>ZAB 协议</title>
-        <link>https://blog.orekilee.top/p/zab-%E5%8D%8F%E8%AE%AE/</link>
-        <pubDate>Mon, 23 May 2022 21:14:13 +0800</pubDate>
+        <title>一致性哈希</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/</link>
+        <pubDate>Tue, 24 May 2022 17:20:13 +0800</pubDate>
         
-        <guid>https://blog.orekilee.top/p/zab-%E5%8D%8F%E8%AE%AE/</guid>
-        <description>&lt;h1 id=&#34;zab协议&#34;&gt;ZAB协议&lt;/h1&gt;
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/</guid>
+        <description>&lt;h1 id=&#34;一致性哈希&#34;&gt;一致性哈希&lt;/h1&gt;
+&lt;h2 id=&#34;分布式存储&#34;&gt;分布式存储&lt;/h2&gt;
+&lt;p&gt;如果我们需要存储QQ号与个人信息，建立起&amp;lt;QQ, 个人信息&amp;gt;的KV模型。&lt;/p&gt;
+&lt;p&gt;假设QQ有10亿用户，并且每个用户的个人信息占据了100M，如果要存储这些数据，所需要的空间就得(100亿* 100M) = 10WT，这么庞大的数据是不可能在单机环境下存储的，只能采用分布式的方法，用多个机器进行存储，但是即使使用多机，这些数据也至少要10w台机器(假设每台服务器存1T)才能存储。&lt;/p&gt;
+&lt;p&gt;并且我们还需要考虑，&lt;strong&gt;如何将这10w台机器与我们的数据建立起映射关系呢？&lt;/strong&gt; 换句话来说就是，我们如何确定哪些数据应该放在哪个机器呢？这时就需要用到&lt;strong&gt;哈希&lt;/strong&gt;算法。&lt;/p&gt;
+&lt;h2 id=&#34;简单哈希&#34;&gt;简单哈希&lt;/h2&gt;
+&lt;p&gt;我们可以采用&lt;strong&gt;除留余数法&lt;/strong&gt;来完成一个映射，key值为qq号，余数为机器数量，得到的结果就是应该存储的机器的编号。这样我们将数据放入指定机器中，使用时再根据机器号进入对应的机器进行增删查改即可。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-c&#34; data-lang=&#34;c&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;err&#34;&gt;机器号&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;hash&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;QQ号&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;%&lt;/span&gt; &lt;span class=&#34;err&#34;&gt;机器数量&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed33.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;但是这个方法存在着一个致命的缺陷，随着用户量不断增多或者用户信息增加，10w台机器就会不够用，此时就需要将机器扩容至15w台。
+当进行扩容后，由于机器数量发生变化，数据的映射关系也会变化，我们就需要进行rehash来将数据重新映射到正确的位置上。&lt;/p&gt;
+&lt;p&gt;但是问题来了，这10w台机器的数据如果需要进行重新映射，花费的时间几乎是不可想象的，我们不可能说为了迁移数据而让服务器宕机数月之久，所以这种方法是不可能行得通的。&lt;/p&gt;
+&lt;h2 id=&#34;一致性哈希-1&#34;&gt;一致性哈希&lt;/h2&gt;
+&lt;p&gt;为了弥补上一种方法的，就引入了一致性哈希算法。&lt;/p&gt;
+&lt;p&gt;上面一种方法的主要缺陷就是由于扩容后rehash带来的数据大量迁移问题。
+&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed34.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;
+为了解决上述问题，一致性哈希将哈希构造成一个0~2^32-1的环形结构，并将余数从原来的机器数量修改值为整型最大值(也可以是比这个更大的)。因为这个数据足够大，所以不需要考虑因为机器数增加导致的rehash问题。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-c&#34; data-lang=&#34;c&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;err&#34;&gt;机器号&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;hash&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;QQ号&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;%&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;2&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;^&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;32&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;我们将环中的某一区间去映射到某台服务器，让这台服务器负责这个区间的管理，这样就能让这10w台服务器来切分这个闭环结构
+&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed35.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;
+当我们要查询某个数据的时候，根据哈希函数算出的映射位置来找到包含该位置的那个区间所对应的服务器，然后在那个服务器中进行操作即可
+&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed36.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;
+如果原先的服务器不够用了，此时增加5w个服务器，也不需要像之前一样对所有机器的数据进行迁移，我们只需要迁移负载重的机器即可
+&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed37.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;例如此时NodeC中存储了25000-50000的数据，此时往其中增加一个新服务器NodeE，让其负责映射闭环中25000-37500的数据。
+此时我们需要做的就是将NodeC中25000~37500的那一部分重新迁移到NodeE上，并改变两个服务器的映射范围，就完成了数据的迁移。从这里我们可以看到，一致性哈希将服务器数据的整体迁移变成了高负载服务器的部分迁移，大大提高了效率以及稳定性。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;总结：&lt;/strong&gt; 一致性哈希就是一个大范围的闭环，由于除数过大，我们也不需要因为由于除数增加导致全体rehash。并且映射关系变味了数据区间——机器，如果要增加机器，就只需要改变映射范围，并将区间中的小部分数据进行迁移，大大的提高了效率。&lt;/p&gt;
+&lt;h2 id=&#34;虚拟节点&#34;&gt;虚拟节点&lt;/h2&gt;
+&lt;p&gt;但是，一致性哈希也存在缺陷，就是在&lt;strong&gt;节点过少&lt;/strong&gt;的时候可能会&lt;strong&gt;因为节点分布不均匀而导致数据倾斜问题&lt;/strong&gt;。例如当前只有两个服务器
+&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed38.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;
+此时就会出现这种情况，部分节点数据过少，而部分节点数据过多，此时的数据大量集中在NodeA上，数据大量倾斜。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed39.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;
+既然节点较少，那就可以考虑在不增加服务器的基础上多增加几个节点，所以为了解决这问题，一致性哈希又引入了&lt;strong&gt;虚拟节点&lt;/strong&gt;。对每个服务节点进行多次哈希映射，每个映射的位置都会放置该服务节点，成为虚拟节点。例如上图，就分别将NodeA和NodeB分成了三个虚拟节点。我们不需要改变数据定位的算法，只需要将&lt;strong&gt;虚拟节点与服务节点进行映射&lt;/strong&gt;，将定位到虚拟节点NodeX #1、#2、#3的节点再定位回服务节点即可。&lt;/p&gt;
+&lt;p&gt;通过这种方法就保证了&lt;strong&gt;即使服务节点少，也能做到相对均匀的数据分布&lt;/strong&gt;&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性模型</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/</link>
+        <pubDate>Tue, 24 May 2022 16:40:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/</guid>
+        <description>&lt;h1 id=&#34;一致性模型&#34;&gt;一致性模型&lt;/h1&gt;
+&lt;h2 id=&#34;什么是一致性模型&#34;&gt;什么是一致性模型?&lt;/h2&gt;
+&lt;p&gt;在分布式系统中，C（一致性） 和 A（可用性）始终存在矛盾。若想保证可用性，就必须通过复制、分片等方式冗余存储。而一旦进行复制，又来带多副本数据一致性的问题——一个副本的数据更新之后，其他副本必须要保持同步，否则数据不一致就可能导致业务出现问题。&lt;/p&gt;
+&lt;p&gt;因此，每次更新数据对所有副本进行修改的时间以及方式决定了复制代价的大小。全局同步与性能实际上是矛盾的，而为了提高性能，往往会采用放宽一致性要求的方法。因此，&lt;strong&gt;我们需要用一致性模型来理解和推理在分布式系统中数据复制需要考虑的问题和基本假设。&lt;/strong&gt;&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;那么什么是一致性模型呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;strong&gt;一致性模型本质上是进程与数据存储的约定：如果进程遵循某些规则，那么进程对数据的读写操作都是可预期的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;下图即为 Jepsen 概括的常见的一致性模型：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/consistency1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;不可用（Unavailable）&lt;/strong&gt;：粉色代表网络分区后完全不可用。当出现网络隔离等问题的时候，为了保证数据的一致性，不提供服务。熟悉 CAP 理论的同学应该清楚，这就是典型的 CP 系统了。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;严格可用 （Sticky Available）&lt;/strong&gt;：黄色代表严格可用。即使一些节点出现问题，在一些还没出现故障的节点，仍然保证可用，但需要保证 client 的操作是一致的。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;完全可用（Highly Available）&lt;/strong&gt;：蓝色代表完全可用。就是网络全挂掉，在没有出现问题的节点上面，仍然可用。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;一致性模型主要可以分为两类：能够保证所有进程对数据的读写顺序都保持一致的一致性模型称为&lt;strong&gt;强一致性模型&lt;/strong&gt;，而不能保证的一致性模型称为&lt;strong&gt;弱一致性模型&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;强一致性模型&#34;&gt;强一致性模型&lt;/h2&gt;
+&lt;p&gt;强一致性包含&lt;strong&gt;线性一致性&lt;/strong&gt;和&lt;strong&gt;顺序一致性&lt;/strong&gt;，其中前者对安全性的约束更强，也是分布式系统中能保证的最好的一致性。&lt;/p&gt;
+&lt;h3 id=&#34;线性一致性linearizable-consistency&#34;&gt;线性一致性（Linearizable Consistency）&lt;/h3&gt;
+&lt;p&gt;线性一致性是最严格的且可实现的单对象单操作一致性模型。&lt;strong&gt;在这种模型下，写入的值在调用和完成之间的某个时间点可以被其他节点读取出来。且所有节点读到数据都是原子的，即不会读到数据转换的过程和中间未完成的状态。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;要想达到线性一致，需要满足以下条件：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任何一次读都能读取到某个数据最近的一次写的数据。&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;所有进程看到的操作顺序都跟全局时钟下的顺序一致。&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;所有进程都按照全局时钟的时间戳来区分事件的先后，那么必然所有进程看到的数据读写操作顺序一定是一样的&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;我们发现，这个要求十分苛刻，难以在现实中实现。因为各种物理限制使分布式数据不可能一瞬间去同步这种变化。（通信是必然有延迟的，一旦有延迟，时钟的同步就没法做到一致。）&lt;/p&gt;
+&lt;h3 id=&#34;顺序一致性sequential-consistency&#34;&gt;顺序一致性（Sequential Consistency）&lt;/h3&gt;
+&lt;p&gt;由于线性一致的代价高昂，因此人们想到，既然全局时钟导致严格一致性很难实现，那么我们能否放弃了全局时钟的约束，改为分布式逻辑时钟实现呢？&lt;/p&gt;
+&lt;p&gt;Lamport 在 1979 年就提出的顺序一致性正是基于上述原理。&lt;strong&gt;顺序一致性中所有的进程以相同的顺序看到所有的修改。读操作未必能及时得到此前其他进程对同一数据的写更新，但是每个进程读到的该数据的不同值的顺序是一致的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;其需要满足以下条件：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任何一次读写操作都是按照某种特定的顺序。&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;所有进程看到的读写操作顺序都保持一致。&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;我们发现他们都能够保证所有进程对数据的读写顺序保持一致。那么它与线性一致性有什么不同呢？&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;尽管顺序一致性通过逻辑时钟保证所有进程保持一致的读写操作顺序，但这些读写操作的顺序跟实际上发生的顺序并不一定一致。而线性一致性是严格保证跟实际发生的顺序一致的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;我们以下图为例：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/consistency2.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;图 a 满足了顺序一致性，但未满足线性一致性&lt;/strong&gt;。从全局时钟来看，p2 的 &lt;code&gt;read(x,0)&lt;/code&gt; 在 p1 的 &lt;code&gt;write(x,4)&lt;/code&gt; 之后，但是 p1 却读出了旧的数据。因此不满足线性一致性。但是两个进程各自的读写顺序却是合理的，进程之间也没有产生冲突，因此从这两个进程的视角来看，执行流程是这样的 &lt;code&gt;write(y,2)&lt;/code&gt;、&lt;code&gt;read(x,0)&lt;/code&gt;、 &lt;code&gt;write(x,4)&lt;/code&gt;、&lt;code&gt;read(y,2)&lt;/code&gt;。此时满足顺序一致性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图 b 满足线性一致性&lt;/strong&gt;。因为每个读操作都读到了该变量的最新写的结果，同时两个进程看到的操作顺序与全局时钟的顺序一样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图 c 不满足顺序一致性&lt;/strong&gt;。因为从进程 P1 的角度看，它对变量 y 的读操作返回了结果 0。那么就是说，P1 进程的对变量 y 的读操作在 P2 进程对变量 y 的写操作之前，x 变量也如此。此时两个进程存在冲突，因此这个顺序不满足顺序一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;弱一致性模型&#34;&gt;弱一致性模型&lt;/h2&gt;
+&lt;p&gt;弱一致性是指系统在数据成功写入之后，不承诺立即可以读到最新写入的值，也不会具体承诺多久读到，但是会尽可能保证在某个时间级别之后，可以让数据达到一致性状态。其中包含&lt;strong&gt;因果一致性&lt;/strong&gt;和&lt;strong&gt;最终一致性&lt;/strong&gt;、&lt;strong&gt;客户端一致性&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;因果一致性causal-consistency&#34;&gt;因果一致性（Causal Consistency）&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;什么是因果关系呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;如果事件 B 是由事件 A 引起的或者受事件 A 的影响，那么这两个事件就具有因果关系。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;因果一致性是一种弱化的顺序一致性模型，它仅要求有因果关系的操作顺序是一致的，没有因果关系的操作顺序是随机的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;因果一致性的条件包括：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;所有进程必须以相同的顺序看到具有因果关系的读写操作。&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不同进程可以以不同的顺序看到并发的读写操作。&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;blockquote&gt;
+&lt;p&gt;我们如何确定是否具有因果关系呢？如何传播这些因果关系呢?&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;strong&gt;即通过逻辑时钟来保证两个写入是有因果关系的。&lt;strong&gt;而实现这个逻辑时钟的一种主要方式就是&lt;/strong&gt;向量时钟&lt;/strong&gt;。向量时钟算法利用了向量这种数据结构，将全局各个进程的逻辑时间戳广播给所有进程，每个进程发送事件时都会将当前进程已知的所有进程时间写入到一个向量中，而后进行传播。&lt;/p&gt;
+&lt;h3 id=&#34;最终一致性eventual-consistency&#34;&gt;最终一致性（Eventual Consistency）&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;最终一致性是更加弱化的一致性模型，它被表述为副本之间的数据复制完全是异步的，如果数据停止修改，那么副本之间最终会完全一致。而这个最终可能是数毫秒到数天，乃至数月，甚至是“永远”。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;对于最终一致性，我们主要关注以下两点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;最终是多久&lt;/strong&gt;。通常来说，实际运行的系统需要能够保证提供一个有下限的时间范围。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;并发冲突如何解决&lt;/strong&gt;。一段时间内可能数据可能多次更新，到底以哪个数据为准？通常采用最后写入成功或向量时钟等策略。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;因为在数据写入与读取完全不考虑别的约束条件，因此最终一致性具有最高的并发度，经常被应用于对性能要求高的场景中。&lt;/p&gt;
+&lt;h3 id=&#34;客户端一致性client-centric-consistency&#34;&gt;客户端一致性（Client-centric Consistency）&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;在最终一致性的模型中，如果客户端在数据不同步的时间窗口内访问不同的副本的同一个数据，会出现读取同一个数据却得到不同的值的情况。为了解决这个问题，有人提出了以客户端为中心的一致性模型。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;strong&gt;客户端一致性是站在一个客户端的角度来观察系统的一致性。其保证该客户端对数据存储的访问的一致性，但是它不为不同客户端的并发访问提供任何一致性保证。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;分布式数据库中，一个节点很可能同时连接到多个副本中，复制的延迟性会造成它从不同副本读取数据是不一致的。而客户端一致性就是为了定义并解决这个问题而存在的，这其中包含了&lt;strong&gt;写跟随读&lt;/strong&gt;、&lt;strong&gt;管道随机访问存储&lt;/strong&gt;两大类别。&lt;/p&gt;
+&lt;h4 id=&#34;写跟随读writes-follow-reads-consistency&#34;&gt;写跟随读（Writes-Follow-Reads Consistency）&lt;/h4&gt;
+&lt;p&gt;写跟随读的另一个名字是回话因果（session causal）。可以看到它与因果一致的区别是，&lt;strong&gt;它只针对一个客户端。&lt;/strong&gt; &lt;strong&gt;即对于一个客户端，如果一次读取到了写入的值 V1，那么这次读取之后写入了 V2。从其他节点看，写入顺序一定是 V1、V2。&lt;/strong&gt;&lt;/p&gt;
+&lt;h4 id=&#34;管道随机访问存储prampipeline-random-access-memory&#34;&gt;管道随机访问存储（PRAM，Pipeline Random Access Memory）&lt;/h4&gt;
+&lt;p&gt;管道随机访问存储的名字来源于共享内存访问模型。&lt;strong&gt;其对于单个进程的写操作都被观察到是顺序的，但不同的进程写会观察到不同的顺序。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;其可拆解为以下三种一致性：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;单调读一致性（Monotonic-read Consistency）&lt;/strong&gt;：它强调一个值被读取出来，那么后续任何读取都会读到该值，或该值之后的值，而不会读取到旧值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;单调写一致性（Monotonic-write Consistency）&lt;/strong&gt;：如果从一个节点写入两个值，它们的执行顺序是 V1、V2。那么从任何节点观察它们的执行顺序都应该是 V1、V2。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;读你所写一致性（Read-your-writes Consistency）&lt;/strong&gt;：一个节点写入数据后，在该节点或其他节点上是一定能读取到这个数据的。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;能够同时满足以上三种一致性的即为满足 PRAM。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;PRAM、因果一致、线性一致到底有什么区别呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/consistency3.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;图 a 满足了顺序一致性与因果一致性&lt;/strong&gt;。图上的进程都满足相同的顺序与因果关系，因此满足顺序一致性与因果一致性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图 b 满足了因果一致性，但未满足顺序一致性&lt;/strong&gt;。对于进程 p3 和 p4 其看到的 p1 和 p2 的执行顺序不一致，因此不满足顺序一致性。但是由于 p1 与 p2 的写入没有任何因果关系，所以此时满足因果一致性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图 c 满足了 PRAM，但未满足因果一致性&lt;/strong&gt;。由于 p2 的 r(x,4) 依赖于 p1 的 w(x,4)，此时两者存在因果关系。然而对于进程 p3 和 p4 而言，其看到的 p1 和  p2 执行顺序不同，因此此时并不满足因果一致性。但此时我们再来分析它们的观察顺序，此时 p4 观察的到顺序是 &lt;code&gt;w(x.7)&lt;/code&gt;、&lt;code&gt;w(x,2)&lt;/code&gt;、&lt;code&gt;w(x,4)&lt;/code&gt;。而 p3 观察到的是 &lt;code&gt;w(x,2)&lt;/code&gt;、&lt;code&gt;w(x,4)&lt;/code&gt;、&lt;code&gt;w(x,7)&lt;/code&gt;。尽管此时它们对不同进程写操作观察的顺序不同，但是对于同一个进程的写操作观察顺序是一致的，因此其满足 PRAM 一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;下图即为上面讨论的几种一致性模型的关系：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/consistency4.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;事务隔离性&#34;&gt;事务隔离性&lt;/h2&gt;
+&lt;p&gt;在一开始那张一致性模型图中，其实是有两个分支的，一个对应的就是数据库里面的隔离性（Isolation），另一个其实对应的是分布式系统的一致性（Consistency）。&lt;/p&gt;
+&lt;p&gt;事务隔离是描述并行事务之间的行为，而一致性是描述非并行事务之间的行为。其实广义的事务隔离应该是经典隔离理论与一致性模型的一种混合。&lt;/p&gt;
+&lt;h3 id=&#34;潜在问题&#34;&gt;潜在问题&lt;/h3&gt;
+&lt;p&gt;如下即数据库实现中遇到的各种各样的 isolation 问题。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;P0 Dirty Write（脏写）&lt;/strong&gt;：一个事务修改了另一个尚未提交的事务已经修改的值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P1 Dirty Read（脏读）&lt;/strong&gt;：一个事务读取到了另一个执行到一半的事务中修改的值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P2 Non-Repeatable Read（不可重复读）&lt;/strong&gt;：一个事务读取过程中读到了另一个事务更新后的结果。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P3 Phantom（幻读）&lt;/strong&gt;：某一事务 A 先挑选出了符合一定条件的数据，之后另一个事务 B 修改了符合该条件的数据，此时 A 再进行的操作都是基于旧的数据，从而产生不一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P4 Lost Update（丢失更新）&lt;/strong&gt;：更新被另一个事务覆盖。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P4C Cursor Lost Update（游标丢失更新）&lt;/strong&gt;：与 Lost Update 类似，只是发生于 cursor 的操作过程之中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;A5A Read Skew（读倾斜）&lt;/strong&gt;：由于事务的交叉导致读取到了不一致的数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;A5B Write Skew（写倾斜）&lt;/strong&gt;：两个事务同时读取到了一致的数据，然后分别进行了满足条件的修改，但最终结果破坏了一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;隔离级别&#34;&gt;隔离级别&lt;/h3&gt;
+&lt;p&gt;对于分布式数据库来说，原始的隔离级别并没有舍弃，而是引入了一致性模型后，扩宽数据库隔离级别的内涵。其中共有如下数种隔离级别：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Read Uncommitted（读未提交）&lt;/strong&gt;：事务执行过程中能够读到未提交的修改。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Read Committed（读已提交）&lt;/strong&gt;：事务执行过程中能够读到已提交的修改。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Monotonic Atomic View（单调原子视图）&lt;/strong&gt;：在 Read Committed 的基础上加上了原子性的约束，观测到其他事务的修改时会观察到完整的修改。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cursor Stability（稳定游标）&lt;/strong&gt;：使用 cursor 读取某个数据时，这个不能被其他事务修改直至 cursor 释放或事务结束。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Snapshot Isolation（快照隔离级别）&lt;/strong&gt;：即使其他事务修改了数据，重复读取都会读到一样的数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Repeatable Read（可重复读）&lt;/strong&gt;：每个事务在独立、一致的 snapshot 上进行操作，直至提交后其他事务才可见。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Serializable（串行化）&lt;/strong&gt;：事务按照一定的次序顺序执行。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;对应的可能发生的问题如下&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P0&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P1&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P4C&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P4&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P2&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P3&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;A5A&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;A5B&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Read Uncommitted&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Read Committed&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Cursor Stability&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;SP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;SP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;SP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Repeatable Read&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Snapshot&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;SP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Serializable&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;P（Possible）&lt;/strong&gt;：会发生。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SP（Sometimes Possible）&lt;/strong&gt;：有时候可能发生。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;NP（Not Possible）&lt;/strong&gt;：不可能发生。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性协议：Gossip</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEgossip/</link>
+        <pubDate>Tue, 24 May 2022 16:30:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEgossip/</guid>
+        <description>&lt;h1 id=&#34;一致性协议gossip&#34;&gt;一致性协议：Gossip&lt;/h1&gt;
+&lt;p&gt;Gossip协议（Gossip Protocol）又称Epidemic协议（Epidemic Protocol），是基于谣言传播方式的节点或者进程之间信息交换的协议，在分布式系统中被广泛使用，比如我们可以使用Gossip协议来确保网络中所有节点的数据一致。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;说到社交网络，就不得不提著名的&lt;strong&gt;六度分隔理论&lt;/strong&gt;。1967年，哈佛大学的心理学教授Stanley Milgram想要描绘一个连结人与社区的人际连系网。做过一次连锁信实验，结果发现了“六度分隔”现象。简单地说：“你和任何一个陌生人之间所间隔的人不会超过六个，也就是说，最多通过六个人你就能够认识任何一个陌生人。&lt;/p&gt;
+&lt;p&gt;数学解释该理论：若每个人平均认识260人，其六度就是260↑6 =1,188,137,600,000。消除一些节点重复，那也几乎&lt;strong&gt;覆盖&lt;/strong&gt;了整个地球人口若干多多倍，这也是Gossip协议的雏形。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Gossip基于&lt;strong&gt;六度分隔理论&lt;/strong&gt;，每个节点像谣言传播一样，随机的将信息传播到其他节点上，不断重复这个过程，直到将信息传播到整个网络中，并在一定时间内，使得系统内的所有节点数据一致。&lt;/p&gt;
+&lt;p&gt;Gossip主要有以下三个功能：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;直接邮寄（Direct Mail）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反熵（Anti-entropy）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;谣言传播（Rumor mongering）&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;直接邮寄&#34;&gt;直接邮寄&lt;/h2&gt;
+&lt;p&gt;直接发送需要更新的数据到其他节点，当数据发送失败时，将数据缓存到队列中，然后进行重传。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上面可以看出，这种方法实现简单切数据同步及时，但是可能会因为重试的缓存队列满了而丢数据，从而无法实现最终一致性。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;那么我们如何实现最终一致性呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;这时候就需要借助到了Gossip协议中的&lt;strong&gt;反熵&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;反熵&#34;&gt;反熵&lt;/h2&gt;
+&lt;p&gt;熵指混乱程度，反熵就是消除不同节点间数据的差异，提升节点间数据的相似度。&lt;/p&gt;
+&lt;p&gt;反熵的过程如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;集群中的节点每隔一段时间就随机选取某个其他节点&lt;/li&gt;
+&lt;li&gt;互相交换数据来消除两个节点之间的差异&lt;/li&gt;
+&lt;li&gt;实现数据的最终一致性&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;反熵主要通过三种方式进行：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;推（Push）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;节点A将数据（key,value,version）推送给节点B，节点B将A中比自己新的数据更新过来。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed3.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;拉（Pull）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;节点A仅将数据（key,version）推送给 B，B将本地比A新的数据（key, value, version）推送给A，A更新本地数据。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed4.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;推拉（Push/Pull）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;同时执行上述两个步骤，同时修复两个节点的数据。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed5.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;blockquote&gt;
+&lt;p&gt;从上面的三种反熵方式可以看出，反熵是需要节点两两交换和比对自己所有的数据，这样来看的话，通讯成本是很高的，而在实际场景下这种频繁的交换会大大影响性能。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;那有没有办法来减少反熵的次数呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;我们可以通过引入如校验和、奇偶校验、CRC校验和格雷码校验等机制来降低需要对比的数据量和通讯信息。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;执行反熵时，相关节点都是已知的，且节点数量不能太多。如果节点动态变化或节点数过多，反熵就不合适。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;那在这种场景下，有没有办法来解决动态、多节点的最终一致性呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;答案是有的，那这时候就要用到Gossip协议中的&lt;strong&gt;谣言传播&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;谣言传播&#34;&gt;谣言传播&lt;/h2&gt;
+&lt;p&gt;谣言传播，就像是一个谣言的产生流程一样，每个人都会向自己身边的人传播，知道谣言散布各地。&lt;/p&gt;
+&lt;p&gt;在分布式系统中，当一个节点有了新数据后，这个节点变成活跃状态，并周期性地联系其他节点向其发送新数据，直到所有节点都存储了该数据，可以理解为之前讲的反熵中的推的方式。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed6.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上面可以看出，谣言传播仍然具有以下缺点：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;时间随机&lt;/strong&gt;：所有节点达到一致性是一个随机性的概率。可以使用&lt;strong&gt;闭环反熵&lt;/strong&gt;修复。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;消息冗余&lt;/strong&gt;：同一节点会多次接收同一消息，增加了消息处理的压力，每一次通信都会对网络带宽、CPU等资源造成负载，进而影响达到最终一致性的时间。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;拜占庭问题&lt;/strong&gt;：如果有恶意节点出现，那么其他节点也会出问题。所以需要先修复故障节点。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;闭环反熵&#34;&gt;闭环反熵&lt;/h2&gt;
+&lt;p&gt;对于谣言传播，所有节点达到一致性是一个随机性的概率，其达到最终一致性的时间并不可控，这并不满足我们的期望，我们更希望能在一个确定的时间范围内实现数据副本的最终一致性，因此Gossip协议又引入了&lt;strong&gt;闭环反熵&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;它按&lt;strong&gt;照一定顺序来修复节点的数据差异，先随机选择一个节点，顺着这个节点往下循环修复&lt;/strong&gt;。每个节点都会对比自身与下一个节点，将本节点存在而下个节点不存在的缺失数据发送给下一个节点来进行修复，如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed7.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;与上面的反熵不同，闭环反熵不再是一个节点不断随机选择另一个节点，来修复副本上的熵，而是设计了一个闭环的流程，一次修复所有节点的副本数据不一致。通过这种方法我们就能够将最终一致性的时间范围明确下来，使其可控。&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;上面说了那么多缺点，下面也来讲讲Gossip的几个优点&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;拓展性&lt;/strong&gt;：网络可以允许节点的动态增加和减少，新增加的节点的状态最终会与其他节点一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;容错&lt;/strong&gt;：网络中任何节点的宕机和重启都不会影响 Gossip 消息的传播，Gossip 协议具有天然的分布式系统容错特性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;去中心化&lt;/strong&gt;：Gossip协议不要求任何中心节点，所有节点都可以是对等的，任何一个节点无需知道整个网络状况，只要网络是连通的，任意一个节点就可以把消息散播到全网。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实现简单&lt;/strong&gt;：Gossip 协议中的消息会以一传十、十传百一样的指数级速度在网络中快速传播，因此系统状态的不一致可以在很快的时间内收敛到一致。消息传播速度达到了 logN。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;高性能&lt;/strong&gt;：Gossip 协议的过程极其简单，实现起来几乎没有太多复杂性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Gossip的三种功能其实都是为了实现反熵，第一种用消息队列，第二种用推拉消息，第三种用散播谣言，下面给出三个功能的使用场景&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;功能&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;应用场景&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;直接邮寄&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;实际场景，&lt;code&gt;直接邮寄&lt;/code&gt;一定要实现，性能损耗最低。通过发送更新数据或缓存重传就能修复数据的不一致。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;反熵&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;在存储组件中，节点都是已知的，采用&lt;code&gt;反熵&lt;/code&gt;修复数据副本的不一致。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;谣言传播&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;集群节点变化时，或节点较多时，采用&lt;code&gt;谣言传播&lt;/code&gt;方式，来同步更新多节点的数据，来实现最终一致性。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性协议：ZAB</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/</link>
+        <pubDate>Tue, 24 May 2022 16:20:23 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/</guid>
+        <description>&lt;h1 id=&#34;一致性协议zab&#34;&gt;一致性协议：ZAB&lt;/h1&gt;
 &lt;p&gt;&lt;strong&gt;ZAB（ZooKeeper Atomic Broadcast 原子广播）&lt;/strong&gt; 协议是为分布式协调服务ZooKeeper专门设计的一种支持崩溃恢复的原子广播协议。 在ZooKeeper中，主要依赖ZAB协议来实现分布式数据一致性，基于该协议，ZooKeeper实现了一种主备模式的系统架构来保持集群中各个副本之间的数据一致性。&lt;/p&gt;
 &lt;p&gt;ZAB协议包括了两种基本的模式，分别是&lt;strong&gt;崩溃恢复&lt;/strong&gt;和&lt;strong&gt;消息广播&lt;/strong&gt;。&lt;/p&gt;
 &lt;h2 id=&#34;消息广播&#34;&gt;消息广播&lt;/h2&gt;
@@ -71,6 +605,1331 @@
 &lt;!-- raw HTML omitted --&gt;
 &lt;p&gt;针对这种情况，我们需要让server2在故障恢复后能够丢弃这些只在它这个节点上提出的事务，来确保数据一致。&lt;/p&gt;
 &lt;p&gt;为了能够满足上述的两个要求，所以ZooKeeper让Leader选举算法保证新选举出来的Leader服务器拥有集群中所有机器&lt;strong&gt;最高的事务编号（ZXID最大）&lt;/strong&gt;，那么这就肯定能够保证新选举出来的Leader一定具有所有已经提交的提案，此时新的Leader就会将事务日志中尚未提交的消息同步到各个服务器中。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性协议：Bully</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEbully/</link>
+        <pubDate>Tue, 24 May 2022 16:20:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEbully/</guid>
+        <description>&lt;h1 id=&#34;一致性协议bully&#34;&gt;一致性协议：Bully&lt;/h1&gt;
+&lt;p&gt;Bully 是最常用的一种领导选举算法，&lt;strong&gt;它使用节点 ID 的大小来选举新领导者&lt;/strong&gt;。在所有活跃的节点中，选取节点 ID 最大或者最小的节点为主节点。&lt;/p&gt;
+&lt;h2 id=&#34;核心算法&#34;&gt;核心算法&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;每个节点都会获得分配给它的唯一 ID。在选举期间，ID 最大的节点成为领导者。因为 ID 最大的节点“逼迫”其他节点接受它成为领导者，它也被称为君主制领导人选举：类似于各国王室中的领导人继承顺位，由顺位最高的皇室成员来继承皇位。如果某个节点意识到系统中没有领导者，则开始选举，或者先前的领导者已经停止响应请求。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;算法核心如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;集群中每个活着的节点查找比自己 ID 大的节点，如果不存在则向其他节点发送 Victory 消息，表明自己为领导节点。&lt;/li&gt;
+&lt;li&gt;如果存在比自己 ID 大的节点，则向这些节点发送 Election 消息，并等待响应。&lt;/li&gt;
+&lt;li&gt;如果在给定的时间内，没有收到这些节点回复的消息，则自己成为领导节点，并向比自己 ID 小的节点发送 Victory 消息。&lt;/li&gt;
+&lt;li&gt;节点收到比自己 ID 小的节点发送的 Election 消息，则回复 Alive 消息。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed33.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;上图举例说明了 Bully 领导者选举算法，其中：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;节点3 注意到先前的领导者 6 已经崩溃，并且通过向比自己 ID 更大的节点发送选举消息来开始新的选举。&lt;/li&gt;
+&lt;li&gt;4 和 5 以 Alive 响应，因为它们的 ID 比 3 更大。&lt;/li&gt;
+&lt;li&gt;3 通知在这一轮中作出响应的最大 ID 节点是5。&lt;/li&gt;
+&lt;li&gt;5 被选为新领导人，它广播选举信息，通知排名较低的节点选举结果。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这种算法的一个明显问题是：它违反了“安全性”原则（即一次最多只能选出一位领导人）。&lt;strong&gt;在存在网络分区的情况下，在节点被分成两个或多个独立工作的子集的情况下，每个子集都会选举其领导者。（脑裂）&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;该算法的另一个问题是：**它对 ID较大的节点有强烈的偏好，但是如果它们不稳定，会严重威胁选举的稳定性，并可能导致不稳定节点永久性地连任。**即不稳定的高排名节点提出自己作为领导者，不久之后失败，但是在新一轮选举中又赢得选举，然后再次失败，选举过程就会如此重复而不能结束。这种情况，&lt;strong&gt;可以通过监控节点的存活性指标，并在选举期间根据这些指标来评价节点的活性，从而解决该问题。&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;算法改进&#34;&gt;算法改进&lt;/h2&gt;
+&lt;p&gt;Bully 算法虽然经典，但由于其相对简单，在实际应用中往往不能得到良好的效果。因此在分布式数据库中，我们会看到如下所述的多种演进版本来解决真实环境中的一些问题，但需要注意的是，其核心依然是经典的 Bully 算法。&lt;/p&gt;
+&lt;h3 id=&#34;故障转移节点列表&#34;&gt;故障转移节点列表&lt;/h3&gt;
+&lt;p&gt;**我们可以使用多个备选节点作为在发生领导节点崩溃后的故障转移目标，从而缩短重选时间。**每个当选的领导者都提供一个故障转移节点列表。当集群中的节点检测到领导者异常时，它通过向该领导节点提供的候选列表中排名最高的候选人发送信息，开始新一轮选举。如果其中一位候选人当选，它就会成为新的领导人，而无须经历完整的选举。&lt;/p&gt;
+&lt;p&gt;如果已经检测到领导者故障的进程本身是列表中排名最高的进程，它可以立即通知其他节点自己就是新的领导者。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed34.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;上图显示了采用这种优化方式的过程，其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;6 是具有指定候选列表 {5，4} 的领导者，它崩溃退出，3 注意到该故障，并与列表中具有最高等级的备选节点5 联系；&lt;/li&gt;
+&lt;li&gt;5 响应 3，表示它是 Alive 的，从而防止 3 与备选列表中的其他节点联系；&lt;/li&gt;
+&lt;li&gt;5 通知其他节点它是新的领导者。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果备选列表中，第一个节点是活跃的，我们在选举期间需要的步骤就会更少。&lt;/p&gt;
+&lt;h3 id=&#34;节点分角色&#34;&gt;节点分角色&lt;/h3&gt;
+&lt;p&gt;另一种算法试图通过将节点分成&lt;strong&gt;候选&lt;/strong&gt;和&lt;strong&gt;普通&lt;/strong&gt;两个子集来降低消息数量，其中只有一个候选节点可以最终成为领导者。普通节点联系候选节点、从它们之中选择优先级最高的节点作为领导者，然后将选举结果通知其余节点。&lt;/p&gt;
+&lt;p&gt;为了解决并发选举的问题，该算法引入了一个&lt;strong&gt;随机的启动延迟&lt;/strong&gt;，从而使不同节点产生了不同的启动时间，最终导致其中一个节点在其他节点之前发起了选举。该延迟时间通常大于消息在节点间往返时间。具有较高优先级的节点具有较低的延迟，较低优先级节点延迟往往很大。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed35.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;上图显示了选举过程的步骤，其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;节点 4 来自普通的集合，它发现了崩溃的领导者 6，于是通过联系候选集合中的所有剩余节点来开始新一轮选举；&lt;/li&gt;
+&lt;li&gt;候选节点响应并告知 4 它们仍然活着；&lt;/li&gt;
+&lt;li&gt;4 通知所有节点新的领导者是 2。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;该算法减小了领导选举中参与节点的数量，从而加快了在大型集群中该算法收敛的速度。&lt;/p&gt;
+&lt;h3 id=&#34;邀请算法&#34;&gt;邀请算法&lt;/h3&gt;
+&lt;p&gt;**邀请算法允许节点“邀请”其他进程加入它们的组，而不是进行组间优先级排序。**该算法允许定义多个领导者，从而形成每个组都有其自己的领导者的局面。每个节点开始时都是一个新组的领导者，其中唯一的成员就是该节点本身。&lt;/p&gt;
+&lt;p&gt;组领导者联系不属于它们组内的其他节点，并邀请它们加入该组。如果受邀节点本身是领导者，则合并两个组；否则，受邀节点回复它所在组的组长 ID，允许两个组长直接取得联系并合并组，这样大大减少了合并的操作步骤。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed40.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;上图显示了邀请算法的执行步骤，其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;四个节点形成四个独立组，每个节点都是所在组的领导，1 邀请 2 加入其组，3 邀请 4 加入其组；&lt;/li&gt;
+&lt;li&gt;2 加入节点 1的组，并且 4 加入节点3的组，1 为第一组组长，联系人另一组组长 3，剩余组成员（在本例中为 4个）获知了新的组长 1；&lt;/li&gt;
+&lt;li&gt;合并两个组，并且 1 成为扩展组的领导者。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;由于组被合并，不管是发起合并的组长成为新的领导，还是另一个组长成为新的领导。为了将合并组所需的消息数量保持在最小，一般选择具有较大 ID 的组长的领导者成为新组的领导者，这样，只有来自较小 ID 组的节点需要更新领导者。&lt;/p&gt;
+&lt;p&gt;与所讨论的其他算法类似，该算法采用“分而治之”的方法来收敛领导选举。邀请算法允许创建节点组并合并它们，而不必从头开始触发新的选举，这样就减少了完成选举所需的消息数量。&lt;/p&gt;
+&lt;h3 id=&#34;环形算法&#34;&gt;环形算法&lt;/h3&gt;
+&lt;p&gt;**在环形算法中，系统中的所有节点形成环，并且每个节点都知道该环形拓扑结构，了解其前后邻居。**当节点检测到领导者失败时，它开始新的选举，选举消息在整个环中转发，方式为：&lt;strong&gt;每个节点联系它的后继节点（环中离它最近的下一节点）&lt;/strong&gt;。如果该节点不可用，则跳过该节点，并尝试联系环中其后的节点，直到最终它们中的一个有回应。&lt;/p&gt;
+&lt;p&gt;节点联系它们的兄弟节点，收集所有活跃的节点从而形成可用的节点集。在将该节点集传递到下一个节点之前，该节点将自己添加到集合中。&lt;/p&gt;
+&lt;p&gt;该算法通过完全遍历该环来进行。当消息返回到开始选举的节点时，从活跃集合中选择排名最高的节点作为领导者。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed41.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;如上图所示，你可以看到这样一个遍历的例子：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;先前的领导 6 失败了，环中每个节点都从自己的角度保存了一份当前环的拓扑结构；&lt;/li&gt;
+&lt;li&gt;以 3 为例，说明查找新领导的流程，3 通过开始遍历来发起选举轮次，在每一步中，节点都按照既定路线进行遍历操作，5 不能到 6，所以跳过，直接到 1；&lt;/li&gt;
+&lt;li&gt;由于 5 是具有最高等级的节点，3 发起另一轮消息，分发关于新领导者的信息。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;该算法的一个优化方法是每个节点&lt;strong&gt;只发布它认为排名最高的节点，而不是一组活跃的节点，以节省空间&lt;/strong&gt;：因为 Max 最大值函数是遵循交换率的，也就是知道一个最大值就足够了。当算法返回到已经开始选举的节点时，最后就得到了 ID 最大的节点。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;另外由于环可以被拆分为两个或更多个部分，每个部分就会选举自己的领导者，这种算法也不具备“安全性”。&lt;/strong&gt; 如前所述，要使具有领导的系统正常运行，我们需要知道当前领导的状态。因此，为了系统整体的稳定性，领导者必须保证是一直活跃的，并且能够履行其职责。&lt;/p&gt;
+&lt;h2 id=&#34;脑裂的解决方案&#34;&gt;脑裂的解决方案&lt;/h2&gt;
+&lt;p&gt;在上文讨论的所有算法都容易出现脑裂的问题，即&lt;strong&gt;最终可能会在独立的两个子网中出现两个领导者，而这两个领导并不知道对方的存在。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;为了避免脑裂问题，我们一般需要引入&lt;strong&gt;法定人数&lt;/strong&gt;来选举领导。比如 Elasticsearch 选举集群领导，就使用 Bully 算法结合最小法定人数来解决脑裂问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed38.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;如上图所示，目前有 2 个网络、5 个节点，假定最小法定人数是3。A 目前作为集群的领导，A、B 在一个网络，C、D 和 E 在另外一个网络，两个网络被连接在一起。&lt;/p&gt;
+&lt;p&gt;当这个连接失败后，A、B 还能连接彼此，但与 C、D 和 E 失去了联系。同样， C、D 和 E 也能知道彼此，但无法连接到 A 和B。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed39.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;此时，C、D 和 E 无法连接原有的领导 A。同时它们三个满足最小法定人数3，故开始进行新一轮的选举。假设 C 被选举为新的领导，这三个节点就可以正常进行工作了。&lt;/p&gt;
+&lt;p&gt;而在另外一个网络中，虽然 A 是曾经的领导，但是这个网络内节点数量是 2，小于最小法定人数。故 A 会主动放弃其领导角色，从而导致该网络中的节点被标记为不可用，从而拒绝提供服务。这样就有效地避免了脑裂带来的问题。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性协议：Raft</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEraft/</link>
+        <pubDate>Tue, 24 May 2022 15:59:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEraft/</guid>
+        <description>&lt;h1 id=&#34;一致性协议raft&#34;&gt;一致性协议：Raft&lt;/h1&gt;
+&lt;p&gt;由于Paxos算法相对来说较为复杂且难以理解，因此在后来又出现了一种用于替代Paxos的算法——Raft&lt;/p&gt;
+&lt;p&gt;Raft 算法是一种简单易懂的共识算法，所谓共识，就是多个节点对某个事情达成一致的看法，即使是在部分节点故障、网络延时、网络分割的情况下。它依靠&lt;strong&gt;状态机&lt;/strong&gt;和&lt;strong&gt;主从同步&lt;/strong&gt;的方式，在各个节点之间实现数据的一致性。&lt;/p&gt;
+&lt;p&gt;Raft算法的核心主要为以下两部分，下面将进行具体讲解&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;主节点选举&lt;/strong&gt;（Leader Election）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;数据同步&lt;/strong&gt;（Log Replication）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;状态机&#34;&gt;状态机&lt;/h2&gt;
+&lt;p&gt;在Raft中节点中存在三种状态，状态之间可以相互进行转换&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Leader（主节点）&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Follower（从节点）&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Candidate（竞选节点）&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;同时，每个节点上会存放一个&lt;strong&gt;倒计时器&lt;/strong&gt;（Election Timeout），时间&lt;strong&gt;随机&lt;/strong&gt;在150ms到300ms之间。Leader节点会周期性的向所有Follower发送一个心跳包（Heartbeat），收到心跳包的节点会将其计时器清零后重新计时，如果在倒计时结束前没有收到Leader的心跳包，此时Follower就会变为Candidate，开始进入竞选状态。&lt;/p&gt;
+&lt;p&gt;具体的状态转移如下图&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed19.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;执行流程&#34;&gt;执行流程&lt;/h2&gt;
+&lt;h3 id=&#34;主节点选举&#34;&gt;主节点选举&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;介绍了状态机后，下面就来看看主节点的选举流程&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第一步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，在一开始时，由于没有Leader，所以此时所有节点的身份都是Follower，每一个节点上都有着自己的计数器，当计时器达到了超时时间后，该节点就会转换为Candidate，开始选举过程。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed20.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第二步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，成为Candidate的节点首先会给自己投一张票，然后向集群中的其他所有节点发起投票请求。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed21.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第三步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，收到投票请求并且还未投票的Follower节点会向发起者回复投票反馈，如果收到了超过半数的回复，此时Candidate选举成功，状态转变为Leader。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed22.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第四步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，Leader节点会立刻向其他节点发出通告，告知其他节点它已成功选举成Leader，收到通知的节点会转换为Follower。并且Leader会周期性的发送心跳包给所有Follower来表明它还存活，当Follower接收到心跳包时，就会重置计时器。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed23.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;一旦Leader节点挂掉，它就无法发出心跳包来重置Follower的倒计时器，那么当Follower的超时时间到达后，其就会转换成Candidate节点，再次重复以上过程。&lt;/p&gt;
+&lt;p&gt;上面介绍的是单节点的选举，倘若同时有多个Follower同时倒计时结束后成为Candidate，同时开始选举，并且在选举过程中所获得的票数相同，此时就陷入了僵局，谁都无法成为Leader。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed24.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;在重新选举时，由于每个节点设置的超时时间都是随机的，因此下一次同时出现多个Candidate并获得同样票数导致选举失败的情况的概率则非常低。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed25.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h3 id=&#34;数据同步&#34;&gt;数据同步&lt;/h3&gt;
+&lt;p&gt;Raft中数据同步的方式与之前写过的2PC（二阶段提交协议）有一些相似，也是分为投票和提交两个阶段，具体流程如下。&lt;/p&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第一步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，客户端将修改传入Leader中（此时修改并没有提交，只是写入日志中）。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed26.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第二步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，Leader将修改复制到集群内的所有Follower节点上，如果复制失败，会不断进行重试直至成功。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed27.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第三步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，Follow节点们成功接收到复制的数据后，会反馈结果给Leader节点，如果Leader节点接收到超过半数的Follower反馈，则表明复制成功，于是提交自己的数据，并且通知客户端数据提交成功。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed28.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第四步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，提交成功后，Leader会通知所有的Follower让它们也提交修改，此时所有节点的值达成一致，完成数据同步流程。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed29.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;为了便于理解，可以结合下面的Raft原理动画一同学习。&lt;/p&gt;
+&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;http://thesecretlivesofdata.com/raft/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Raft原理动画&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性协议：Paxos</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEpaxos/</link>
+        <pubDate>Tue, 24 May 2022 15:58:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEpaxos/</guid>
+        <description>&lt;h1 id=&#34;一致性协议paxos&#34;&gt;一致性协议：Paxos&lt;/h1&gt;
+&lt;h2 id=&#34;拜占庭将军问题&#34;&gt;拜占庭将军问题&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;拜占庭位于如今的土耳其的伊斯坦布尔，是东罗马帝国的首都。由于当时拜占庭罗马帝国国土辽阔，为了达到防御目的，每个军队都分隔很远，将军与将军之间只能靠信差传消息。在战争的时候，拜占庭军队内所有将军和副官必须达成一致的共识，决定是否有赢的机会才去攻打敌人的阵营。但是，在军队内有可能存有叛徒和敌军的间谍，叛徒可以任意行动以达到以下目标：欺骗某些将军采取进攻行动；促成一个不是所有将军都同意的决定，如当将军们不希望进攻时促成进攻行动；或者迷惑某些将军，使他们无法做出决定。如果叛徒达到了这些目的之一，则任何攻击行动的结果都是注定要失败的，只有完全达成一致的努力才能获得胜利。&lt;/p&gt;
+&lt;p&gt;这时候，在已知有成员谋反的情况下，其余忠诚的将军在不受叛徒的影响下如何达成一致的协议，拜占庭问题就此形成 。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;拜占庭将军问题的核心在于&lt;strong&gt;在缺少可信任的中央节点和可信任的通道的情况下，分布在不同地方的各个节点应如何达成共识&lt;/strong&gt;。我们可以将这个问题延伸到分布式计算领域中。&lt;/p&gt;
+&lt;p&gt;在分布式计算领域中，&lt;strong&gt;试图在异步系统和不可靠的通道上达到一致性状态是不可能的&lt;/strong&gt;，因此在对一致性的研究过程中，都往往&lt;strong&gt;假设信道是可靠的&lt;/strong&gt;，而事实上，大多数系统都是部署在同一个局域网中，因此消息被篡改的情况非常罕见；另一方面，由于机器硬件和网络原因导致的消息不完整问题，也仅仅只需要一套简单的校验算法即可避免。&lt;/p&gt;
+&lt;p&gt;那么当我们假设&lt;strong&gt;拜占庭问题不存在（所有消息都是完整的，没有被篡改）&lt;/strong&gt;，那么这种情况下需要什么算法来保证一致性呢？拜占庭将军问题的提出者Lamport提出了一种非拜占庭将军问题的一致性解决方案——&lt;strong&gt;Paxos算法&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;paxos&#34;&gt;Paxos&lt;/h2&gt;
+&lt;h3 id=&#34;问题描述&#34;&gt;问题描述&lt;/h3&gt;
+&lt;p&gt;与拜占庭将军问题一样，Lamport同样使用故事的方式来提出Paxos问题&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;希腊岛屿Paxon上的议员在议会大厅中表决通过法律，并通过服务员传递纸条的方式交流信息，每个议员会将通过的法律记录在自己的账目上。问题在于执法者和服务员都不可靠，他们随时会因为各种事情离开议会大厅，并随时可能有新的议员进入议会大厅进行法律表决，使用何种方式能够使得这个表决过程正常进行，且通过的法律不发生矛盾。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;不难看出故事中的议会大厅就是分布式系统，议员对应节点或进程，服务员传递纸条的过程就是消息传递的过程，法律即是我们需要保证一致性的值。议员和服务员的进出对应着节点/网络的失效和加入，议员的账目对应节点中的持久化存储设备。上面表决过程的正常进行可以表述为进展需求：当大部分议员在议会大厅呆了足够长时间，且期间没有议员进入或者退出，那么提出的法案应该被通过并被记录在每个议员的账目上。&lt;/p&gt;
+&lt;p&gt;Paxos算法需要解决的问题就是如何在上述分布式系统中，快速且正确地在集群内部对&lt;strong&gt;某个数据的值&lt;/strong&gt;达成&lt;strong&gt;一致&lt;/strong&gt;，并且保证不论发生以上任何异常，都不会破坏整个系统的一致性。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed16.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;为了能够使得表决过程正常进行，且通过的法律不发生矛盾，那么我们需要保证以下几点&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;在这些被提出的提案中，最后只能有一个被选定&lt;/li&gt;
+&lt;li&gt;如果没有提案被提出，那么就不会有被选定的提案&lt;/li&gt;
+&lt;li&gt;当一个提案被选定后，节点们应该可以获取被选定的提案信息&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在Paxos算法中，主要有以下三种角色，并且一个节点可能同时担任几种角色&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;提议者（Proposer）&lt;/strong&gt;：负责提出提议；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;接受者（Acceptor）&lt;/strong&gt;：对每个提议进行投票；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;告知者（Learner）&lt;/strong&gt;：被告知投票的结果，不参与投票过程。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed17.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;同时，假设不同参与者之间通过收发消息来进行通信，那么我们需要具备以下条件&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;每个参与者可能会因为出错而导致停止、重启等情况，&lt;/li&gt;
+&lt;li&gt;虽然消息在传输过程中可能会出现不可预知的延迟、重复、丢失等情况，但是消息不会被损坏或篡改（即不存在拜占庭问题）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;执行过程&#34;&gt;执行过程&lt;/h3&gt;
+&lt;p&gt;首先我们规定一个提议包含两个字段：[n, v]，其中 n 为序号（具有唯一性），v 为提议值。&lt;/p&gt;
+&lt;p&gt;Paxos执行过程主要分为两个阶段，与之前讲过的2PC（二阶段提交协议）类似。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Prepare阶段&lt;/li&gt;
+&lt;li&gt;Accept阶段&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如下图&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed18.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h4 id=&#34;prepare阶段&#34;&gt;Prepare阶段&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;首先，每个Proposer都会向所有的Acceptor发送一个Prepare请求。&lt;/li&gt;
+&lt;li&gt;当Acceptor接收到一个Prepare请求，提议内容为[n1,v1]，由于之前还未接受过Prepare请求，那么它会返回一个[no previous]的Prepare响应，并且设置当前接受的提议为[n1,v1]，同时保证以后不会再接收序号小于n1的提议。&lt;/li&gt;
+&lt;li&gt;如果Acceptor再次收到一个Prepare请求，提议内容为[n2,v2]，此时会有两种情况。
+&lt;ul&gt;
+&lt;li&gt;如果n2 &amp;lt; n1，此时Acceptor就会直接抛弃该请求&lt;/li&gt;
+&lt;li&gt;如果n2 &amp;gt;= n1，此时Acceptor就会发送一个[n1,v1]的Prepare响应，设置当前接受到的提议为[n2,v2]，同时保证与上一步逻辑相同，保证以后不会再接受序号小于n2的提议。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;accept阶段&#34;&gt;Accept阶段&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;当一个Proposer接收到超过一半的Acceptor的Prepare响应时，此时它就会发送一个针对[n,v]提案的Accept请求给Acceptor。&lt;/li&gt;
+&lt;li&gt;如果一个Acceptor收到一个编号为n的提案的Accept请求，此时有两种情况。
+&lt;ul&gt;
+&lt;li&gt;如果该Acceptor没有对编号大于n的Prepare请求做出过响应，它就会接受该提案，并发送Learn提议给Learner&lt;/li&gt;
+&lt;li&gt;如果该Acceptor接受过编号大于n的Prepare请求，那么它就会拒绝、不回应或回复error。（如果一个Proposer没有收到过半的回应，那他就会重新进入第一阶段，递增提案号后重新提出Prepare请求）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;在上述过程中，每一个Proposer都有可能会产生多个提案。但只要每个Proposer都遵循如上述算法运行，就一定能保证算法执行的正确性。&lt;/p&gt;
+&lt;h4 id=&#34;learner获取提案&#34;&gt;Learner获取提案&lt;/h4&gt;
+&lt;p&gt;在Accept阶段之后Acceptor选定提案后，根据具体的应用场景不同，Learner主要采用以下三种方案来学习选定的提案&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;方案&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;优点&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;缺点&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Acceptor直接将提议发给所有的Learner&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Learner能够快速获取被选定的提议&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;通信次数过多，每个Acceptor都要和Learn产生通信（M * N）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Acceptor接受提议后将提议发给主Learner，主Learner再通知其他Learner&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;通信次数减少（M + N - 1）&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;单点问题（主Learner出现故障就会崩溃）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Acceptor将提议发一个Learner集合，Learener集合再发给其他Learener&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;解决了单点问题，集合中Learner个数越多就越可靠&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;网络通信复杂度变高&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;当Learner们发现有大多数的Acceptor接受了某一个提议，那么该提议的提议值则就是Paxos最终选择出来的结果。&lt;/p&gt;
+&lt;h3 id=&#34;活锁问题&#34;&gt;活锁问题&lt;/h3&gt;
+&lt;p&gt;在Paxos算法实际运作的时候还存在这样一种极端的情况——当有两个Proposer依次提出了一系列编号递增的提案，此时就会导致陷入死循环，无法完成第二阶段，也就是无法选定一个提案，如以下场景。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Proposer P1发出编号为n1的Prepare请求，收到过半响应，完成了阶段一的流程。&lt;/li&gt;
+&lt;li&gt;同时，Proposer P2发出编号为n2的Prepare请求（n2 &amp;gt; n1），也收到了过半的响应，完成了阶段一的流程，并且Acceptor承诺不再接受编号小于n2的提案。&lt;/li&gt;
+&lt;li&gt;P1进入第二阶段时，由于Acceptor不接受小于n2的提案，所以P1重新回到第一阶段，递增提案号为n3后重新发出Prepare请求&lt;/li&gt;
+&lt;li&gt;紧接着，P2进入第二阶段，由于Acceptor不接受小于n3的提案，此时它也重新回到第一阶段，递增提案号后重新发出Prepare请求&lt;/li&gt;
+&lt;li&gt;于是P1、P2陷入了死循环，谁都无法完成阶段二，这也就导致了没有value能被选定。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;为了保证Paxos算法的可持续性，以避免陷入上述提到的死循环，就必须选择一个主Proposer，并规定只有主Proposer才能够提出提案。这样一来，只要主Proposer和过半的Acceptor能够正常进行网络通信，那么肯定会有一个提案被批准（第二阶段的accept），则可以解决死循环导致的活锁问题。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>分布式锁</title>
+        <link>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/</link>
+        <pubDate>Tue, 24 May 2022 15:54:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/</guid>
+        <description>&lt;h1 id=&#34;分布式锁&#34;&gt;分布式锁&lt;/h1&gt;
+&lt;p&gt;随着互联网技术的不断发展、数据量的大幅增加、业务逻辑的复杂化导致传统的集中式系统已经无法应用于当前的业务场景，因此分布式系统被应用在越来越多的地方，但是在分布式系统中，由于网络、机器（如网络延迟、分区，机器宕机）等情况导致场景更加复杂，充满了不可靠的情况。为了保证一致性，在这种情况下我们就需要用到&lt;strong&gt;分布式锁&lt;/strong&gt;。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;那么分布式锁需要具备哪些条件呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;获取、释放锁的性能要高&lt;/li&gt;
+&lt;li&gt;判断锁的获取操作必须要是原子的（防止同一个锁被多个节点获取）&lt;/li&gt;
+&lt;li&gt;网络或者机器出现问题导致无法继续工作时，必须要释放锁（防止死锁）&lt;/li&gt;
+&lt;li&gt;可重入的，一个线程可以多次获取同一把锁（防止死锁）&lt;/li&gt;
+&lt;li&gt;阻塞锁（依据业务需求）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;但是目前并没有能够满足上面所有要求的完美结局方案，对于分布式锁，我们通常使用以下三种方法来实现&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;数据库&lt;/li&gt;
+&lt;li&gt;Redis(缓存)&lt;/li&gt;
+&lt;li&gt;Zookeeper&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;数据库&#34;&gt;数据库&lt;/h2&gt;
+&lt;h3 id=&#34;唯一索引&#34;&gt;唯一索引&lt;/h3&gt;
+&lt;p&gt;我们可以利用数据库中的&lt;strong&gt;唯一索引&lt;/strong&gt;来实现。由于唯一索引能够保证记录只被插入一次，因此我们可以利用其判断当前是否处于锁定状态。所以当想要获取锁的时候，就向数据库中插入一条记录，而释放锁的时候就删除这条记录即可。&lt;/p&gt;
+&lt;p&gt;但是该方法存在以下问题&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;锁没有失效时间&lt;/strong&gt;，如果解锁失败的话其他进程无法再获得该锁（死锁）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;非阻塞锁&lt;/strong&gt;，插入失败就直接报错，没有办法进入队列重试&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不可重入&lt;/strong&gt;，同一线程在没有释放锁之前无法重复获得该锁&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;对于数据库来说我们还可以选择使用排他锁、乐观锁等方法来实现分布式锁，但是由于这些方法对原表有侵入、占用数据库连接等情况，一般情况下都不做考虑，因此这里也就不详细描述。&lt;/p&gt;
+&lt;h2 id=&#34;redis&#34;&gt;Redis&lt;/h2&gt;
+&lt;h3 id=&#34;setnxexpire&#34;&gt;SETNX、EXPIRE&lt;/h3&gt;
+&lt;p&gt;我们可以利用&lt;code&gt;setnx(set if not exist)&lt;/code&gt;命令来实现锁。只有在缓存中不存在Key的时候才会set并返回true，而Key已存在的时候就直接返回false。同时为了防止获取锁失败而导致的死锁情况，我们可以利用&lt;code&gt;expire&lt;/code&gt;命令对这个key设置一个超时时间。&lt;/p&gt;
+&lt;p&gt;为了防止我们&lt;code&gt;setnx&lt;/code&gt;成功之后线程发生异常中断导致我们来不及设置&lt;code&gt;expire&lt;/code&gt;而导致死锁，我们通常会使用以下命令来设置&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;8
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;SET&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;key&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;random_value&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;NX&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;EX&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;30000&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;cm&#34;&gt;/*
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;  EX seconds – 设置键key的过期时间，单位时秒
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;  PX milliseconds – 设置键key的过期时间，单位时毫秒
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;  NX – 只有键key不存在的时候才会设置key的值
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;  XX – 只有键key存在的时候才会设置key的值
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;*/&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;该命令仅在Key不存在（NX选项）时才插入，并且设置到期时间为30000毫秒（PX选项），value设置为随机值，该值在所有客户端和所有锁定请求中必须唯一（防止被他人误删）。&lt;/p&gt;
+&lt;p&gt;当我们想要释放锁时，为了保证安全（防止误删除另一个客户端创建的锁），仅当密钥存在且存储在密钥上的值恰好是期望的值时，才删除该密钥，下面是以lua脚本完成的删除逻辑&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-lua&#34; data-lang=&#34;lua&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kr&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;redis.call&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&amp;#34;get&amp;#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;KEYS&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;])&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;==&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;ARGV&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;kr&#34;&gt;then&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kr&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;redis.call&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&amp;#34;del&amp;#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;KEYS&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;])&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kr&#34;&gt;else&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kr&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kr&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;这种方法虽然实现起来非常简单，但是其存在着&lt;strong&gt;单点问题&lt;/strong&gt;，它加锁时只作用于一个Redis节点上，如果该节点出现故障故障，即使使用哨兵来保证高可用，也会出现锁丢失的情况，如下场景&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;在Redis的Master节点拿到锁，此时锁还没有同步到Slave节点&lt;/li&gt;
+&lt;li&gt;此时Master发生故障，哨兵主导进行故障转移，Slave节点升级为Master节点&lt;/li&gt;
+&lt;li&gt;由于锁没来得及同步，因此导致锁丢失&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;考虑到这种情况，Redis作者antirez基于分布式环境下提出了一种更高级的分布式锁的实现方式：&lt;strong&gt;Redlock&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;redlock算法&#34;&gt;RedLock算法&lt;/h3&gt;
+&lt;p&gt;Redlock 是 Redis 的作者 antirez 给出的集群模式的 Redis 分布式锁，它基于 N 个&lt;strong&gt;完全独立&lt;/strong&gt;（&lt;strong&gt;不存在主从复制或者其他集群协调机制&lt;/strong&gt;）的 Redis节点（通常情况下 N 设置成 5，为了资源的合理利用通常为奇数）。&lt;/p&gt;
+&lt;p&gt;算法的流程如下&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;获取当前时间&lt;/li&gt;
+&lt;li&gt;客户端依次尝试从5个(奇数)相互独立的Redis实例中使用&lt;strong&gt;相同的key和具有唯一性的value&lt;/strong&gt;获取锁&lt;/li&gt;
+&lt;li&gt;计算获取锁消耗的时间，只有&lt;strong&gt;时间小于锁的过期时间&lt;/strong&gt;，并且从**大多数（N / 2 + 1）**实例上获取了锁，才认为获取锁成功；&lt;/li&gt;
+&lt;li&gt;如果获取了锁，则重新计算有效期时间，即&lt;strong&gt;原有效时间减去获取锁消耗的时间&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;如果客户端获取锁失败，则释放所有实例上的锁&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;虽然RedLock算法比上面的单点Redis锁更可靠，但是由于分布式的复杂性，实现起来的条件也更加的苛刻。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;由于必须获取**（N / 2 + 1）**个节点上的锁，所以可能会出现锁冲突的情况（即每个人都获取了一些锁，但是没有人获取一半以上的锁）。针对这个问题，其借鉴了Raft算法的思路，即产生冲突后为每个节点设置一个随机开始时间，在时间到后重新尝试获取锁，但是这也导致了获取锁的成本增加。&lt;/li&gt;
+&lt;li&gt;如果5个节点有2个宕机，锁的可用性会极大降低，因为必须等待这两个宕机节点的结果超时才能返回。另外只剩3个节点，客户端必须获取到这全部3个节点的锁才能拥有锁，加锁难度也加大了。&lt;/li&gt;
+&lt;li&gt;如果出现网络分区，那么可能出现客户端永远也无法获取锁的情况。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;介于以上情况，我们还可以选择更加可靠的方法，即Zookeeper实现的分布式锁。&lt;/p&gt;
+&lt;h2 id=&#34;zookeeper&#34;&gt;Zookeeper&lt;/h2&gt;
+&lt;p&gt;Zookeeper是一个为分布式应用提供一致性服务的软件，它内部是一个分层的文件系统目录树结构，规定同一个目录下只能有一个唯一文件名。&lt;/p&gt;
+&lt;p&gt;由于Zookeeper同样没有实现锁API，所以我们利用其数据节点来表示锁，数据节点分为以下三种类型&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;永久节点&lt;/strong&gt;：节点创建后永久存在，不会因为会话的消失而消失&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;临时节点&lt;/strong&gt;：与永久节点相反，当客户端结束会话后立即删除&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;顺序节点&lt;/strong&gt;：会在节点名的后面加一个数字后缀，并且是有序的，例如生成的有序节点为 /lock/node-0000000000，它的下一个有序节点则为 /lock/node-0000000001，以此类推。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;实现原理&#34;&gt;实现原理&lt;/h3&gt;
+&lt;p&gt;除了上面介绍的节点外，我们还需要用到Watcher（监视器）来注册对节点状态的监听&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Watcher：注册一个该节点的监视器，当节点状态发生变化时，Watcher就会触发，此时Zookeeper将会向客户端发送一条通知（Watcher只能被触发一次）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;根据上述特性，我们就可以使用临时顺序节点与Watcher来实现分布式锁&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;创建一个锁目录/lock&lt;/li&gt;
+&lt;li&gt;当需要获取锁时，就在lock目录下创建临时顺序节点&lt;/li&gt;
+&lt;li&gt;获取/lock下的子节点列表，判断自己创建的子节点是否为当前子节点列表中序号最小的子节点，如果是则认为获得锁；否则到lock目录下注册一个子节点变更的Watcher监听，获得子节点的变更通知后重复此步骤直至获得锁&lt;/li&gt;
+&lt;li&gt;执行完业务逻辑后，主动删除自己的节点来释放锁。此时会触发其他节点的Watcher，让其他人获取锁。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;blockquote&gt;
+&lt;p&gt;那如果出现网络中断或者机器宕机，锁还能释放吗？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;这里需要注意的是，我们使用的是临时节点，所以当客户端因为某种原因无法继续工作时，就会导致会话的中断，临时节点就会被Zookeeprer自动删除。这也就是Zookeeper相较于Redis更加可靠的原因。&lt;/p&gt;
+&lt;h3 id=&#34;羊群效应&#34;&gt;羊群效应&lt;/h3&gt;
+&lt;p&gt;上面这个实现方法，大体上能够满足一般的分布式集群竞争锁的需求，并且能够保证一定的性能。但是随着机器规模的扩大，其效率会越来越低。&lt;/p&gt;
+&lt;p&gt;为什么呢？我们思考一下锁的释放流程&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;在我们获取锁失败后，会注册一个对lock目录的Watcher监控，当有节点变更消息时，就会通知给所有注册了的机器。然而这个通知除了使序号最小的节点获取锁外，对其他的节点没有产生任何实际作用。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;性能瓶颈的原因就是上面这个问题，大量的&lt;strong&gt;Watcher通知&lt;/strong&gt;和&lt;strong&gt;子节点列表获取&lt;/strong&gt;两个操作重复运行，并且绝大多数运行结果都是判断出自己并非是序号最小的节点，从而继续等待下一次的通知，浪费了大量的资源。&lt;/p&gt;
+&lt;p&gt;如果集群规模较大，不仅会对Zookeeper服务器造成巨大的性能影响和网络冲击，更严重的时候甚至会因为多个节点对应的客户端同时释放锁导致大量的节点消失，从而短时间内向剩余客户端发送大量的事件通知——这就是所谓的&lt;strong&gt;羊群效应&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;改进方法&#34;&gt;改进方法&lt;/h3&gt;
+&lt;p&gt;羊群效应出现根源在于其没有找到事件的真正关注点，对于分布式锁的竞争过程来说，它的核心逻辑就是&lt;strong&gt;判断自己是否是所有子节点中序号最小的&lt;/strong&gt;。那么问题就简单了，我们&lt;strong&gt;只需要关注比自己序号小的那一个相关节点的变更情况&lt;/strong&gt;就可以了，而不再需要关注全局的子列表变更情况。&lt;/p&gt;
+&lt;p&gt;于是，改进后的获取流程如下&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;创建一个锁目录/lock&lt;/li&gt;
+&lt;li&gt;当需要获取锁时，就在lock目录下创建临时顺序节点&lt;/li&gt;
+&lt;li&gt;获取/lock下的子节点列表，判断自己创建的子节点是否为当前子节点列表中序号最小的子节点，如果是则认为获得锁；否则到Watcher自己的次小节点（防止羊群效应）&lt;/li&gt;
+&lt;li&gt;执行完业务逻辑后，主动删除自己的节点来释放锁，此时会触发顺序的下一个节点的Watcher&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;方案&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;优点&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;缺点&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;应用场景&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;&lt;strong&gt;数据库&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;直接使用数据库，操作简单&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;分布式系统的性能瓶颈大部分都在数据库，而使用数据库锁加大了负担&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;业务逻辑简单，对性能要求不高&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;&lt;strong&gt;Redis&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;性能较高，且实现起来方便&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;锁超时机制不可靠，当线程获取锁时，可能因为处理时间过长导致锁超时失效&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;追求高性能，允许偶发的锁失效问题&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;&lt;strong&gt;ZooKeeper&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;不依赖超时时间释放锁，可靠性高&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;由于频繁的创建和删除节点，性能比不上Redis锁&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;系统要求高可靠性&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+</description>
+        </item>
+        <item>
+        <title>分布式ID</title>
+        <link>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8Fid/</link>
+        <pubDate>Tue, 24 May 2022 15:50:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8Fid/</guid>
+        <description>&lt;h1 id=&#34;分布式id&#34;&gt;分布式ID&lt;/h1&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;ID是数据的唯一标识&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，传统的做法是使用数据库的自增ID，但是随着业务规模的不断发展，数据量将越来越大，于是需要进行&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;分库分表&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，而分表后，每个表中的ID都会按自己的节奏进行自增，很有可能出现ID冲突的情况。这时就需要一个单独的机制来负责生成一个&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;全局唯一的ID&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;。这个ID也可以叫做&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;分布式ID&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;。&lt;/p&gt;
+&lt;p&gt;对于一个合格的分布式ID，它应该满足以下几项条件&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;全局唯一&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;高可用&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;高性能&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;趋势递增&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方便接入&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;下面就介绍几种常见的分布式ID生成方案&lt;/p&gt;
+&lt;h2 id=&#34;数据库&#34;&gt;数据库&lt;/h2&gt;
+&lt;h3 id=&#34;自增id&#34;&gt;自增ID&lt;/h3&gt;
+&lt;p&gt;我们可以利用数据库的&lt;code&gt;auto_increment&lt;/code&gt;自增ID来生成分布式ID，只需要一个数据库实例即可完成。&lt;/p&gt;
+&lt;p&gt;建表如下&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;8
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;CREATE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;DATABASE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;`&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;SEQID&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;`&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;CREATE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;TABLE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;SEQID&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;SEQUENCE_ID&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;	&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;id&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;bigint&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;20&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;unsigned&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NOT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NULL&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;auto_increment&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;	&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;stub&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;char&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;10&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NOT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NULL&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;default&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;&amp;#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;	&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;PRIMARY&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;KEY&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;id&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;),&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;	&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;UNIQUE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;KEY&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;stub&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;stub&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;ENGINE&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;MyISAM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;我们通过往该表中插入数据，并获取到自增的主键id。为了考虑到并发的安全 ，我们可以通过事务来完成这个操作。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;begin&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;insert&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;into&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;SEQUENCE_ID&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;value&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;VALUES&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;values&amp;#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;select&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;last_insert_id&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;commit&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;我们可以看出，这种依赖单点的方法虽然实现起来简单，但是这种依赖单点的方法并不可靠，因为Mysql并不能很好的支持高并发，当请求ID量特别大的时候就会因为单点的宕机而影响到整个业务系统。&lt;/p&gt;
+&lt;h3 id=&#34;多主模式&#34;&gt;多主模式&lt;/h3&gt;
+&lt;p&gt;既然单点不可靠，那么我们可以考虑使用&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;集群&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;的方式来解决这个问题。考虑到单个主节点可能会因为宕机而没有将数据同步到从节点，可能会导致ID重复的情况，因此我们可以考虑使用&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;多主集群&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;。&lt;/p&gt;
+&lt;p&gt;为了防止多个主节点生成重复的ID，我们通常会通过控制&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;初始值&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;和&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;步长&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;来避免这个问题。&lt;/p&gt;
+&lt;p&gt;例如在有两个主节点的情况下，我们就可以通过这种方式来错开ID。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;-- 节点1
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;set&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;@@&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;auto_increment_offset&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;     &lt;/span&gt;&lt;span class=&#34;c1&#34;&gt;-- 起始值
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;set&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;@@&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;auto_increment_increment&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;2&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;  &lt;/span&gt;&lt;span class=&#34;c1&#34;&gt;-- 步长
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;c1&#34;&gt;-- 节点2
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;set&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;@@&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;auto_increment_offset&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;2&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;     &lt;/span&gt;&lt;span class=&#34;c1&#34;&gt;-- 起始值
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;set&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;@@&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;auto_increment_increment&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;2&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;  &lt;/span&gt;&lt;span class=&#34;c1&#34;&gt;-- 步长
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;但是，这种方法的可拓展性不强，倘若我们要往集群中增加新的主节点时，我们就需要重新去设置步长，并且还需要根据前两个节点的自增ID的大小来考虑我们新节点的起始值，而这些操作只能&lt;strong&gt;人工&lt;/strong&gt;来进行。如果在修改步长的时候出现了重复的ID，此时就还需要进行停机修改。&lt;/p&gt;
+&lt;h2 id=&#34;号段模式&#34;&gt;号段模式&lt;/h2&gt;
+&lt;p&gt;前面两种方法的局限性在于其每次获取ID时都需要直接访问数据库，效率较低，&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;如果能够一次获取大量的ID，并将其缓存在本地，那样就可以大大的提升ID获取的效率，这也是号段模式的核心思想。&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;p&gt;号段模式每次从数据库中批量的获取一段自增ID，即取出一个范围的ID交给号段服务维护。例如（1，2000]即代表着2000个ID。我们的业务系统只需要到号段服务中申请ID，不需要每次都去请求数据库，直到所有的ID都用完后才会去申请下一个号段。&lt;/p&gt;
+&lt;p&gt;数据库表修改如下&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;8
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;CREATE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;TABLE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;id_generator&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;  &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;id&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;int&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;10&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NOT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NULL&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;  &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;max_id&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;bigint&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;20&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NOT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NULL&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;COMMENT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;当前最大id&amp;#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;  &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;step&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;int&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;20&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NOT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NULL&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;COMMENT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;号段的步长&amp;#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;  &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;biz_type&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;int&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;20&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NOT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NULL&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;COMMENT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;业务类型&amp;#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;  &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;version&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;int&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;20&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NOT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;NULL&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;COMMENT&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;版本号&amp;#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;  &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;PRIMARY&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;KEY&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;`&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;id&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;`&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;号段服务不再强依赖数据库，即使数据库不可用，号段服务也可以继续工作直到申请的ID全部使用完。但是如果此时号段服务重启，就会导致剩余的ID丢失。&lt;/p&gt;
+&lt;p&gt;为了保证号段服务的高可用，我们同样需要建立一个集群，在请求方从号段服务获取ID时，就会随机的选取一个节点来获取，而这种并发场景下我们同样需要考虑到并发安全的问题，因此我们上面的表中也提供了一个版本号的字段version，我们可以使用&lt;strong&gt;乐观锁&lt;/strong&gt;来进行并发的控制。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;update&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;id_generator&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;set&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;current_max_id&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=#&lt;/span&gt;&lt;span class=&#34;err&#34;&gt;{&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;newMaxId&lt;/span&gt;&lt;span class=&#34;err&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;version&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;version&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;+&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;where&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;version&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;#&lt;/span&gt;&lt;span class=&#34;err&#34;&gt;{&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;version&lt;/span&gt;&lt;span class=&#34;err&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;我们可以使用上面的SQL来获取新号段，当update更新成功就说明号段获取成功了。&lt;/p&gt;
+&lt;h2 id=&#34;雪花算法&#34;&gt;雪花算法&lt;/h2&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;雪花算法（Snowflake）&lt;/strong&gt; &lt;!-- raw HTML omitted --&gt;是twitter开源的一个分布式ID的生成算法，它的核心思想是：&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;生成一个long类型的ID，一个long大小8字节，一个字节8个比特位，因此它使用64个比特位来确定一个分布式ID。其中41bit代表时间戳，10bit标识一台机器，剩下12bit则用来标识每个id&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;
+&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed14.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;第1个bit位为符号位&lt;/strong&gt;，因为生成的id通常为正数所以固定为0&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;2~42位为时间戳部分&lt;/strong&gt;，其精确至毫秒。同时为了更加合理的利用，其并不会存储当前的时间，而是使用时间戳的差值（当前时间 - 固定的开始时间），这样就可以保证ID从更小的起点开始生成。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;43~52位为工作机器的id&lt;/strong&gt;，这里的计算会更加灵活，可以根据机房数量、机器数量来自行均衡，保证能够利用到更多的机器。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;53~64位为序列编号&lt;/strong&gt;，在同一毫秒中的同一台机器上我们可以生成4096个ID&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;考虑到不同的业务场景以及各个公司的特性，大多数公司并不会去直接使用snowflake，而是会对其进行改造，让其更贴合自身的使用场景。如百度的uid-generator、美团的Leaf、滴滴的TinyId等。&lt;/p&gt;
+&lt;p&gt;下面是github上开源的一个java实现的snowflake&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;  1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;  2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;  3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;  4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;  5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;  6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;  7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;  8
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;  9
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 10
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 11
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 12
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 13
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 14
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 15
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 16
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 17
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 18
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 19
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 20
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 21
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 22
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 23
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 24
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 25
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 26
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 27
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 28
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 29
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 30
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 31
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 32
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 33
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 34
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 35
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 36
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 37
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 38
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 39
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 40
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 41
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 42
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 43
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 44
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 45
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 46
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 47
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 48
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 49
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 50
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 51
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 52
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 53
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 54
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 55
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 56
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 57
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 58
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 59
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 60
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 61
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 62
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 63
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 64
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 65
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 66
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 67
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 68
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 69
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 70
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 71
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 72
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 73
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 74
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 75
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 76
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 77
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 78
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 79
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 80
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 81
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 82
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 83
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 84
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 85
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 86
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 87
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 88
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 89
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 90
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 91
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 92
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 93
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 94
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 95
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 96
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 97
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 98
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 99
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;100
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;101
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;/**
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt; * twitter的snowflake算法 -- java实现
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt; * github链接：https://github.com/beyondfengyu/SnowFlake
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt; * @author beyond
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt; * @date 2016/11/26
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt; */&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kd&#34;&gt;public&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;class&lt;/span&gt; &lt;span class=&#34;nc&#34;&gt;SnowFlake&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;cm&#34;&gt;/**
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     * 起始的时间戳
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     */&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;START_STMP&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;1480166465631L&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;cm&#34;&gt;/**
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     * 每一部分占用的位数
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     */&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;SEQUENCE_BIT&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;12&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt; &lt;span class=&#34;c1&#34;&gt;//序列号占用的位数
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MACHINE_BIT&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;5&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;   &lt;span class=&#34;c1&#34;&gt;//机器标识占用的位数
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;DATACENTER_BIT&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;5&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;c1&#34;&gt;//数据中心占用的位数
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;cm&#34;&gt;/**
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     * 每一部分的最大值
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     */&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MAX_DATACENTER_NUM&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1L&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;^&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1L&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;DATACENTER_BIT&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MAX_MACHINE_NUM&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1L&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;^&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1L&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MACHINE_BIT&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MAX_SEQUENCE&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1L&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;^&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1L&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;SEQUENCE_BIT&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;cm&#34;&gt;/**
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     * 每一部分向左的位移
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     */&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MACHINE_LEFT&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;SEQUENCE_BIT&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;DATACENTER_LEFT&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;SEQUENCE_BIT&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MACHINE_BIT&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;final&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;TIMESTMP_LEFT&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;DATACENTER_LEFT&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;DATACENTER_BIT&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;datacenterId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;  &lt;span class=&#34;c1&#34;&gt;//数据中心
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;machineId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;     &lt;span class=&#34;c1&#34;&gt;//机器标识
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;sequence&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;0L&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt; &lt;span class=&#34;c1&#34;&gt;//序列号
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;lastStmp&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1L&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;c1&#34;&gt;//上一次时间戳
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;public&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;SnowFlake&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;datacenterId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;machineId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;datacenterId&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MAX_DATACENTER_NUM&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;||&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;datacenterId&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;            &lt;span class=&#34;k&#34;&gt;throw&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;new&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;IllegalArgumentException&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s&#34;&gt;&amp;#34;datacenterId can&amp;#39;t be greater than MAX_DATACENTER_NUM or less than 0&amp;#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;machineId&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MAX_MACHINE_NUM&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;||&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;machineId&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;            &lt;span class=&#34;k&#34;&gt;throw&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;new&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;IllegalArgumentException&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s&#34;&gt;&amp;#34;machineId can&amp;#39;t be greater than MAX_MACHINE_NUM or less than 0&amp;#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;this&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;datacenterId&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;datacenterId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;this&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;machineId&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;machineId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;cm&#34;&gt;/**
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     * 产生下一个ID
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     *
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     * @return
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;     */&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;public&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;synchronized&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;nextId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;currStmp&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;getNewstmp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;currStmp&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;lastStmp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;            &lt;span class=&#34;k&#34;&gt;throw&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;new&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;RuntimeException&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s&#34;&gt;&amp;#34;Clock moved backwards.  Refusing to generate id&amp;#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;currStmp&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;==&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;lastStmp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;            &lt;span class=&#34;c1&#34;&gt;//相同毫秒内，序列号自增
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;            &lt;span class=&#34;n&#34;&gt;sequence&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;sequence&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;+&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MAX_SEQUENCE&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;            &lt;span class=&#34;c1&#34;&gt;//同一毫秒的序列数已经达到最大
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;            &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;sequence&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;==&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;0L&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;                &lt;span class=&#34;n&#34;&gt;currStmp&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;getNextMill&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;            &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;else&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;            &lt;span class=&#34;c1&#34;&gt;//不同毫秒内，序列号置为0
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;            &lt;span class=&#34;n&#34;&gt;sequence&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;0L&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;n&#34;&gt;lastStmp&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;currStmp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;currStmp&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;START_STMP&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;TIMESTMP_LEFT&lt;/span&gt; &lt;span class=&#34;c1&#34;&gt;//时间戳部分
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;                &lt;span class=&#34;o&#34;&gt;|&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;datacenterId&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;DATACENTER_LEFT&lt;/span&gt;       &lt;span class=&#34;c1&#34;&gt;//数据中心部分
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;                &lt;span class=&#34;o&#34;&gt;|&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;machineId&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;MACHINE_LEFT&lt;/span&gt;             &lt;span class=&#34;c1&#34;&gt;//机器标识部分
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;                &lt;span class=&#34;o&#34;&gt;|&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;sequence&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;                             &lt;span class=&#34;c1&#34;&gt;//序列号部分
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;getNextMill&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;mill&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;getNewstmp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;while&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;mill&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;lastStmp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;            &lt;span class=&#34;n&#34;&gt;mill&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;getNewstmp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;mill&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;private&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;long&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;getNewstmp&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;System&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;currentTimeMillis&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kd&#34;&gt;public&lt;/span&gt; &lt;span class=&#34;kd&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;kt&#34;&gt;void&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;main&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;String&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;[]&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;args&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;n&#34;&gt;SnowFlake&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;snowFlake&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;new&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;SnowFlake&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;2&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;,&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;3&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;kt&#34;&gt;int&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;i&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;i&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;12&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;);&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;i&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;++)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;            &lt;span class=&#34;n&#34;&gt;System&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;out&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;println&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;snowFlake&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;nextId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;());&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;h2 id=&#34;redis&#34;&gt;Redis&lt;/h2&gt;
+&lt;p&gt;我们可以利用Redis中的&lt;code&gt;incr&lt;/code&gt;命令来原子的获取自增ID&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;mi&#34;&gt;127&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;6379&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;set&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;seq_id&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;     &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;//&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;err&#34;&gt;初始化自增&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;ID&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;OK&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;127&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;6379&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;incr&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;seq_id&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;      &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;//&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;err&#34;&gt;自增并返回结果&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;integer&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;2&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;使用Redis实现起来特别简单且高效，但是我们还需要考虑到&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;持久化&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;时带来的一些问题&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;RDB持久化&lt;/strong&gt;：由于其是定期保存一次数据库的快照，为了保证效率他也存在着一定的时间间隔。倘若在我们刚保存一次快照后，连续获取了几次ID，而此时还没来得及做下一次持久化就宕机了。当我们通过持久化重启Redis后，这段时间生成的ID就会被重复使用。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;AOF持久化&lt;/strong&gt;：AOF相当于是逻辑日志，其会通过保存我们执行过的命令来进行持久化。它并不像RDB出现一段时间的数据丢失而导致的ID重复的情况，但是在它恢复的过程中需要重新执行保存的命令，因此随着ID数量的增多，它重启恢复数据的时间也会越来越慢。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;/th&gt;
+&lt;th&gt;优点&lt;/th&gt;
+&lt;th&gt;缺点&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;数据库自增ID&lt;/td&gt;
+&lt;td&gt;实现简单，ID单调自增，数值类型查询效率高&lt;/td&gt;
+&lt;td&gt;单点问题，在高并发时可能会有宕机的风险&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;数据库多主集群&lt;/td&gt;
+&lt;td&gt;解决了单点问题，一定程度上提高了稳定性&lt;/td&gt;
+&lt;td&gt;可拓展性不强，随着业务规模的不断扩大， 集群也会随之增加，但是新主节点的加入较为麻烦，需要人工操作&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;号段模式&lt;/td&gt;
+&lt;td&gt;不强依赖数据库，提高了效率&lt;/td&gt;
+&lt;td&gt;当为了保证高可用而使用多主集群时，仍然需要去修改起始值和步长&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;雪花算法&lt;/td&gt;
+&lt;td&gt;1.可以根据业务特性自由分配比特位，较为灵活。2.不依赖第三方系统，独立部署&lt;/td&gt;
+&lt;td&gt;强依赖机器时钟，如果出现时钟回拨则会导致系统不可用&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Redis&lt;/td&gt;
+&lt;td&gt;实现起来简单且高效&lt;/td&gt;
+&lt;td&gt;持久化恢复存在问题，如RDB重复ID，AOF速度慢&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+</description>
+        </item>
+        <item>
+        <title>分布式事务</title>
+        <link>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/</link>
+        <pubDate>Tue, 24 May 2022 15:48:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/</guid>
+        <description>&lt;h1 id=&#34;分布式事务&#34;&gt;分布式事务&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;分布式事务就是指事务的参与者、支持事务的服务器、资源服务器以及事务管理器分别位于分布式系统的不同节点之上。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;简单的说，就是一次大的操作由不同的小操作组成，这些小的操作分布在不同的服务器上，且属于不同的应用，分布式事务需要保证这些小操作&lt;strong&gt;要么全部成功，要么全部失败&lt;/strong&gt;。本质上来说，分布式事务就是为了&lt;strong&gt;保证不同数据库的数据一致性&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;2pc二阶段提交协议&#34;&gt;2PC（二阶段提交协议）&lt;/h2&gt;
+&lt;p&gt;在分布式系统中，每一个机器节点虽然都能够明确地知道自己在进行事务操作过程中的结果是成功或失败，但是却无法直接获取到其他分布式节点的操作结果。&lt;/p&gt;
+&lt;p&gt;为了保证事务处理的ACID特性，就需要引入一个称为&lt;strong&gt;协调者&lt;/strong&gt;的组件来统一调度所有分布式节点的执行逻辑，这些被调度的分布式节点则被称为&lt;strong&gt;参与者&lt;/strong&gt;。协调者负责调度参与者的行为，最终决定这些参与者是否要把事务真正进行提交，基于这个思想，衍生出了&lt;strong&gt;二阶段提交&lt;/strong&gt;和&lt;strong&gt;三阶段提交&lt;/strong&gt;两种协议。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;2PC&lt;/strong&gt;是&lt;strong&gt;Two-Phase Commit&lt;/strong&gt;的缩写，即&lt;strong&gt;二阶段提交&lt;/strong&gt;，&lt;strong&gt;是为了使基于分布式系统架构下的所有节点在进行事务处理过程中能够保持原子性和一致性而设计的一种算法&lt;/strong&gt;。目前绝大多数关系型数据库都是使用二阶段提交协议来完成分布式事务处理的。&lt;/p&gt;
+&lt;h3 id=&#34;执行流程&#34;&gt;执行流程&lt;/h3&gt;
+&lt;p&gt;顾名思义，二阶段提交协议就是将事务的提交过程分成了两个阶段来进行处理，在第一阶段的主要内容就是进行投票，来表明是否有继续执行事务的必要。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;阶段一：提交事务请求（投票阶段）&lt;/strong&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;事务询问&lt;/strong&gt;：协调者向所有参与者发出事务询问，询问是否可以执行事务操作，并等待各参与者的响应。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;执行事务&lt;/strong&gt;：各个参与者节点执行事务操作，并将undo和redo信息记入事务日志中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;各参与者向协调者反馈事务询问的响应&lt;/strong&gt;：如果参与者成功执行事务，则反馈YES响应，表示事务执行成功。如果参与者执行事务失败，则反馈NO响应，表示事务执行失败。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;在第二阶段中，会根据第一阶段参与者的反馈来决定是否能够提交事务，要么全都成功，要么全都失败。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;阶段二：执行事务提交（执行阶段）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;执行事务提交&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送提交请求&lt;/strong&gt;：协调者向所有参与者发起提交请求。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务提交&lt;/strong&gt;：参与者在收到提交请求后，会正式执行事务提交操作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反馈事务提交结果&lt;/strong&gt;：参与者在完成事务提交之后向协调者发送ACK消息。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;完成事务&lt;/strong&gt;：协调者接收到所有参与者的ACK后完成事务。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送回滚请求&lt;/strong&gt;：协调者向所有参与者发起回滚请求。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务回滚&lt;/strong&gt;：参与者在收到回滚请求后，利用阶段一记录的undo信息来执行事务回滚操作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反馈事务回滚结果&lt;/strong&gt;：参与者在完成事务回滚之后向协调者发送ACK消息。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;：协调者接收到所有参与者的ACK后完成事务中断。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed10.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed11.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h3 id=&#34;优缺点&#34;&gt;优缺点&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;优点&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;原理简单&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实现方便&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;缺点&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;同步阻塞&lt;/strong&gt;：在执行过程中，所有参与该事务操作的逻辑都会处于阻塞状态，也就是说各个参与者在等待其他参与者响应的过程中将无法执行其他操作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;单点问题&lt;/strong&gt;：在上述过程中，协调者起到了核心的调度作用。一旦协调者出现了问题，那么整个提交流程将无法运转，甚至如果在二阶段的提交流程中出现了问题，将导致其他参与者都处于锁定事务资源的状态中，无法完成事务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;数据不一致&lt;/strong&gt;：倘若在第二阶段的提交过程中，协调者向参与者发送提交请求，而由于网络原因或者是协调者本身的原因，导致只有部分参与者收到了提交请求，此时就导致了只有接收到请求的参与者进行了事务提交，而产生数据不一致的问题。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;过于保守&lt;/strong&gt;：二阶段提交协议没有设计较为完整的容错机制，任意一个节点的失败都会导致整个事务的失败&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;二阶段提交协议存在着上述几种缺陷，因此研究者在二阶段协议的基础上进行了改进&lt;/p&gt;
+&lt;h2 id=&#34;3pc三阶段提交协议&#34;&gt;3PC（三阶段提交协议）&lt;/h2&gt;
+&lt;p&gt;3PC是Three-Phase Commit的缩写，即三阶段提交，是2PC的改进版，其将二阶段提交协议的提交事务请求过程一分为二，形成了由CanCommit、PreCommit、DoCommint三个阶段组成的事务处理协议，其协议设计如下图所示
+&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed12.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;执行流程-1&#34;&gt;执行流程&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;阶段一：CanCommit&lt;/strong&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;事务询问&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;各参与者向协调者反馈事务询问的响应&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;阶段二：PreCommit&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;执行事务预提交&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送预提交请求&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务预提交&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;各参与者向协调者反馈事务执行的结果&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送中断请求&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;阶段三：DoCommit&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;执行提交&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送提交请求&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务提交&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反馈事务提交结果&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;完成事务&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送中断请求&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务回滚&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反馈事务回滚结果&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;需要注意的是，在阶段三中可能会出现以下两种问题&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;协调者出现问题&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;协调者和参与者之间的网络出现故障&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;无论出现上述那种问题，最终都会导致参与者无法及时的接收到来自协调者的DoCommit或是Abort请求，针对这种异常情况，参与者都会在等待超时后继续进行事务提交。&lt;/p&gt;
+&lt;h3 id=&#34;优缺点-1&#34;&gt;优缺点&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;优点&lt;/strong&gt;：相较于二阶段提交协议，降低了参与者的阻塞范围，并且能够在出现单点故障后继续达成一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;缺点&lt;/strong&gt;：三阶段提交协议在去除阻塞的同时也引入了新的问题，那就是参与者在收到预提交的消息时，如果出现了网络分区的情况，协调者与参与者无法进行正常的网络通信，但是参与者依旧会进行事务的提交，从而导致数据的不一致。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;本地消息表异步确保&#34;&gt;本地消息表（异步确保）&lt;/h2&gt;
+&lt;p&gt;本地消息表与业务数据表处于同一个数据库中，这样就能利用本地事务来保证在对这两个表的操作满足事务特性，并且使用了&lt;strong&gt;消息队列&lt;/strong&gt;来保证&lt;strong&gt;最终一致性&lt;/strong&gt;。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;在分布式事务操作的一方完成写业务数据的操作之后向本地消息表发送一个消息，本地事务能保证这个消息一定会被写入本地消息表中。&lt;/li&gt;
+&lt;li&gt;之后将本地消息表中的消息转发到消息队列中，如果转发成功则将消息从本地消息表中删除，否则继续重新转发。&lt;/li&gt;
+&lt;li&gt;在分布式事务操作的另一方从消息队列中读取一个消息，并执行消息中的操作。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed13.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+</description>
+        </item>
+        <item>
+        <title>分布式时钟</title>
+        <link>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E6%97%B6%E9%92%9F/</link>
+        <pubDate>Tue, 24 May 2022 15:45:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E6%97%B6%E9%92%9F/</guid>
+        <description>&lt;h1 id=&#34;分布式时钟&#34;&gt;分布式时钟&lt;/h1&gt;
+&lt;h2 id=&#34;逻辑时钟与物理时钟&#34;&gt;逻辑时钟与物理时钟&lt;/h2&gt;
+&lt;p&gt;对于分布式系统来说，时钟分为&lt;strong&gt;逻辑时钟&lt;/strong&gt;与&lt;strong&gt;物理时钟&lt;/strong&gt;两种。&lt;strong&gt;物理时钟对应的是我们真实世界的时间，一般由操作系统提供，而逻辑时钟则一般被实现为一个单调递增的计数器&lt;/strong&gt;。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;为什么在分布式系统中不直接使用物理时钟，而是使用逻辑时钟呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;对于分布式系统而言，即使我们可以使用一些工具去同步集群内的时间，但是&lt;strong&gt;使所有节点的时间保持一致&lt;/strong&gt;这个目标依旧是很难达成的。而如果我们使用不同节点产生的不一致的物理时间来进行一致性计算，就会导致结果出现很大的偏差，因此分布式系统就通过另外的方法来记录事件的顺序关系，也就是上面提到的逻辑时间。&lt;/p&gt;
+&lt;h2 id=&#34;如何实现逻辑时钟&#34;&gt;如何实现逻辑时钟?&lt;/h2&gt;
+&lt;h3 id=&#34;lamport-timestamps&#34;&gt;Lamport timestamps&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Leslie Lamport 在1978年提出逻辑时钟的概念，并描述了一种逻辑时钟的表示方法，这个方法被称为 Lamport 时间戳（Lamport timestamps）。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;分布式系统中按是否存在节点交互可分为三类事件，一类发生于节点内部，二是发送事件，三是接收事件。Lamport 时间戳原理如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed30.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ol&gt;
+&lt;li&gt;每个事件对应一个 Lamport 时间戳，初始值为0&lt;/li&gt;
+&lt;li&gt;如果事件在节点内发生，时间戳加1&lt;/li&gt;
+&lt;li&gt;如果事件属于发送事件，时间戳加1并在消息中带上该时间戳&lt;/li&gt;
+&lt;li&gt;如果事件属于接收事件，时间戳 = Max(本地时间戳，消息中的时间戳) + 1&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;假设有事件 a、b，C(a)、C(b )分别表示事件 a、b 对应的 Lamport 时间戳，如果 a 发生在b 之前，记作 &lt;code&gt;a⇒b&lt;/code&gt;，则有&lt;code&gt;C(a)&amp;lt;C(b)，例如图1中有 &lt;/code&gt;C1→B1，那么 &lt;code&gt;C(C1)&amp;lt;C(B1)&lt;/code&gt;。通过该定义，事件集中 Lamport 时间戳不等的事件可进行比较，我们获得事件的偏序关系(partial order)。&lt;strong&gt;注意：如果&lt;code&gt;C(a)&amp;lt;C(b)&lt;/code&gt;，并不能说明&lt;code&gt;a⇒b&lt;/code&gt;，也就是说&lt;code&gt;C(a)&amp;lt;C(b&lt;/code&gt;是&lt;code&gt;a⇒b&lt;/code&gt;的必要不充分条件&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;如果&lt;code&gt; C(a) = C(b)&lt;/code&gt;，那a、b事件的顺序又是怎样的？值得注意的是当 &lt;code&gt;C(a) = C(b)&lt;/code&gt;的时候，它们肯定没有因果关系，所以它们之间的先后顺序其实并不会影响结果，我们这里只需要给出一种确定的方式来定义它们之间的先后就能得到全序关系。&lt;strong&gt;注意：Lamport逻辑时钟只保证因果关系（偏序）的正确性，不保证绝对时序的正确性。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;通过以上定义，我们可以对所有事件排序，获得事件的全序关系。以上图例子，我们可以进行排序：                     &lt;code&gt;C1 ⇒ B1 ⇒ B2 ⇒ A1 ⇒ B3 ⇒ A2 ⇒ C2 ⇒ B4 ⇒ C3 ⇒ A3 ⇒ B5 ⇒ C4 ⇒ C5 ⇒ A4&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;观察上面的全序关系你可以发现，从时间轴来看 B5 是早于 A3 发生的，但是在全序关系里面我们根据上面的定义给出的却是 A3 早于 B5，可以发现 Lamport 逻辑时钟是一个正确的算法，即有因果关系的事件时序不会错，但并不是一个公平的算法，即没有因果关系的事件时序不一定符合实际情况。&lt;/p&gt;
+&lt;h3 id=&#34;vector-clock&#34;&gt;Vector clock&lt;/h3&gt;
+&lt;p&gt;因此 Vector clock 就在 Lamport timestamps 的基础上加以改进，它通过 vector 结构记录了本节点与其他节点的 Lamport timestamps。其原理如下图&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed31.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上图可以看出，Vector clock 与 Lamport timestamps 的规则几乎一模一样。&lt;/p&gt;
+&lt;p&gt;假设有事件 a、b 分别在节点 P、Q 上发生，Vector clock 分别为 Ta、Tb，如果 &lt;code&gt;Tb[Q] &amp;gt; Ta[Q]&lt;/code&gt; 并且 &lt;code&gt;Tb[P] &amp;gt;= Ta[P]&lt;/code&gt;，则a发生于b之前，记作&lt;code&gt;a⇒b&lt;/code&gt;。到目前为止还和 Lamport timestamps 差别不大，那 Vector clock 怎么判别同时发生关系呢？&lt;/p&gt;
+&lt;p&gt;如果 &lt;code&gt;Tb[Q] &amp;gt; Ta[Q]&lt;/code&gt; 并且 &lt;code&gt;Tb[P] &amp;lt; Ta[P]&lt;/code&gt;，则认为 a、b 同时发生，记作 &lt;code&gt;a &amp;lt;=&amp;gt; b&lt;/code&gt;。例如图 2 中节点 B 上的第4 个事件 (A:2，B:4，C:1) 与节点 C 上的第 2 个事件 (B:3，C:2) 没有因果关系、属于同时发生事件。&lt;/p&gt;
+&lt;h3 id=&#34;version-vector&#34;&gt;Version vector&lt;/h3&gt;
+&lt;p&gt;基于 Vector clock 我们可以获得任意两个事件的顺序关系，或为先后顺序或为同时发生，识别事件顺序在工程实践中有很重要的引申应用，最常见的应用是&lt;strong&gt;发现数据冲突&lt;/strong&gt;。这时，就诞生了 Version vector。&lt;/p&gt;
+&lt;p&gt;分布式系统中为了保证可用性，数据往往存在多个副本，而这多个副本又可能会被同时更新，这就会导致副本之间产生数据不一致的情况。Version vector 的目的就是为了&lt;strong&gt;发现这些数据冲突&lt;/strong&gt;，其实现与 Vector clock类似，下图则是其具体运作流程。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed32.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;client端写入数据，该请求被Sx处理并创建相应的 vector ([Sx, 1])，记为数据 D1&lt;/li&gt;
+&lt;li&gt;第 2 次请求也被 Sx 处理，数据修改为 D2，vector 修改为 ([Sx, 2])&lt;/li&gt;
+&lt;li&gt;第 3、第 4 次请求分别被 Sy、Sz 处理，client 端先读取到 D2，然后 D3、D4 被写入 Sy、Sz&lt;/li&gt;
+&lt;li&gt;第 5 次更新时 client 端读取到 D2、D3和D4 3个数据版本，通过类似 Vector clock 判断同时发生关系的方法可判断 D3、D4 存在数据冲突，最终通过一定方法解决数据冲突并写入 D5&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Vector clock只用于发现数据冲突，不能解决数据冲突。解决数据冲突因场景而异，具体方法有以&lt;strong&gt;最后更新为准(last write win)&lt;/strong&gt;，或&lt;strong&gt;将冲突的数据交给client由client端决定如何处理&lt;/strong&gt;，或通&lt;strong&gt;过quorum决议事先避免数据冲突的情况发生&lt;/strong&gt;。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;由于记录了所有数据在所有节点上的逻辑时钟信息，Vector clock 和 Version vector 在实际应用中可能面临的一个问题是 vector 过大，用于数据管理的元数据甚至大于数据本身。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;解决该问题的方法是使用 server id 取代 client id 创建 vector (因为 server 的数量相对 client 稳定)，或设定最大的 size、如果超过该 size 值则淘汰最旧的 vector 信息。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>分布式基础理论：CAP与BASE</title>
+        <link>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E5%9F%BA%E7%A1%80%E7%90%86%E8%AE%BAcap%E4%B8%8Ebase/</link>
+        <pubDate>Tue, 24 May 2022 15:43:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E5%9F%BA%E7%A1%80%E7%90%86%E8%AE%BAcap%E4%B8%8Ebase/</guid>
+        <description>&lt;h1 id=&#34;分布式基础理论cap与base&#34;&gt;分布式基础理论：CAP与BASE&lt;/h1&gt;
+&lt;h2 id=&#34;cap&#34;&gt;CAP&lt;/h2&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;一个分布式系统不可能同时满足一致性（Consistency）、可用性（Availability）、分区容错性（Partition Tolerance）这三个基本需求，最多只能满足其中的两项，不可能三者兼顾。&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;一致性&lt;/strong&gt;：在分布式系统中的所有数据副本，在同一时刻是否一致（等同于所有节点访问同一份最新的数据副本）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;可用性&lt;/strong&gt;：分布式系统在面对各种异常时可以提供正常服务的能力（非故障的节点在有限的时间内返回合理的响应）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;分区容错性&lt;/strong&gt;：分布式系统在遇到任何网络分区故障的时候，仍然需要能对外提供一致性和可用性的服务，除非是整个网络环境都发生了故障。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如下图&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed8.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;为什么三者不可兼顾呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;我们首先就需要了解以下&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;网络分区&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;的概念。&lt;/p&gt;
+&lt;p&gt;在分布式系统中，不同的节点分布在不同的子网络（机房或异地网络等）中，由于一些特殊的原因导致这些子网络之间出现网络不连通的状况，但各个子网络的内部网络是正常的，从而就导致了整个系统的网络环境被切分成了若干个孤立的区域。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed9.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;节点被划分为多个区域后，每个区域内部可以通信，但是区域之间无法通信。&lt;/p&gt;
+&lt;p&gt;对于一个分布式系统而言，我们的组件必然要被部署到不同的节点上，也必然会出现子网络。我们无法保证网络始终可靠，那么网络分区则是一个必定会产生的异常情况。&lt;/p&gt;
+&lt;p&gt;当发生网络分区的时候，如果我们要继续提供服务，那么分区容错性也就是我们必然需要面对和解决的问题，&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;因此分区容错性P是必定要满足的&lt;/strong&gt;。&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;那么一致性C和可用性A可以兼顾吗？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;答案必定是否定的，为什么呢？倘若分布式系统中出现了网络分区的情况，此时某一个节点在进行写操作，为了保证一致性，那么就必须要禁止其他节点的读写操作以防止数据冲突，而此时就导致其他的节点无法正常工作，即与&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;可用性&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;发生冲突。而如果让其他节点都正常进行读写操作的话，那就无法保证数据的一致，影响了数据的一致性，&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;因此，我们只能满足可用性A和一致性C二者其一&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;p&gt;用一句话总结就是，&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;CAP 理论中分区容错性 P 是一定要满足的，在此基础上，只能满足可用性A或者一致性C。&lt;/strong&gt; &lt;!-- raw HTML omitted --&gt;因此在上面我给出的图中，CA是不可能的选项，在实际场景中，我们会根据具体的需求来选择CP和AP。&lt;/p&gt;
+&lt;h2 id=&#34;base&#34;&gt;BASE&lt;/h2&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;BASE理论&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;是&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;基本可用（Basically Available）&lt;/strong&gt; 、&lt;strong&gt;软状态（Soft-state）&lt;strong&gt;和&lt;/strong&gt;最终一致性（Eventually Consistent）&lt;/strong&gt; &lt;!-- raw HTML omitted --&gt;三个短语的缩写。其是对CAP中的一致性和可用性进行一个权衡的结果。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;基本可用（Basically Available）&lt;/strong&gt;：基本可用是指分布式系统在出现不可预知故障的时候，允许损失部分可用性（响应时间上的损失、系统功能上的损失）。但是，这绝不等价于系统不可用。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;软状态（Soft-state）&lt;/strong&gt;：允许系统中的数据存在中间状态（CAP理论中的数据不一致），并认为该中间状态的存在不会影响系统的整体可用性，即允许系统在不同节点的数据副本之间进行数据同步的过程存在延时。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;最终一致性（Eventually Consistent）&lt;/strong&gt;：最终一致性强调的是系统中所有的数据副本，在经过一段时间的同步后，最终能够达到一个一致的状态。因此，最终一致性的本质是需要系统保证最终数据能够达到一致，而不需要实时保证系统数据的强一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;BASE理论的核心思想就是&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;我们无法做到强一致，但每个应用都可以根据自身的业务特点，采用适当的方式来使系统达到最终一致性。&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;p&gt;什么意思呢？&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;其实就是要牺牲数据的一致性（不保证强一致性，只保证最终一致性）来满足系统的高可用性&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，系统中一部分数据不可用或者不一致时，仍需要保持&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;系统整体“主要可用”&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;。&lt;/p&gt;
+&lt;p&gt;总的来说，BASE理论面向的是大型高可用可扩展的分布式系统，和传统事务的ACID特性使相反的，它完全不同于ACID的强一致性模型，而是提出通过&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;牺牲强一致性来获得可用性，并允许数据在一段时间内是不一致的，但最终达到一致状态&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;。但同时，在实际的分布式场景中，不同业务单元和组件对数据一致性的要求是不同的，因此在具体的分布式系统架构设计过程中，ACID特性与BASE理论往往又会结合在一起使用。&lt;/p&gt;
 </description>
         </item>
         

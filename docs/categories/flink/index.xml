@@ -1,0 +1,944 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Flink on 凌桓&#39;s BLOG</title>
+        <link>https://blog.orekilee.top/categories/flink/</link>
+        <description>Recent content in Flink on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language><atom:link href="https://blog.orekilee.top/categories/flink/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Flink 状态一致性</title>
+        <link>https://blog.orekilee.top/p/flink-%E7%8A%B6%E6%80%81%E4%B8%80%E8%87%B4%E6%80%A7/</link>
+        <pubDate>Tue, 24 May 2022 14:40:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/flink-%E7%8A%B6%E6%80%81%E4%B8%80%E8%87%B4%E6%80%A7/</guid>
+        <description>&lt;h1 id=&#34;状态一致性&#34;&gt;状态一致性&lt;/h1&gt;
+&lt;h2 id=&#34;什么是状态一致性&#34;&gt;什么是状态一致性&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;有状态的流处理，内部每个算子任务都可以有自己的状态。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;对于流处理器内部（没有接入sink）来说，所谓的状态一致性，其实就是我们所说的&lt;strong&gt;计算结果要保证准确，一条数据不应该丢失，也不应该重复计算&lt;/strong&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;在遇到故障时可以恢复状态，恢复以后的重新计算，结果应该也是完全正常的。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;状态一致性种类&#34;&gt;状态一致性种类&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;最多一次（At-Most-Once）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;任务发生故障时最简单的措施就是既不恢复丢失的状态，也不重放丢失的事件，所以至多一次是最简单的一种情况。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;它保证了每个事件至多被处理一次。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;至少一次（At-Least-Once）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;对于大多数现实应用而言，用户的期望是不丢事件，这类保障被称为至少一次。&lt;/li&gt;
+&lt;li&gt;它意味着所有事件最终都会处理，虽然有些可能会处理多次。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;精确一次（Exactly-Once）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;精确一次是最严格，最难实现的一类保障。&lt;/li&gt;
+&lt;li&gt;它不但能够保证事件没有丢失，而且每个事件对于内部状态的更新都只有一次。&lt;/li&gt;
+&lt;li&gt;Flink利用Checkpoints机制来保证精确一次语义。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;端到端end-to-end状态一致性&#34;&gt;端到端（end-to-end）状态一致性&lt;/h2&gt;
+&lt;p&gt;端到端的保障指的是&lt;strong&gt;在整个数据处理管道上结果都是正确的&lt;/strong&gt;。在每个组件都提供自身的保障情况下，整个处理管道上端到端的保障会&lt;strong&gt;受制于保障最弱的那个组件&lt;/strong&gt;。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;那么端到端的精确一次在各部分又是如何实现的呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;内部&lt;/strong&gt;：Checkpoints机制，在发生故障的时候能够恢复各个环节的数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Source&lt;/strong&gt;：可设置数据读取的偏移量，当发生故障的时候重置偏移量到故障之前的位置。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sink&lt;/strong&gt;：从故障恢复时，数据不会重复写入外部系统。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;其中前两种在上文已经介绍过了，下面就介绍一下Sink如何提供端到端的精确一次性保障。&lt;/p&gt;
+&lt;h2 id=&#34;sink端到端状态一致性的保证&#34;&gt;Sink端到端状态一致性的保证&lt;/h2&gt;
+&lt;p&gt;应用若是想提供端到端的精确一次性保障，就需要一些特殊的Sink连接器，根据情况不同，这些连接器可以使用两种技术来实现精确一次保障：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;幂等性写（idempotent write）&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;- 幂等操作的含义就是可以多次执行，但是只会引起一次改变。
+- 例如我们将相同的键值对插入一个哈希结构中就是一个幂等操作， 因为由于该键值对已存在后，无论插入多少次都不会改变结果。
+- 由于可以在不改变结果的前提下多次执行，因此幂等性写操作在一定程度上减轻Flink检查点机制所带来的重复结果的影响&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;事务性写（transactional write）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;事务性写其实就是原子性写，即只有在上次成功的检查点之前计算的结果才会被写入外部Sink系统。&lt;/li&gt;
+&lt;li&gt;事务性写虽然不会像幂等性写那样出现重放过程中的不一致现象，但是会增加一定延迟，因为结果只有在检查点完成后才对外可见。&lt;/li&gt;
+&lt;li&gt;实现思想：构建的事务对应着Checkpoints，待Checkpoints真正完成的时候，才把所有对应的结果写入Sink系统中。&lt;/li&gt;
+&lt;li&gt;实现方式：
+&lt;ul&gt;
+&lt;li&gt;预写日志（Write Ahead Log，WAL）&lt;/li&gt;
+&lt;li&gt;两阶段提交（Two Phase Commit，2PC）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;预写日志&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;把结果数据先当成状态保存，然后在收到Checkpoints完成的通知时，一次性写入Sink系统。&lt;/li&gt;
+&lt;li&gt;简单易于实现，由于数据提前在状态后端做了缓存，所以无论什么Sink系统都能用这种方式一批搞定。&lt;/li&gt;
+&lt;li&gt;但同时它也存在问题，写入数据时出现故障则会导致一部分数据成功一部分失败。&lt;/li&gt;
+&lt;li&gt;DataStream API提供了一个模板类&lt;code&gt;GenericWriteAheadSink&lt;/code&gt;，来实现这种事务性Sink。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;两阶段提交&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;对于每个Checkpoints，Sink任务会启动一个事务，并将接下来所有接收的数据添加到事务里。&lt;/li&gt;
+&lt;li&gt;然后将这些数据写入外部 Sink，但不提交它们，这时只是“预提交”。&lt;/li&gt;
+&lt;li&gt;当它收到Checkpoints完成的通知时，它才正式提交事务，实现结果的真正写入。&lt;/li&gt;
+&lt;li&gt;这种方式真正实现了精确一次，它需要一个提供事务支持的外部Sink系统，Flink提供了&lt;code&gt;TwoPhaseCommitSinkFunction&lt;/code&gt;接口。&lt;/li&gt;
+&lt;li&gt;对外部Sink系统的要求
+&lt;ul&gt;
+&lt;li&gt;外部Sink系统必须提供事务支持，或者Sink任务必须能够模拟外部系统上的事务。&lt;/li&gt;
+&lt;li&gt;在Checkpoints的隔离期间里，必须能够开启一个事务并接受数据写入。&lt;/li&gt;
+&lt;li&gt;在收到Checkpoints完成的通知之前，事务必须是“等待提交”的状态。在故障恢复的情况下，这可能需要一些时间。如果这个时候 Sink系统关闭事务（例如超时了），那么未提交的数据就会丢失。&lt;/li&gt;
+&lt;li&gt;Sink任务必须能够在进程失败后恢复事务。&lt;/li&gt;
+&lt;li&gt;提交事务必须是幂等操作。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk35.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;flinkkafka端到端状态一致性的保证&#34;&gt;Flink+Kafka端到端状态一致性的保证&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;内部&lt;/strong&gt;：利用Checkpoints机制把状态保存，当发生故障的时候可以恢复状态，从而保证内部的状态一致性。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;source 端&lt;/strong&gt;：Kafka Consumer作为Source，可以将偏移量保存下来，当发生故障时可以从发生故障前的偏移量重新消费数据，从而保证一致性。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;sink端&lt;/strong&gt;：Kafka Producer作为Sink，采用两阶段提交Sink，需要实现一个&lt;code&gt;TwoPhaseCOmmitSinkFunction&lt;/code&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>Flink 容错机制</title>
+        <link>https://blog.orekilee.top/p/flink-%E5%AE%B9%E9%94%99%E6%9C%BA%E5%88%B6/</link>
+        <pubDate>Tue, 24 May 2022 14:38:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/flink-%E5%AE%B9%E9%94%99%E6%9C%BA%E5%88%B6/</guid>
+        <description>&lt;h1 id=&#34;flink-容错机制&#34;&gt;Flink 容错机制&lt;/h1&gt;
+&lt;h2 id=&#34;checkpoints检查点&#34;&gt;Checkpoints（检查点）&lt;/h2&gt;
+&lt;p&gt;Flink中基于&lt;strong&gt;异步轻量级的分布式快照技术&lt;/strong&gt;提供了&lt;strong&gt;Checkpoints容错机制&lt;/strong&gt;，Checkpoints可以将同一时间点作业/算子的状态数据全局统一快照处理，包括前面提到的算子状态和键值分区状态。当发生了故障后，Flink会将所有任务的状态恢复至最后一次Checkpoint中的状态，并从那里重新开始执行。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;那么Checkpoints的生成策略是什么样的呢？它会在什么时候进行快照的生成呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;其实就是在所有任务都处理完同一个输入数据流的时候，这时就会对当前全部任务的状态进行一个拷贝，生成Checkpoints。&lt;/p&gt;
+&lt;p&gt;为了方便理解，这里先简单的用一个朴素算法来解释这一生成过程（Flink的Checkpoints算法实际要更加复杂，在下面会详细讲解）&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;暂停接受所有输入流。&lt;/li&gt;
+&lt;li&gt;等待已经流入系统的数据被完全处理，即所有任务已经处理完所有的输入数据。&lt;/li&gt;
+&lt;li&gt;将所有任务的状态拷贝到远程持久化，生成Checkpoints。在所有任务完成自己的拷贝工作后，Checkpoints生成完毕。&lt;/li&gt;
+&lt;li&gt;恢复所有数据流的接收&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;恢复流程&#34;&gt;恢复流程&lt;/h3&gt;
+&lt;p&gt;为了方便进行实例的讲解，假设当前有一个Source任务，负责从一个递增的数字流（1、2、3、4……）中读取数据，读取到的数据会分为奇数流和偶数流，求和算子的两个任务会分别对它们进行求和。在当前任务中，数据源算子的任务会将输入流的当前偏移量存为状态，求和算子的任务会将当前和存为状态。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk16.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;如上图，在当前生成的Checkpoints中保存的输入偏移为5，偶数求和为6，奇数求和为9。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk9.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;假设在下一轮计算中，任务sum_odd计算出现了问题，任务sum_odd的时候产生了问题，导致结果出现错误。由于出现问题，为了防止从头开始重复计算，此时会通过Checkpoints来进行快照的恢复。&lt;/p&gt;
+&lt;p&gt;Checkpoints恢复应用需要以下三个步骤&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;重启整个应用&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;利用最新的检查点重置任务状态&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;恢复所有任务的处理&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk30.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;第一步我们需要先重启整个应用，恢复到最原始的状态。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk29.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;紧接着从检查点的快照信息中读取出输入源的偏移量以及算子计算的结果，进行状态的恢复&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk28.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;状态恢复完成后，继续Checkpoints恢复的位置开始继续处理。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;从检查点恢复后，它的内部状态会和生成检查点的时候完全一致，并且会紧接着重新处理那些从之前检查点完成开始，到发生系统故障之间已经处理过的数据。虽然这意味着Flink会重复处理部分消息，但上述机制仍然可以实现&lt;strong&gt;精确一次的状态一致性&lt;/strong&gt;，因为所有的算子都会恢复到那些数据处理之前的时间点。&lt;/p&gt;
+&lt;p&gt;但这个机制仍然面临一些问题，因为Checkpoints和恢复机制仅能重置&lt;strong&gt;应用内部的状态&lt;/strong&gt;，而应用所使用的Sink可能在恢复期间将结果向下游系统（如事件日志系统、文件系统或数据库）&lt;strong&gt;重复发送多次&lt;/strong&gt;。为了解决这个问题，对于某些存储系统，Flink提供的Sink函数支持&lt;strong&gt;精确一次输出&lt;/strong&gt; （在检查点完成后才会把写出的记录正式提交）。另一种方法则是适用于大多数存储系统的&lt;strong&gt;幂等更新&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;生成策略&#34;&gt;生成策略&lt;/h3&gt;
+&lt;p&gt;Flink中的Checkpoints是基于&lt;strong&gt;Chandy-Lamport分布式快照算法&lt;/strong&gt; 实现的，该算法&lt;strong&gt;不会暂停整个应用&lt;/strong&gt;，而是&lt;strong&gt;会将生成Checkpoints的过程和处理过程分离&lt;/strong&gt;，这样在部分任务持久化状态的过程中，其他任务还可以继续执行。&lt;/p&gt;
+&lt;p&gt;在介绍生成策略之前，首先需要介绍一下&lt;strong&gt;Checkpoints barrier（屏障）&lt;/strong&gt; 这一种特殊记录。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk27.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;如上图，与水位线相同，Flink会在Source中&lt;strong&gt;间隔性&lt;/strong&gt;地生成barrier，&lt;strong&gt;通过barrier把一条流上的数据划分到不同的Checkpoints中&lt;/strong&gt;，在barrier之前到来的数据导致的状态更改，都会被包含在当前所属的Checkpoints中；而基于barrier之后的数据导致的所有更改，就会被包含在之后的Checkpoints中。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk26.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;假设当前有两个Source任务，各自消费一个递增的数字流（1、2、3、4……），读取到的数据会分为奇数流和偶数流，求和算子的两个任务会分别对它们进行求和，并将结果值更新至下游Sink。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk25.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;此时JobManager向每一个Source任务发送一个新的Checkpoints编号，以此启动Checkpoints生成流程。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk24.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;在Source任务收到消息后，会暂停发出记录，紧接着利用状态后端生成本地状态的Checkpoints，并把barrier连同编号广播给所有传出的数据流分区。&lt;/li&gt;
+&lt;li&gt;状态后端在状态存入Checkpoints后通知Source任务，并向JobManager发送确认消息。&lt;/li&gt;
+&lt;li&gt;在所有barrier发出后，Source将恢复正常工作。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk23.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;Source任务会广播barrier至所有与之相连的任务，确保这些任务能从它们的每个输入都收到一个barrier&lt;/li&gt;
+&lt;li&gt;在等待过程中，对于barrier未到达的分区，数据会继续正常处理。而barrier已经到达的分区，它们新到来的记录会被缓冲起来，不能处理。这个等待所有barrier到来的过程被称为&lt;strong&gt;barrier对齐&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk22.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;任务中收齐全部输入分区发送的barrier后，就会通知状态后端开始生成Checkpoints，同时继续把Checkpoints barrier广播转发到下游相连的任务。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk21.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;任务在发出所有的Checkpoints barrier后就会开始处理缓冲的记录。等到所有缓冲记录处理完后，任务就会继续处理Source。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk20.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;Sink任务在收到分隔符后会依次进行barrier对齐，然后将自身状态写入Checkpoints，最终向JobManager发送确认信息。&lt;/li&gt;
+&lt;li&gt;JobManager在接收到所有任务返回的Checkpoints确认信息后，就说明此次Checkpoints生成结束。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;savepoints保存点&#34;&gt;Savepoints（保存点）&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;由于Cheakpoints是&lt;strong&gt;周期性自动生成&lt;/strong&gt;的，但有些时候我们需要&lt;strong&gt;手动&lt;/strong&gt;的去进行镜像保存功能，于是Flink同时还为我们提供了Savepoints来完成这个功能，Savepoints不仅可以做到故障恢复，还可以用于手动备份、版本迁移、暂停或重启应用等。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Savepoints是Checkpoints的一种特殊实现&lt;/strong&gt;，底层也是使用Checkpoint机制，因此Savepoints可以认为是具有一些额外元数据的Checkpoints。&lt;/li&gt;
+&lt;li&gt;Savepoints的生成和清理都无法由Flink自动进行，因此都需要用户自己来&lt;strong&gt;显式触发&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>Flink 状态管理</title>
+        <link>https://blog.orekilee.top/p/flink-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86/</link>
+        <pubDate>Tue, 24 May 2022 14:35:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/flink-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86/</guid>
+        <description>&lt;h1 id=&#34;flink-状态管理&#34;&gt;Flink 状态管理&lt;/h1&gt;
+&lt;p&gt;通常意义上，函数里&lt;strong&gt;所有需要任务去维护并用来计算结果的数据都属于任务的状态&lt;/strong&gt;，可以把&lt;strong&gt;状态想象成任务的业务逻辑所需要访问的本地或实例变量&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk19.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;如上图，任务首先会接受一些输入数据。在处理这些数据的过程中，任务对其状态进行读取或更新，并根据状态的输入数据计算结果。我们以一个持续计算接收到多少条记录的简单任务为例。当任务收到一个新的记录后，首先会访问状态获取当前统计的记录数目，然后把数目增加并更新状态，最后将更新后的状态数目发送出去。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Flink会负责进行状态的管理&lt;/strong&gt;，包括状态一致性、故障处理以及高效存取相关的问题都由Flink负责搞定，这样开发人员就可以专注于自己的应用逻辑。&lt;/p&gt;
+&lt;p&gt;在Flink中，状态都是和特定operator（算子）相关联，为了让Flink的Runtime（运行）层知道算子有哪些状态，算子需要自己对其进行注册。根据&lt;strong&gt;作用域的不同&lt;/strong&gt;，状态可以分为以下两类&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;operator state（算子状态）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;keyed state（键值分区状态）&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;算子状态&#34;&gt;算子状态&lt;/h2&gt;
+&lt;p&gt;算子状态的&lt;strong&gt;作用域是某个算子任务&lt;/strong&gt;，这意味着所有在同一个并行任务之内的记录都能访问到相同的状态**（每一个并行的子任务都共享一个状态）&lt;strong&gt;。算子状态不能通过其他任务访问，无论该任务是否来自相同算子&lt;/strong&gt;（相同算子的不同任务之间也不能访问）**。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk18.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;Flink为算子状态提供了三种数据结构&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;列表状态（list state）&lt;/strong&gt;：将状态表示为一组数据的列表。&lt;strong&gt;（每一个并行的子任务共享一个状态）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;联合列表状态（union list state）&lt;/strong&gt;：同样将状态表示为数据的列表，但在进行故障恢复或者从某个保存点（savepoint）启动应用的时候，状态恢复的方式和普通的列表状态有所不同。&lt;strong&gt;（把之前的每一个状态广播到对应的每一个算子中）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;广播状态（broadcast state）&lt;/strong&gt;：专门为那些需要保证算子的每个任务状态都相同的场景而设计。&lt;strong&gt;（把同一个状态广播给所有算子子任务）&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;键值分区状态&#34;&gt;键值分区状态&lt;/h2&gt;
+&lt;p&gt;键值分区状态会按照&lt;strong&gt;算子输入记录所定义的键值&lt;/strong&gt;来进行维护或访问。Flink为每个键值都维护了一个状态实例，该实例总是位于那个处理对应键值记录的算子任务上。当任务在处理一个记录时，会自动把状态的&lt;strong&gt;访问范围限制为当前记录的键值&lt;/strong&gt;，因此&lt;strong&gt;所有键值相同的记录都能访问到一样的状态。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk17.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;Flink为键值分区状态提供以下几种数据结构&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;单值状态（value state）&lt;/strong&gt;：每个键对应存储一个任意类型的值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;列表状态（list state）&lt;/strong&gt;：每个键对应存储一个值的列表。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;映射状态（map state）&lt;/strong&gt;：每个键对应存储一个键值映射。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;聚合状态（Reducing state &amp;amp; Aggregating State）&lt;/strong&gt;：每个键对应存储一个用于聚合操作的列表&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;状态后端state-backends&#34;&gt;状态后端（State Backends）&lt;/h2&gt;
+&lt;p&gt;有状态算子的任务通常会对每一条到来的记录读写状态，因此高效的状态访问对于记录处理的低延迟而言至关重要。为了保证快速访问状态，&lt;strong&gt;每个并行任务都会把状态维护在本地&lt;/strong&gt;。至于状态具体的存储、访问和维护，则是由一个名为状态后端的&lt;strong&gt;可拔插（pluggable）&lt;/strong&gt; 组件来决定。状态后端主要负责两件事情：&lt;strong&gt;本地状态管理和将状态以检查点的形式写入远程存储&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;目前，Flink提供了三种状态后端，状态后端的选择会影响有状态应用的鲁棒性及性能。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;MemoryStateBackend&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;MemoryStateBackend将状态以常规对象的方式存储在TaskManager进程的JVM堆，并在生成Checkpoints时会将状态发送至JobManager并保存到它的堆内存中。&lt;/li&gt;
+&lt;li&gt;如果状态过大，则可能导致JVM上的任务由于OutOfMemoryError而终止，并且可能由于堆中放置了过多常驻内存的对象而引发垃圾回收停顿问题。&lt;/li&gt;
+&lt;li&gt;由于内存具有易失性，所以一旦JobManager出现故障就会导致状态丢失，因此MemoryStateBackend通常用于开发和调试。&lt;/li&gt;
+&lt;li&gt;内存访问速度快，延迟低，但容错性也低。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;FsStateBackend&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;与MemoryStateBackend一样将本地状态存储在TaskManager进程的JVM堆里，不同的是将Checkpoints存到了远程持久化文件系统（FileSystem）中。&lt;/li&gt;
+&lt;li&gt;受到TaskManager内存大小的限制，并且也可能导致垃圾回收停顿问题。&lt;/li&gt;
+&lt;li&gt;FsStateBackend既让本地访问享有内存的速度，又可以支持故障容错。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;RocksDBStateBackend&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;RocksDBStateBackend会将全部状态序列化后存到本地RocksDB实例中&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;由于磁盘I/O以及序列化/反序列化对象的性能开销，相较于内存中维护状态而言， 读写性能会偏低。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;RocksDB的支持并不直接包含在Flink中，需要额外引入依赖&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;dependency&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;groupId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;org&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;apache&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;flink&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;lt;/&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;groupId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;artifactId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;flink&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;statebackend&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;rocksdb_2&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;12&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;lt;/&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;artifactId&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;o&#34;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;version&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;12&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;lt;/&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;version&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;&amp;lt;/&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;dependency&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;有状态算子的扩缩容&#34;&gt;有状态算子的扩缩容&lt;/h2&gt;
+&lt;p&gt;流式应用的一项基本需求是&lt;strong&gt;根据输入数据到达速率的变化调整算子的并行度&lt;/strong&gt;。对于无状态的算子扩缩容很容易，但是对于有状态算子来说，这就变的复杂了很多。因为我们&lt;strong&gt;需要把状态重新分组，分配到与之前数量不等的并行任务上&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;针对不同类型状态的算子，Flink提供了四种扩缩容模式&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;键值分区状态&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;算子列表状态&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;算子联合列表状态&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;算子广播状态&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;键值分区状态-1&#34;&gt;键值分区状态&lt;/h3&gt;
+&lt;p&gt;带有键值分区状态的算子在扩缩容时&lt;strong&gt;会根据新的任务数量对键值重新分区&lt;/strong&gt;，但为了降低状态在不同任务之间迁移的必要成本，Flink不会对单独的键值实施再分配，而是会把所有键值分为不同的&lt;strong&gt;键值组（Key group）&lt;/strong&gt;。每个键值组都包含了部分键值，Flink以此为单位把键值分配给不同任务。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk12.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h3 id=&#34;算子列表状态&#34;&gt;算子列表状态&lt;/h3&gt;
+&lt;p&gt;带有算子列表状态的算子在扩缩容时会&lt;strong&gt;对列表中的条目进行重新分配&lt;/strong&gt;。理论上，所有并行算子任务的列表条目会被&lt;strong&gt;统一收集&lt;/strong&gt;起来，随后&lt;strong&gt;均匀分配到更少或更多的任务之上&lt;/strong&gt;。如果列表条目的数量小于算子新设置的并行度，部分任务在启动时的状态就可能为空。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk33.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h3 id=&#34;算子联合列表状态&#34;&gt;算子联合列表状态&lt;/h3&gt;
+&lt;p&gt;带有算子联合列表状态的算子会在扩缩容时&lt;strong&gt;把状态列表的全部条目广播到全部任务上&lt;/strong&gt;，随后由任务自己决定哪些条目应该保留，哪些应该丢弃。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk32.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h3 id=&#34;算子广播状态&#34;&gt;算子广播状态&lt;/h3&gt;
+&lt;p&gt;带有算子广播状态的算子在扩缩容时会&lt;strong&gt;把状态拷贝到全部新任务上&lt;/strong&gt;，这样做的原因是&lt;strong&gt;广播状态能确保所有任务的状态相同&lt;/strong&gt;。在缩容的情况下，由于状态经过复制不会丢失，我们可以简单的停掉多出的任务。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk31.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+</description>
+        </item>
+        <item>
+        <title>Flink 流处理</title>
+        <link>https://blog.orekilee.top/p/flink-%E6%B5%81%E5%A4%84%E7%90%86/</link>
+        <pubDate>Tue, 24 May 2022 14:29:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/flink-%E6%B5%81%E5%A4%84%E7%90%86/</guid>
+        <description>&lt;h1 id=&#34;flink-流处理&#34;&gt;Flink 流处理&lt;/h1&gt;
+&lt;h2 id=&#34;dataflow编程&#34;&gt;Dataflow编程&lt;/h2&gt;
+&lt;p&gt;顾名思义，Dataflow程序描述了数据如何在不同操作之间流动。Dataflow程序通常表现为&lt;strong&gt;有向无环图（DAG）&lt;/strong&gt;，图中顶点称为&lt;strong&gt;算子（Operator）&lt;/strong&gt;，表示计算。而&lt;strong&gt;边表示数据依赖关系&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;算子是Dataflow程序的基本功能单元，他们从输入获取数据，对其进行计算，然后产生数据并发往输出以供后续处理。而所有Flink程序都由三部分算子组成。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Source（数据源）&lt;/strong&gt;：负责获取输入数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Transformation（数据处理）&lt;/strong&gt;：对数据进行处理加工，通常对应着多个算子。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sink（数据汇）&lt;/strong&gt;：负责输出数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk6.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;执行图&#34;&gt;执行图&lt;/h2&gt;
+&lt;p&gt;类似上图的Dataflow图被称为逻辑图，因为它们表达了高层视角下的计算逻辑。为了执行Dataflow程序，需要将逻辑图转化为物理Dataflow图（执行图），后者会指定程序的执行细节。&lt;/p&gt;
+&lt;p&gt;在Flink中，执行图按层级顺序分为以下四层&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;StreamingGraph&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;是根据用户通过Stream API编写的代码生成的初始流程图，用于&lt;strong&gt;表示程序的拓扑结构&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;JobGraph&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;StreamGraph经过优化后生成了JobGraph，提交给JobManager的数据结构。主要的优化为&lt;strong&gt;将多个符合条件的节点链接在一起作为一个节点&lt;/strong&gt;（任务链Operator Chains）后放在一个作业中执行，这样可以减少数据在节点之间流动所需要的序列化/反序列化/传输消耗。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ExecutionGraph&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;JobManager根据JobGraph生成ExecutionGraph，ExecutionGraph是JobGraph的&lt;strong&gt;并行化&lt;/strong&gt;版本，是调度层最核心的数据结构。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;物理执行图&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;JobManager根据ExecutionGraph对任务进行调度后，在各个TaskManager上&lt;strong&gt;部署作业后形成的“图”&lt;/strong&gt;，并不是一个具体的数据结构。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk2.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;并行度&#34;&gt;并行度&lt;/h2&gt;
+&lt;p&gt;Flink程序的执行具有&lt;strong&gt;并行、分布式&lt;/strong&gt;的特性。&lt;/p&gt;
+&lt;p&gt;在执行过程中，一个Stream包含一个或多个分区（partition），而每一个算子（operator）可以包含一个或多个子任务（operator subtask），这些子任务中不同的线程、不同的物理机或不同的容器中彼此互不依赖地执行。&lt;/p&gt;
+&lt;p&gt;一个&lt;strong&gt;特定算子的子任务的个数被称之为并行度（paralelism）&lt;/strong&gt;。一般情况下&lt;strong&gt;一个流程序的并行度可以认为就是其所有算子中最大的并行度&lt;/strong&gt;，一个程序中不同的算子可以具有不同的并行度。&lt;/p&gt;
+&lt;h2 id=&#34;数据传输策略&#34;&gt;数据传输策略&lt;/h2&gt;
+&lt;p&gt;Stream在算子之间传输数据的形式可以是one-to-one（forwarding）的模式也可以是Redistributing的模式，具体是哪一种需要取决于算子的种类。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;One-to-one&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Stream维护着分区以及元素的顺序&lt;/strong&gt;（比如在Source和map operator之间），那意味着map算子的子任务看到的元素的个数以及顺序跟Source算子的子任务生产的元素的个数、顺序相同，map、filter、flatmap等算子都是one-to-one的对应关系。&lt;/li&gt;
+&lt;li&gt;类似于Spark中的&lt;strong&gt;窄依赖&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Redistributing&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Stream的分区会发生改变&lt;/strong&gt;（map()跟keyBy/window之间或者keyBy/windows跟Sink之间）。每一个算子的子任务依据所选择的Transformation发送数据到不同的目标任务。&lt;/li&gt;
+&lt;li&gt;例如keyBy()基于hashCode重分区、broadcast和rebalance会随机重新分区，这些算子都会引起redistribute过程，而redistribute过程就类似于Spark中的shuffle过程。&lt;/li&gt;
+&lt;li&gt;类似于Spark中的&lt;strong&gt;宽依赖&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;任务链&#34;&gt;任务链&lt;/h2&gt;
+&lt;p&gt;Flink 采用了一种称为&lt;strong&gt;任务链&lt;/strong&gt;的优化技术，可以在特定条件下减少本地通信的开销。为了满足任务链的要求，必须将两个或多个算子设为&lt;strong&gt;相同的并行度&lt;/strong&gt;，并通过&lt;strong&gt;本地转发（local forward）&lt;/strong&gt; 的方式进行连接。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;相同并行度&lt;/strong&gt;的 &lt;strong&gt;one-to-one&lt;/strong&gt; 操作 &lt;strong&gt;（两个条件缺一不可）&lt;/strong&gt;，Flink 这样相连的算子链接在一起形成一个 task，原来的算子成为里面的 subtask。每个 task 由一个线程执行。将算子链接成 task 是个有用的优化：它减少线程间切换、缓冲的开销，并且减少延迟的同时增加整体吞吐量。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk5.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;时间语义&#34;&gt;时间语义&lt;/h2&gt;
+&lt;p&gt;对于流式数据处理，最大的特点就是数据上具有时间的属性特征，Flink根据时间产生的位置不同，将时间区分为如下三种时间概念&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;事件时间（Event Time）&lt;/strong&gt;：数据流事件实际发生的时间。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;接入时间（Ingestion Time）&lt;/strong&gt;：数据进入Flink系统的时间。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;处理时间（Processing Time）&lt;/strong&gt;：当前流处理算子所在机器上的本地时钟时间。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk3.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;Flink中&lt;strong&gt;默认使用的是处理时间&lt;/strong&gt;，但是在&lt;strong&gt;大多数情况下都会使用事件时间（即实际事件的发生点，也符合事件发生进而分析的逻辑）&lt;/strong&gt;，一般只有在Event Time无法使用的情况下才会使用接入时间和处理时间，因此我们可以通过调用执行环境的&lt;code&gt;setStreamTimeCharacteristic&lt;/code&gt;方法来指定时间语义&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;//创建执行环境				
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;StreamExecutionEnvironment&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;env&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;StreamExecutionEnvironment&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;getExecutionEnvironment&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;//设置指定的时间语义，如下面的设置为EventTime
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;env&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;setStreamTimeCharacteristic&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;TimeCharacteristic&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;na&#34;&gt;EventTime&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;处理时间与事件时间的选择&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;在大部分场景由于我们需要依据事件发生的顺序来进行逻辑处理，因此都会使用事件时间。但是在一些特殊场景下，考虑到事件数据数据乱序到达以及延迟到达等问题，为了保证实时性和低延迟，处理时间就会派上用场。&lt;/p&gt;
+&lt;p&gt;例如下面几种场景：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;更重视处理速度而非准确性的应用。&lt;/li&gt;
+&lt;li&gt;需要周期性实时报告结果而无论其准确性（如实时监控仪表盘）。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;因此，对比处理时间和事件时间得出结论：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;处理时间提供了低延迟，但是它的结果依赖处理速度，因此具有不确定性。&lt;/li&gt;
+&lt;li&gt;事件时间则与之相反，能够保证结果的准确性，并允许你处理延迟甚至无序的事件。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;水位线watermarks&#34;&gt;水位线（Watermarks）&lt;/h2&gt;
+&lt;p&gt;在理想状态下，事件数据都是按照事件产生的时间顺序传输至Flink系统中。但事实上，由于网络或者分布式系统等外部因素的影响下，事件数据往往不能及时传输，导致系统的不稳定而造成&lt;strong&gt;数据乱序到达或者延迟到达&lt;/strong&gt;等情况。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk8.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;一旦出现这种问题，如果我们严格按照Event Time来决定窗口的运行，我们既不能保证属于该窗口的数据已经全部到达，也不能无休止的等待延迟到达的数据，因此我们需要一种机制来控制数据处理的进度，这就是&lt;strong&gt;水位线（Watermarks）机制&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;水位线是一个全局的进度指标&lt;/strong&gt;，它能够衡量数据处理进度==（表达数据到达的完整性）**，保证事件数据全部到达Flink系统，即使数据乱序或者延迟到达，也能够像预期一样计算出正确和连续的结果。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;那么它是如何做到的呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;Flink会使用&lt;strong&gt;最新的事件时间减去固定时间间隔&lt;/strong&gt;作为水位线，该时间时间为用户外部配置的支持最大延迟到达的时间长度。&lt;/li&gt;
+&lt;li&gt;当一个算子接收到一个时间为T的水位线，就可以认为&lt;strong&gt;不会再收到任何时间戳小于或等于T的事件了（迟到事件或异常事件）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;水位线其实就相当于一个提示算子的信号，&lt;strong&gt;当水位线时间戳大于时间窗口的结束时间&lt;/strong&gt;，且窗口中含有事件数据时，此时算子就会认为某个特定时间区间的时间戳已经全部到齐，立即开始触发窗口计算或对接收的数据进行排序。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;从上面我们可以看出，水位线其实就是&lt;strong&gt;在结果的准确性和延迟之间做出取舍&lt;/strong&gt;，它虽然保证了低延迟，但是伴随而来的却是低可信度。倘若我们要保证后续的延迟事件不丢失，就必须额外增加一些代码来处理他们，但是如果采用这种保守的机制，虽然可信度低高了，但是延迟又会继续增加，&lt;strong&gt;因此延迟和可信无法做到两全其美&lt;/strong&gt;，需要我们依据具体场景来自己平衡。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>Flink 架构</title>
+        <link>https://blog.orekilee.top/p/flink-%E6%9E%B6%E6%9E%84/</link>
+        <pubDate>Tue, 24 May 2022 14:23:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/flink-%E6%9E%B6%E6%9E%84/</guid>
+        <description>&lt;h1 id=&#34;flink-架构&#34;&gt;Flink 架构&lt;/h1&gt;
+&lt;h2 id=&#34;架构体系&#34;&gt;架构体系&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk10.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;在Flink整个软件架构体系中，遵循了分层的架构设计理念，在降低系统耦合度的同时也为上层用户构建Flink应用提供了丰富且友好的借口。从上图可以看出Flink的架构体系基本上可以分为以下三层&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;API &amp;amp; Libraries层&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Runtime核心层&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;物理部署层&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;api--libraries层&#34;&gt;API &amp;amp; Libraries层&lt;/h3&gt;
+&lt;p&gt;作为分布式数据处理框架，Flink同时提供了支持流计算和批计算的借口，同时在此基础之上抽象出不同的应用类型的组件库，如基于流处理的CEP（复杂事件处理库）、SQL&amp;amp;Table库和基于批处理的FlinkML（机器学习库）、Gelly（图处理库）等。&lt;/p&gt;
+&lt;p&gt;API层包括构建流计算应用的DataStream API和批计算应用的DataSet API，两者都提供给用户丰富的数据处理高级API，例如Map、FlatMap操作等，同时也提供比较低级的Process Function API，用户可以直接操作状态和时间等底层数据。&lt;/p&gt;
+&lt;h3 id=&#34;runtime核心层&#34;&gt;Runtime核心层&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;该层主要负责对上层不同接口提供基础服务，也是Flink分布式计算框架的核心实现层&lt;/strong&gt;，支持分布式Stream作业的执行、JobGraph到ExecutionGraph的映射转换、任务调度等。&lt;/p&gt;
+&lt;h3 id=&#34;物理部署层&#34;&gt;物理部署层&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;该层主要涉及Flink的部署模式&lt;/strong&gt;，目前Flink支持多种部署模式：本地、集群（Standalone/YARN）、云（GCE/EC2）、Kubenetes。Flink能够通过该层能够支持不同的部署，用户可以根据需要选择使用对应的部署模式&lt;/p&gt;
+&lt;h2 id=&#34;运行时组件&#34;&gt;运行时组件&lt;/h2&gt;
+&lt;p&gt;Flink系统主要由以下四个组件组成&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;JobManager（任务管理器）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;TaskManager（作业管理器）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ResourceManger（资源管理器）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Dispatcher（分发器）&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Flink本身是用Java和Scala实现的，因此所有组件都基于&lt;strong&gt;JVM（Java虚拟机）&lt;/strong&gt; 运行。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk4.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h3 id=&#34;jobmanager&#34;&gt;JobManager&lt;/h3&gt;
+&lt;p&gt;Flink遵循&lt;strong&gt;Master-Slave（主从）&lt;strong&gt;架构设计原则，&lt;strong&gt;JobManager为Master节点，TaskManager为Slave节点&lt;/strong&gt;，并且所有组件之间的通信都借助&lt;/strong&gt;Akka&lt;/strong&gt;，包括任务的状态以及CheckPoint（检查点）触发等信息。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;作为&lt;strong&gt;主进程（Master Process）&lt;/strong&gt;，&lt;strong&gt;JobManager控制着单个应用程序的执行&lt;/strong&gt;，也就是&lt;strong&gt;每个应用都由一个不同的JobManager管理&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;JobManager可以接受需要执行的应用，该应用会包含一个所谓的Job Graph（任务图），即&lt;strong&gt;逻辑Dataflow Graph（数据流图）&lt;/strong&gt;，以及一个打包了全部所需类、库以及其他资源的JAR文件。&lt;/li&gt;
+&lt;li&gt;JobManager将JobGraph转化为名为Execution Graph（执行图）的&lt;strong&gt;物理Dataflow Graph&lt;/strong&gt;，其中包含了所有可以并发实行的任务。&lt;/li&gt;
+&lt;li&gt;JobManager会从ResourceManager申请执行任务的必要资源——TaskManager slot，一旦它收到了足够数量的TaskManager slot，它就会将Execution Graph中的任务分发给TaskManager来执行。在执行过程中，JobManager还要负责所有需要集中协调的操作，如创建CheakPoint等。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;taskmanager&#34;&gt;TaskManager&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;TaskManager是&lt;strong&gt;Flink的工作进程（Worker Process）&lt;/strong&gt;，在Flink的搭建过程中要启动多个TaskManager。每个TaskManager提供一定数量的slot（处理槽），&lt;strong&gt;slot的数量限制了TaskManager可执行的任务数&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;TaskManager在启动之后会向ResourceManager注册它的slot，当接收到ResourceManager的指示时，TaskManager会向JobManager提供一个或者多个slot。之后JobManager就可以向slot中分配任务来执行。&lt;/li&gt;
+&lt;li&gt;在执行过程中，运行&lt;strong&gt;同一应用的不同任务&lt;/strong&gt;的TaskManager之间会产生&lt;strong&gt;数据交换&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;resourcemanger&#34;&gt;ResourceManger&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Flink为不同的环境和资源提供者（如YARN、Kubernetes、Stand-alone）提供了&lt;strong&gt;不同&lt;/strong&gt;的ResourceManger。&lt;/li&gt;
+&lt;li&gt;ResourceManger负责&lt;strong&gt;管理Flink的处理资源单元&lt;/strong&gt;——&lt;strong&gt;TaskManager Slot&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;当JobManager申请TaskManager slot时，ResourceManger会指示一个拥有空闲slot的TaskManager将其slot提供给JobManager。如果ResourceManger的slot数无法满足JobManager的请求，则ResourceManger可以与资源提供者通信，让他们提供额外的容器来启动更多的TaskManager进程。同时，ResourceManger还负责终止空闲进程的TaskManager以释放计算资源。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;dispatcher&#34;&gt;Dispatcher&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Dispatcher在会&lt;strong&gt;跨多个作业运行&lt;/strong&gt;，它提供了一个&lt;strong&gt;REST接口&lt;/strong&gt;来让我们提交需要执行的应用，一旦某个应用提交执行，则Dispatcher会启动一个&lt;strong&gt;JobManager&lt;/strong&gt;并将应用转交给它。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;REST接口意味着Dispatcher这一集群的&lt;strong&gt;HTTP入口可以受到防火墙的保护&lt;/strong&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Dispatcher同时还会启动一个&lt;strong&gt;Web UI&lt;/strong&gt;，用来展示和监控有关作业执行的信息。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Dispatcher&lt;strong&gt;并不是必需的组件&lt;/strong&gt;，某些应用提交执行的方式可能用不到Dispatcher。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk11.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk7.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h1 id=&#34;heading&#34;&gt;&lt;/h1&gt;
+</description>
+        </item>
+        <item>
+        <title>Flink 基本概念</title>
+        <link>https://blog.orekilee.top/p/flink-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/</link>
+        <pubDate>Tue, 24 May 2022 14:22:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/flink-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/</guid>
+        <description>&lt;h1 id=&#34;flink介绍&#34;&gt;Flink介绍&lt;/h1&gt;
+&lt;h2 id=&#34;概述&#34;&gt;概述&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;Apache Flink是一个&lt;strong&gt;框架&lt;/strong&gt;和&lt;strong&gt;分布式&lt;/strong&gt;处理引擎，用于在&lt;strong&gt;无边界&lt;/strong&gt;和&lt;strong&gt;有边界&lt;/strong&gt;数据流上进行&lt;strong&gt;有状态&lt;/strong&gt;的计算。Flink能在所有常见集群环境中运行，并能以内存速度和任意规模进行计算。&lt;/p&gt;
+&lt;p&gt;Apache Flink功能强大，支持开发和运行多种不同种类的应用程序。它的主要特性包括：批流一体化、精密的状态管理、事件时间支持以及精确一次的状态一致性保障等。Flink不仅可以运行在包括 YARN、 Mesos、Kubernetes在内的多种资源管理框架上，还支持在裸机集群上独立部署。在启用高可用选项的情况下，它不存在单点失效问题。事实证明，Flink已经可以扩展到数千核心，其状态可以达到 TB 级别，且仍能保持高吞吐、低延迟的特性。世界各地有很多要求严苛的流处理应用都运行在Flink之上。&lt;/p&gt;
+&lt;p&gt;接下来，我们来介绍一下Flink中的几个重要概念。&lt;/p&gt;
+&lt;h3 id=&#34;批与流&#34;&gt;批与流&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;批处理&lt;/strong&gt;的特点是有界、持久、大量，非常适合需要访问全套记录才能完成的计算工作，一般用于离线统计。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;流处理&lt;/strong&gt;的特点是无界、实时, 无需针对整个数据集执行操作，而是对通过系统传输的每个数据项执行操作，一般用于实时统计。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在Spark的世界观中，一切都是由&lt;strong&gt;批次&lt;/strong&gt;组成的，离线数据是一个大批次，而实时数据是由一个一个无限的小批次组成的。而在Flink的世界观中，一切都是由&lt;strong&gt;流&lt;/strong&gt;组成的，离线数据是有界限的流，实时数据是一个没有界限的流，这就是所谓的有界流和无界流。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;无界流&lt;/strong&gt;：有定义流的开始，但没有定义流的结束。它们会无休止地产生数据。无界流的数据必须持续处理，即数据被摄取后需要立刻处理。我们不能等到所有数据都到达再处理，因为输入是无限的，在任何时候输入都不会完成。处理无界数据通常要求以特定顺序摄取事件，例如事件发生的顺序，以便能够推断结果的完整性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;有界流&lt;/strong&gt;：有定义流的开始，也有定义流的结束。有界流可以在摄取所有数据后再进行计算。有界流所有数据可以被排序，所以并不需要有序摄取。有界流处理通常被称为批处理。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk15.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;strong&gt;Flink 擅长处理无界和有界数据集&lt;/strong&gt;，精确的时间控制和状态化使得Flink的运行时(runtime)能够运行任何处理无界流的应用。有界流则由一些专为固定大小数据集特殊设计的算法和数据结构进行内部处理，产生了出色的性能。&lt;/p&gt;
+&lt;h3 id=&#34;部署应用到任何地方&#34;&gt;部署应用到任何地方&lt;/h3&gt;
+&lt;p&gt;Apache Flink是一个分布式系统，它需要计算资源来执行应用程序。Flink集成了所有常见的集群资源管理器，例如Hadoop YARN、 Apache Mesos和Kubernetes，但同时也可以作为独立集群运行。&lt;/p&gt;
+&lt;p&gt;Flink 被设计为能够很好地工作在上述每个资源管理器中，这是通过资源管理器特定(resource-manager-specific)的部署模式实现的。Flink 可以采用与当前资源管理器相适应的方式进行交互。&lt;/p&gt;
+&lt;p&gt;部署Flink应用程序时，Flink会根据应用程序配置的并行性自动标识所需的资源，并从资源管理器请求这些资源。在发生故障的情况下，Flink通过请求新资源来替换发生故障的容器。提交或控制应用程序的所有通信都是通过 REST 调用进行的，这可以简化 Flink 与各种环境中的集成。&lt;/p&gt;
+&lt;h3 id=&#34;利用内存性能&#34;&gt;利用内存性能&lt;/h3&gt;
+&lt;p&gt;有状态的 Flink 程序针对本地状态访问进行了优化。任务的状态始终保留在内存中，如果状态大小超过可用内存，则会保存在能高效访问的磁盘数据结构中。任务通过访问本地（通常在内存中）状态来进行所有的计算，从而产生非常低的处理延迟。Flink 通过定期和异步地对本地状态进行持久化存储来保证故障场景下精确一次的状态一致性。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk14.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;h3 id=&#34;分层ap&#34;&gt;分层AP&lt;/h3&gt;
+&lt;p&gt;Flink 根据抽象程度分层，提供了三种不同的 API。每一种 API 在简洁性和表达力上有着不同的侧重，并且针对不同的应用场景。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/flink/fk13.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;ProcessFunction&lt;/strong&gt;：可以处理一或两条输入数据流中的单个事件或者归入一个特定窗口内的多个事件。它提供了对于时间和状态的细粒度控制。开发者可以在其中任意地修改状态，也能够注册定时器用以在未来的某一时刻触发回调函数。因此，你可以利用 ProcessFunction 实现许多有状态的事件驱动应用所需要的基于单个事件的复杂业务逻辑。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;DataStream API&lt;/strong&gt;：为许多通用的流处理操作提供了处理原语。这些操作包括窗口、逐条记录的转换操作，在处理事件时进行外部数据库查询等。DataStream API 支持 Java 和 Scala 语言，预先定义了例如&lt;code&gt;map()&lt;/code&gt;、&lt;code&gt;reduce()&lt;/code&gt;、&lt;code&gt;aggregate()&lt;/code&gt; 等函数。你可以通过扩展实现预定义接口或使用 Java、Scala 的 lambda 表达式实现自定义的函数。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SQL &amp;amp; Table API&lt;/strong&gt;：Flink 支持两种关系型的 API，Table API 和 SQL。这两个 API 都是批处理和流处理统一的 API，这意味着在无边界的实时数据流和有边界的历史记录数据流上，关系型 API 会以相同的语义执行查询，并产生相同的结果。Table API和SQL借助了 Apache Calcite来进行查询的解析，校验以及优化。它们可以与DataStream和DataSet API无缝集成，并支持用户自定义的标量函数，聚合函数以及表值函数。Flink 的关系型 API 旨在简化数据分析、数据流水线和 ETL 应用的定义。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;特点&#34;&gt;特点&lt;/h2&gt;
+&lt;p&gt;Apache Flink是一个集合众多具有竞争力特性于一身的第三代流处理引擎，它的以下特点使得它能够在同类系统中脱颖而出。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;同时支持高吞吐、低延迟、高性能。&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Flink是目前开源社区中唯一一套集高吞吐、低延迟、高性能三者于一身的分布式流式处理框架。像Apache Spark也只能兼顾高吞吐和高性能特性，主要因为在Spark Streaming流式计算中无法做到低延迟保障；而流式计算框架Apache Storm只能支持低延迟和高性能特性，但是无法满足高吞吐的要求。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;同时支持事件时间和处理时间语义。&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;在流式计算领域中，窗口计算的地位举足轻重，但目前大多数框架窗口计算采用的都是处理时间，也就是事件传输到计算框架处理时系统主机的当前时间。Flink能够支持基于事件时间语义进行窗口计算，也就是使用事件产生的时间，这种基于事件驱动的机制使得事件即使乱序到达，流系统也能够计算出精确的结果，保证了事件原本的时序性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;支持有状态计算，并提供精确一次的状态一致性保障。&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;所谓状态就是在流式计算过程中将算子的中间结果数据保存着内存或者文件系统中，等下一个事件进入算子后可以从之前的状态中获取中间结果中计算当前的结果，从而不须每次都基于全部的原始数据来统计结果，这种方式极大地提升了系统的性能，并降低了数据计算过程的资源消耗。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;基于轻量级分布式快照实现的容错机制。&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Flink能够分布式运行在上千个节点上，将一个大型计算任务的流程拆解成小的计算过程，然后将Task分布到并行节点上进行处理。在任务执行过程中，能够自动发现事件处理过程中的错误而导致的数据不一致问题，在这种情况下，通过基于分布式快照技术的Checkpoints，将执行过程中的状态信息进行持久化存储，一旦任务出现异常终止，Flink就能够从Checkpoints中进行任务的自动恢复，以确保数据中处理过程中的一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;保证了高可用，动态扩展，实现7 * 24小时全天候运行。&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;支持高可用性配置（无单点失效），和Kubernetes、YARN、Apache Mesos紧密集成，快速故障恢复，动态扩缩容作业等。基于上述特点，它可以7 X 24小时运行流式应用，几乎无须停机。当需要动态更新或者快速恢复时，Flink通过Savepoints技术将任务执行的快照保存在存储介质上，当任务重启的时候可以直接从事先保存的Savepoints恢复原有的计算状态，使得任务继续按照停机之前的状态运行。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;支持高度灵活的窗口操作。&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Flink将窗口划分为基于Time、Count、Session，以及Data-driven等类型的窗口操作，窗口可以用灵活的触发条件定制化来达到对复杂流传输模式的支持，用户可以定义不同的窗口触发机制来满足不同的需求。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;应用场景&#34;&gt;应用场景&lt;/h2&gt;
+&lt;p&gt;在实际生产的过程中，大量数据在不断地产生，例如金融交易数据、互联网订单数据、GPS定位数据、传感器信号、移动终端产生的数据、通信信号数据等，以及我们熟悉的网络流量监控、服务器产生的日志数据，这些数据最大的共同点就是实时从不同的数据源中产生，然后再传输到下游的分析系统。&lt;/p&gt;
+&lt;p&gt;针对这些数据类型主要包括以下场景，Flink对这些场景都有非常好的支持。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;实时智能推荐&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;利用Flink流计算帮助用户构建更加实时的智能推荐系统，对用户行为指标进行实时计算，对模型进行实时更新，对用户指标进行实时预测，并将预测的信息推送给Web/App端，帮助用户获取想要的商品信息，另一方面也帮助企业提高销售额，创造更大的商业价值。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;复杂事件处理&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;例如工业领域的复杂事件处理，这些业务类型的数据量非常大，且对数据的时效性要求较高。我们可以使用Flink提供的CEP（复杂事件处理）进行事件模式的抽取，同时应用Flink的SQL进行事件数据的转换，在流式系统中构建实时规则引擎。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;实时欺诈检测&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;在金融领域的业务中，常常出现各种类型的欺诈行为。运用Flink流式计算技术能够在毫秒内就完成对欺诈判断行为指标的计算，然后实时对交易流水进行规则判断或者模型预测，这样一旦检测出交易中存在欺诈嫌疑，则直接对交易进行实时拦截，避免因为处理不及时而导致的经济损失&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;实时数仓与ETL&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;结合离线数仓，通过利用流计算等诸多优势和SQL灵活的加工能力，对流式数据进行实时清洗、归并、结构化处理，为离线数仓进行补充和优化。另一方面结合实时数据ETL处理能力，利用有状态流式计算技术，可以尽可能降低企业由于在离线数据计算过程中调度逻辑的复杂度，高效快速地处理企业需要的统计结果，帮助企业更好的应用实时数据所分析出来的结果。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;流数据分析&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;实时计算各类数据指标，并利用实时结果及时调整在线系统相关策略，在各类投放、无线智能推送领域有大量的应用。流式计算技术将数据分析场景实时化，帮助企业做到实时化分析Web应用或者App应用的各种指标。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;实时报表分析&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;实时报表分析说近年来很多公司采用的报表统计方案之一，其中最主要的应用便是实时大屏展示。利用流式计算实时得出的结果直接被推送到前段应用，实时显示出重要的指标变换，最典型的案例就是淘宝的双十一实时战报。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;flink-vs-spark-streaming&#34;&gt;Flink VS Spark Streaming&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;数据模型&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Flink基本数据模型是数据流，以及事件序列。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Spark采用RDD模型，Spark Streaming的DStream实际上也就是一组组小批&lt;/p&gt;
+&lt;p&gt;数据RDD的集合。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;运行时架构&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Flink是标准的流执行模式，一个事件在一个节点处理完后可以直接发往下一个节&lt;/p&gt;
+&lt;p&gt;点进行处理。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Spark是批计算，将DAG划分为不同的Stage，一个完成后才可以计算下一个。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

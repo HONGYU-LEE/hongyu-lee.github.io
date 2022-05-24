@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='分布式ID ID是数据的唯一标识，传统的做法是使用数据库的自增ID，但是随着业务规模的不断发展，数据量将越来越大，于是需要进行分库分表，而分表后，每个表中的ID都会按自己的节奏进行自增，很有可能出现ID冲突的情况。这时就需要一个单独的机制来负责生成一个全局唯一的ID。这个ID也可以叫做分布式ID。
+对于一个合格的分布式ID，它应该满足以下几项条件
+ 全局唯一 高可用 高性能 趋势递增 方便接入  下面就介绍几种常见的分布式ID生成方案
+数据库 自增ID 我们可以利用数据库的auto_increment自增ID来生成分布式ID，只需要一个数据库实例即可完成。
+建表如下
+1 2 3 4 5 6 7 8  CREATEDATABASE`SEQID`;CREATETABLESEQID.SEQUENCE_ID(idbigint(20)unsignedNOTNULLauto_increment,stubchar(10)NOTNULLdefault&amp;#39;&amp;#39;,PRIMARYKEY(id),UNIQUEKEYstub(stub))ENGINE=MyISAM;  我们通过往该表中插入数据，并获取到自增的主键id。为了考虑到并发的安全 ，我们可以通过事务来完成这个操作。
+1 2 3 4  begin;insertintoSEQUENCE_ID(value)VALUES(&amp;#39;values&amp;#39;);selectlast_insert_id();commit;  我们可以看出，这种依赖单点的方法虽然实现起来简单，但是这种依赖单点的方法并不可靠，因为Mysql并不能很好的支持高并发，当请求ID量特别大的时候就会因为单点的宕机而影响到整个业务系统。
+多主模式 既然单点不可靠，那么我们可以考虑使用集群的方式来解决这个问题。考虑到单个主节点可能会因为宕机而没有将数据同步到从节点，可能会导致ID重复的情况，因此我们可以考虑使用多主集群。
+为了防止多个主节点生成重复的ID，我们通常会通过控制初始值和步长来避免这个问题。
+例如在有两个主节点的情况下，我们就可以通过这种方式来错开ID。
+1 2 3 4 5 6 7  -- 节点1 set@@auto_increment_offset=1;-- 起始值 set@@auto_increment_increment=2;-- 步长 -- 节点2 set@@auto_increment_offset=2;-- 起始值 set@@auto_increment_increment=2;-- 步长   但是，这种方法的可拓展性不强，倘若我们要往集群中增加新的主节点时，我们就需要重新去设置步长，并且还需要根据前两个节点的自增ID的大小来考虑我们新节点的起始值，而这些操作只能人工来进行。如果在修改步长的时候出现了重复的ID，此时就还需要进行停机修改。
+号段模式 前面两种方法的局限性在于其每次获取ID时都需要直接访问数据库，效率较低，如果能够一次获取大量的ID，并将其缓存在本地，那样就可以大大的提升ID获取的效率，这也是号段模式的核心思想。号段模式每次从数据库中批量的获取一段自增ID，即取出一个范围的ID交给号段服务维护。例如（1，2000]即代表着2000个ID。我们的业务系统只需要到号段服务中申请ID，不需要每次都去请求数据库，直到所有的ID都用完后才会去申请下一个号段。
+数据库表修改如下
+1 2 3 4 5 6 7 8  CREATETABLEid_generator(idint(10)NOTNULL,max_idbigint(20)NOTNULLCOMMENT&amp;#39;当前最大id&amp;#39;,stepint(20)NOTNULLCOMMENT&amp;#39;号段的步长&amp;#39;,biz_typeint(20)NOTNULLCOMMENT&amp;#39;业务类型&amp;#39;,versionint(20)NOTNULLCOMMENT&amp;#39;版本号&amp;#39;,PRIMARYKEY(`id`))  号段服务不再强依赖数据库，即使数据库不可用，号段服务也可以继续工作直到申请的ID全部使用完。但是如果此时号段服务重启，就会导致剩余的ID丢失。'><title>分布式ID</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8Fid/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='分布式ID'>
+<meta property='og:description' content='分布式ID ID是数据的唯一标识，传统的做法是使用数据库的自增ID，但是随着业务规模的不断发展，数据量将越来越大，于是需要进行分库分表，而分表后，每个表中的ID都会按自己的节奏进行自增，很有可能出现ID冲突的情况。这时就需要一个单独的机制来负责生成一个全局唯一的ID。这个ID也可以叫做分布式ID。
+对于一个合格的分布式ID，它应该满足以下几项条件
+ 全局唯一 高可用 高性能 趋势递增 方便接入  下面就介绍几种常见的分布式ID生成方案
+数据库 自增ID 我们可以利用数据库的auto_increment自增ID来生成分布式ID，只需要一个数据库实例即可完成。
+建表如下
+1 2 3 4 5 6 7 8  CREATEDATABASE`SEQID`;CREATETABLESEQID.SEQUENCE_ID(idbigint(20)unsignedNOTNULLauto_increment,stubchar(10)NOTNULLdefault&amp;#39;&amp;#39;,PRIMARYKEY(id),UNIQUEKEYstub(stub))ENGINE=MyISAM;  我们通过往该表中插入数据，并获取到自增的主键id。为了考虑到并发的安全 ，我们可以通过事务来完成这个操作。
+1 2 3 4  begin;insertintoSEQUENCE_ID(value)VALUES(&amp;#39;values&amp;#39;);selectlast_insert_id();commit;  我们可以看出，这种依赖单点的方法虽然实现起来简单，但是这种依赖单点的方法并不可靠，因为Mysql并不能很好的支持高并发，当请求ID量特别大的时候就会因为单点的宕机而影响到整个业务系统。
+多主模式 既然单点不可靠，那么我们可以考虑使用集群的方式来解决这个问题。考虑到单个主节点可能会因为宕机而没有将数据同步到从节点，可能会导致ID重复的情况，因此我们可以考虑使用多主集群。
+为了防止多个主节点生成重复的ID，我们通常会通过控制初始值和步长来避免这个问题。
+例如在有两个主节点的情况下，我们就可以通过这种方式来错开ID。
+1 2 3 4 5 6 7  -- 节点1 set@@auto_increment_offset=1;-- 起始值 set@@auto_increment_increment=2;-- 步长 -- 节点2 set@@auto_increment_offset=2;-- 起始值 set@@auto_increment_increment=2;-- 步长   但是，这种方法的可拓展性不强，倘若我们要往集群中增加新的主节点时，我们就需要重新去设置步长，并且还需要根据前两个节点的自增ID的大小来考虑我们新节点的起始值，而这些操作只能人工来进行。如果在修改步长的时候出现了重复的ID，此时就还需要进行停机修改。
+号段模式 前面两种方法的局限性在于其每次获取ID时都需要直接访问数据库，效率较低，如果能够一次获取大量的ID，并将其缓存在本地，那样就可以大大的提升ID获取的效率，这也是号段模式的核心思想。号段模式每次从数据库中批量的获取一段自增ID，即取出一个范围的ID交给号段服务维护。例如（1，2000]即代表着2000个ID。我们的业务系统只需要到号段服务中申请ID，不需要每次都去请求数据库，直到所有的ID都用完后才会去申请下一个号段。
+数据库表修改如下
+1 2 3 4 5 6 7 8  CREATETABLEid_generator(idint(10)NOTNULL,max_idbigint(20)NOTNULLCOMMENT&amp;#39;当前最大id&amp;#39;,stepint(20)NOTNULLCOMMENT&amp;#39;号段的步长&amp;#39;,biz_typeint(20)NOTNULLCOMMENT&amp;#39;业务类型&amp;#39;,versionint(20)NOTNULLCOMMENT&amp;#39;版本号&amp;#39;,PRIMARYKEY(`id`))  号段服务不再强依赖数据库，即使数据库不可用，号段服务也可以继续工作直到申请的ID全部使用完。但是如果此时号段服务重启，就会导致剩余的ID丢失。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8Fid/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='分布式' /><meta property='article:tag' content='分布式ID' /><meta property='article:published_time' content='2022-05-24T15:50:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-24T15:50:33&#43;08:00'/>
+<meta name="twitter:title" content="分布式ID">
+<meta name="twitter:description" content="分布式ID ID是数据的唯一标识，传统的做法是使用数据库的自增ID，但是随着业务规模的不断发展，数据量将越来越大，于是需要进行分库分表，而分表后，每个表中的ID都会按自己的节奏进行自增，很有可能出现ID冲突的情况。这时就需要一个单独的机制来负责生成一个全局唯一的ID。这个ID也可以叫做分布式ID。
+对于一个合格的分布式ID，它应该满足以下几项条件
+ 全局唯一 高可用 高性能 趋势递增 方便接入  下面就介绍几种常见的分布式ID生成方案
+数据库 自增ID 我们可以利用数据库的auto_increment自增ID来生成分布式ID，只需要一个数据库实例即可完成。
+建表如下
+1 2 3 4 5 6 7 8  CREATEDATABASE`SEQID`;CREATETABLESEQID.SEQUENCE_ID(idbigint(20)unsignedNOTNULLauto_increment,stubchar(10)NOTNULLdefault&amp;#39;&amp;#39;,PRIMARYKEY(id),UNIQUEKEYstub(stub))ENGINE=MyISAM;  我们通过往该表中插入数据，并获取到自增的主键id。为了考虑到并发的安全 ，我们可以通过事务来完成这个操作。
+1 2 3 4  begin;insertintoSEQUENCE_ID(value)VALUES(&amp;#39;values&amp;#39;);selectlast_insert_id();commit;  我们可以看出，这种依赖单点的方法虽然实现起来简单，但是这种依赖单点的方法并不可靠，因为Mysql并不能很好的支持高并发，当请求ID量特别大的时候就会因为单点的宕机而影响到整个业务系统。
+多主模式 既然单点不可靠，那么我们可以考虑使用集群的方式来解决这个问题。考虑到单个主节点可能会因为宕机而没有将数据同步到从节点，可能会导致ID重复的情况，因此我们可以考虑使用多主集群。
+为了防止多个主节点生成重复的ID，我们通常会通过控制初始值和步长来避免这个问题。
+例如在有两个主节点的情况下，我们就可以通过这种方式来错开ID。
+1 2 3 4 5 6 7  -- 节点1 set@@auto_increment_offset=1;-- 起始值 set@@auto_increment_increment=2;-- 步长 -- 节点2 set@@auto_increment_offset=2;-- 起始值 set@@auto_increment_increment=2;-- 步长   但是，这种方法的可拓展性不强，倘若我们要往集群中增加新的主节点时，我们就需要重新去设置步长，并且还需要根据前两个节点的自增ID的大小来考虑我们新节点的起始值，而这些操作只能人工来进行。如果在修改步长的时候出现了重复的ID，此时就还需要进行停机修改。
+号段模式 前面两种方法的局限性在于其每次获取ID时都需要直接访问数据库，效率较低，如果能够一次获取大量的ID，并将其缓存在本地，那样就可以大大的提升ID获取的效率，这也是号段模式的核心思想。号段模式每次从数据库中批量的获取一段自增ID，即取出一个范围的ID交给号段服务维护。例如（1，2000]即代表着2000个ID。我们的业务系统只需要到号段服务中申请ID，不需要每次都去请求数据库，直到所有的ID都用完后才会去申请下一个号段。
+数据库表修改如下
+1 2 3 4 5 6 7 8  CREATETABLEid_generator(idint(10)NOTNULL,max_idbigint(20)NOTNULLCOMMENT&amp;#39;当前最大id&amp;#39;,stepint(20)NOTNULLCOMMENT&amp;#39;号段的步长&amp;#39;,biz_typeint(20)NOTNULLCOMMENT&amp;#39;业务类型&amp;#39;,versionint(20)NOTNULLCOMMENT&amp;#39;版本号&amp;#39;,PRIMARYKEY(`id`))  号段服务不再强依赖数据库，即使数据库不可用，号段服务也可以继续工作直到申请的ID全部使用完。但是如果此时号段服务重启，就会导致剩余的ID丢失。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" style="background-color: #2a9d8f; color: #fff;">
+                分布式
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E5%88%86%E5%B8%83%E5%BC%8Fid/">分布式ID</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 24, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="分布式id">分布式ID</h1>
+<p><!-- raw HTML omitted --><strong>ID是数据的唯一标识</strong><!-- raw HTML omitted -->，传统的做法是使用数据库的自增ID，但是随着业务规模的不断发展，数据量将越来越大，于是需要进行<!-- raw HTML omitted --><strong>分库分表</strong><!-- raw HTML omitted -->，而分表后，每个表中的ID都会按自己的节奏进行自增，很有可能出现ID冲突的情况。这时就需要一个单独的机制来负责生成一个<!-- raw HTML omitted --><strong>全局唯一的ID</strong><!-- raw HTML omitted -->。这个ID也可以叫做<!-- raw HTML omitted --><strong>分布式ID</strong><!-- raw HTML omitted -->。</p>
+<p>对于一个合格的分布式ID，它应该满足以下几项条件</p>
+<ul>
+<li><strong>全局唯一</strong></li>
+<li><strong>高可用</strong></li>
+<li><strong>高性能</strong></li>
+<li><strong>趋势递增</strong></li>
+<li><strong>方便接入</strong></li>
+</ul>
+<p>下面就介绍几种常见的分布式ID生成方案</p>
+<h2 id="数据库">数据库</h2>
+<h3 id="自增id">自增ID</h3>
+<p>我们可以利用数据库的<code>auto_increment</code>自增ID来生成分布式ID，只需要一个数据库实例即可完成。</p>
+<p>建表如下</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">CREATE</span><span class="w"> </span><span class="k">DATABASE</span><span class="w"> </span><span class="o">`</span><span class="n">SEQID</span><span class="o">`</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">SEQID</span><span class="p">.</span><span class="n">SEQUENCE_ID</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="n">id</span><span class="w"> </span><span class="nb">bigint</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="w"> </span><span class="n">unsigned</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="n">auto_increment</span><span class="p">,</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="n">stub</span><span class="w"> </span><span class="nb">char</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">default</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="k">UNIQUE</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">stub</span><span class="w"> </span><span class="p">(</span><span class="n">stub</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">)</span><span class="w"> </span><span class="n">ENGINE</span><span class="o">=</span><span class="n">MyISAM</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>我们通过往该表中插入数据，并获取到自增的主键id。为了考虑到并发的安全 ，我们可以通过事务来完成这个操作。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">begin</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">insert</span><span class="w"> </span><span class="k">into</span><span class="w"> </span><span class="n">SEQUENCE_ID</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="s1">&#39;values&#39;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">select</span><span class="w"> </span><span class="n">last_insert_id</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">commit</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>我们可以看出，这种依赖单点的方法虽然实现起来简单，但是这种依赖单点的方法并不可靠，因为Mysql并不能很好的支持高并发，当请求ID量特别大的时候就会因为单点的宕机而影响到整个业务系统。</p>
+<h3 id="多主模式">多主模式</h3>
+<p>既然单点不可靠，那么我们可以考虑使用<!-- raw HTML omitted --><strong>集群</strong><!-- raw HTML omitted -->的方式来解决这个问题。考虑到单个主节点可能会因为宕机而没有将数据同步到从节点，可能会导致ID重复的情况，因此我们可以考虑使用<!-- raw HTML omitted --><strong>多主集群</strong><!-- raw HTML omitted -->。</p>
+<p>为了防止多个主节点生成重复的ID，我们通常会通过控制<!-- raw HTML omitted --><strong>初始值</strong><!-- raw HTML omitted -->和<!-- raw HTML omitted --><strong>步长</strong><!-- raw HTML omitted -->来避免这个问题。</p>
+<p>例如在有两个主节点的情况下，我们就可以通过这种方式来错开ID。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="c1">-- 节点1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">set</span><span class="w"> </span><span class="o">@@</span><span class="n">auto_increment_offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">     </span><span class="c1">-- 起始值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">set</span><span class="w"> </span><span class="o">@@</span><span class="n">auto_increment_increment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">  </span><span class="c1">-- 步长
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- 节点2
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">set</span><span class="w"> </span><span class="o">@@</span><span class="n">auto_increment_offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">     </span><span class="c1">-- 起始值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">set</span><span class="w"> </span><span class="o">@@</span><span class="n">auto_increment_increment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">  </span><span class="c1">-- 步长
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>但是，这种方法的可拓展性不强，倘若我们要往集群中增加新的主节点时，我们就需要重新去设置步长，并且还需要根据前两个节点的自增ID的大小来考虑我们新节点的起始值，而这些操作只能<strong>人工</strong>来进行。如果在修改步长的时候出现了重复的ID，此时就还需要进行停机修改。</p>
+<h2 id="号段模式">号段模式</h2>
+<p>前面两种方法的局限性在于其每次获取ID时都需要直接访问数据库，效率较低，<!-- raw HTML omitted --><strong>如果能够一次获取大量的ID，并将其缓存在本地，那样就可以大大的提升ID获取的效率，这也是号段模式的核心思想。</strong><!-- raw HTML omitted --></p>
+<p>号段模式每次从数据库中批量的获取一段自增ID，即取出一个范围的ID交给号段服务维护。例如（1，2000]即代表着2000个ID。我们的业务系统只需要到号段服务中申请ID，不需要每次都去请求数据库，直到所有的ID都用完后才会去申请下一个号段。</p>
+<p>数据库表修改如下</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">id_generator</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">id</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">max_id</span><span class="w"> </span><span class="nb">bigint</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">COMMENT</span><span class="w"> </span><span class="s1">&#39;当前最大id&#39;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">step</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">COMMENT</span><span class="w"> </span><span class="s1">&#39;号段的步长&#39;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">biz_type</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">COMMENT</span><span class="w"> </span><span class="s1">&#39;业务类型&#39;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">version</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">COMMENT</span><span class="w"> </span><span class="s1">&#39;版本号&#39;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">)</span><span class="w"> 
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>号段服务不再强依赖数据库，即使数据库不可用，号段服务也可以继续工作直到申请的ID全部使用完。但是如果此时号段服务重启，就会导致剩余的ID丢失。</p>
+<p>为了保证号段服务的高可用，我们同样需要建立一个集群，在请求方从号段服务获取ID时，就会随机的选取一个节点来获取，而这种并发场景下我们同样需要考虑到并发安全的问题，因此我们上面的表中也提供了一个版本号的字段version，我们可以使用<strong>乐观锁</strong>来进行并发的控制。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">update</span><span class="w"> </span><span class="n">id_generator</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">current_max_id</span><span class="o">=#</span><span class="err">{</span><span class="n">newMaxId</span><span class="err">}</span><span class="p">,</span><span class="w"> </span><span class="k">version</span><span class="o">=</span><span class="k">version</span><span class="o">+</span><span class="mi">1</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="k">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">#</span><span class="err">{</span><span class="k">version</span><span class="err">}</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>我们可以使用上面的SQL来获取新号段，当update更新成功就说明号段获取成功了。</p>
+<h2 id="雪花算法">雪花算法</h2>
+<p><!-- raw HTML omitted --><strong>雪花算法（Snowflake）</strong> <!-- raw HTML omitted -->是twitter开源的一个分布式ID的生成算法，它的核心思想是：<!-- raw HTML omitted --><strong>生成一个long类型的ID，一个long大小8字节，一个字节8个比特位，因此它使用64个比特位来确定一个分布式ID。其中41bit代表时间戳，10bit标识一台机器，剩下12bit则用来标识每个id</strong><!-- raw HTML omitted -->
+<img src="http://img.orekilee.top//imgbed/distributed/distributed14.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li><strong>第1个bit位为符号位</strong>，因为生成的id通常为正数所以固定为0</li>
+<li><strong>2~42位为时间戳部分</strong>，其精确至毫秒。同时为了更加合理的利用，其并不会存储当前的时间，而是使用时间戳的差值（当前时间 - 固定的开始时间），这样就可以保证ID从更小的起点开始生成。</li>
+<li><strong>43~52位为工作机器的id</strong>，这里的计算会更加灵活，可以根据机房数量、机器数量来自行均衡，保证能够利用到更多的机器。</li>
+<li><strong>53~64位为序列编号</strong>，在同一毫秒中的同一台机器上我们可以生成4096个ID</li>
+</ul>
+<p>考虑到不同的业务场景以及各个公司的特性，大多数公司并不会去直接使用snowflake，而是会对其进行改造，让其更贴合自身的使用场景。如百度的uid-generator、美团的Leaf、滴滴的TinyId等。</p>
+<p>下面是github上开源的一个java实现的snowflake</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">  1
+</span><span class="lnt">  2
+</span><span class="lnt">  3
+</span><span class="lnt">  4
+</span><span class="lnt">  5
+</span><span class="lnt">  6
+</span><span class="lnt">  7
+</span><span class="lnt">  8
+</span><span class="lnt">  9
+</span><span class="lnt"> 10
+</span><span class="lnt"> 11
+</span><span class="lnt"> 12
+</span><span class="lnt"> 13
+</span><span class="lnt"> 14
+</span><span class="lnt"> 15
+</span><span class="lnt"> 16
+</span><span class="lnt"> 17
+</span><span class="lnt"> 18
+</span><span class="lnt"> 19
+</span><span class="lnt"> 20
+</span><span class="lnt"> 21
+</span><span class="lnt"> 22
+</span><span class="lnt"> 23
+</span><span class="lnt"> 24
+</span><span class="lnt"> 25
+</span><span class="lnt"> 26
+</span><span class="lnt"> 27
+</span><span class="lnt"> 28
+</span><span class="lnt"> 29
+</span><span class="lnt"> 30
+</span><span class="lnt"> 31
+</span><span class="lnt"> 32
+</span><span class="lnt"> 33
+</span><span class="lnt"> 34
+</span><span class="lnt"> 35
+</span><span class="lnt"> 36
+</span><span class="lnt"> 37
+</span><span class="lnt"> 38
+</span><span class="lnt"> 39
+</span><span class="lnt"> 40
+</span><span class="lnt"> 41
+</span><span class="lnt"> 42
+</span><span class="lnt"> 43
+</span><span class="lnt"> 44
+</span><span class="lnt"> 45
+</span><span class="lnt"> 46
+</span><span class="lnt"> 47
+</span><span class="lnt"> 48
+</span><span class="lnt"> 49
+</span><span class="lnt"> 50
+</span><span class="lnt"> 51
+</span><span class="lnt"> 52
+</span><span class="lnt"> 53
+</span><span class="lnt"> 54
+</span><span class="lnt"> 55
+</span><span class="lnt"> 56
+</span><span class="lnt"> 57
+</span><span class="lnt"> 58
+</span><span class="lnt"> 59
+</span><span class="lnt"> 60
+</span><span class="lnt"> 61
+</span><span class="lnt"> 62
+</span><span class="lnt"> 63
+</span><span class="lnt"> 64
+</span><span class="lnt"> 65
+</span><span class="lnt"> 66
+</span><span class="lnt"> 67
+</span><span class="lnt"> 68
+</span><span class="lnt"> 69
+</span><span class="lnt"> 70
+</span><span class="lnt"> 71
+</span><span class="lnt"> 72
+</span><span class="lnt"> 73
+</span><span class="lnt"> 74
+</span><span class="lnt"> 75
+</span><span class="lnt"> 76
+</span><span class="lnt"> 77
+</span><span class="lnt"> 78
+</span><span class="lnt"> 79
+</span><span class="lnt"> 80
+</span><span class="lnt"> 81
+</span><span class="lnt"> 82
+</span><span class="lnt"> 83
+</span><span class="lnt"> 84
+</span><span class="lnt"> 85
+</span><span class="lnt"> 86
+</span><span class="lnt"> 87
+</span><span class="lnt"> 88
+</span><span class="lnt"> 89
+</span><span class="lnt"> 90
+</span><span class="lnt"> 91
+</span><span class="lnt"> 92
+</span><span class="lnt"> 93
+</span><span class="lnt"> 94
+</span><span class="lnt"> 95
+</span><span class="lnt"> 96
+</span><span class="lnt"> 97
+</span><span class="lnt"> 98
+</span><span class="lnt"> 99
+</span><span class="lnt">100
+</span><span class="lnt">101
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * twitter的snowflake算法 -- java实现
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * github链接：https://github.com/beyondfengyu/SnowFlake
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * @author beyond
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * @date 2016/11/26
+</span></span></span><span class="line"><span class="cl"><span class="cm"> */</span>
+</span></span><span class="line"><span class="cl"><span class="kd">public</span> <span class="kd">class</span> <span class="nc">SnowFlake</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 起始的时间戳
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">START_STMP</span> <span class="o">=</span> <span class="n">1480166465631L</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 每一部分占用的位数
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">SEQUENCE_BIT</span> <span class="o">=</span> <span class="n">12</span><span class="o">;</span> <span class="c1">//序列号占用的位数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">MACHINE_BIT</span> <span class="o">=</span> <span class="n">5</span><span class="o">;</span>   <span class="c1">//机器标识占用的位数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">DATACENTER_BIT</span> <span class="o">=</span> <span class="n">5</span><span class="o">;</span><span class="c1">//数据中心占用的位数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 每一部分的最大值
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">MAX_DATACENTER_NUM</span> <span class="o">=</span> <span class="o">-</span><span class="n">1L</span> <span class="o">^</span> <span class="o">(-</span><span class="n">1L</span> <span class="o">&lt;&lt;</span> <span class="n">DATACENTER_BIT</span><span class="o">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">MAX_MACHINE_NUM</span> <span class="o">=</span> <span class="o">-</span><span class="n">1L</span> <span class="o">^</span> <span class="o">(-</span><span class="n">1L</span> <span class="o">&lt;&lt;</span> <span class="n">MACHINE_BIT</span><span class="o">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">MAX_SEQUENCE</span> <span class="o">=</span> <span class="o">-</span><span class="n">1L</span> <span class="o">^</span> <span class="o">(-</span><span class="n">1L</span> <span class="o">&lt;&lt;</span> <span class="n">SEQUENCE_BIT</span><span class="o">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 每一部分向左的位移
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">MACHINE_LEFT</span> <span class="o">=</span> <span class="n">SEQUENCE_BIT</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">DATACENTER_LEFT</span> <span class="o">=</span> <span class="n">SEQUENCE_BIT</span> <span class="o">+</span> <span class="n">MACHINE_BIT</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="kt">long</span> <span class="n">TIMESTMP_LEFT</span> <span class="o">=</span> <span class="n">DATACENTER_LEFT</span> <span class="o">+</span> <span class="n">DATACENTER_BIT</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kt">long</span> <span class="n">datacenterId</span><span class="o">;</span>  <span class="c1">//数据中心
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kd">private</span> <span class="kt">long</span> <span class="n">machineId</span><span class="o">;</span>     <span class="c1">//机器标识
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kd">private</span> <span class="kt">long</span> <span class="n">sequence</span> <span class="o">=</span> <span class="n">0L</span><span class="o">;</span> <span class="c1">//序列号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kd">private</span> <span class="kt">long</span> <span class="n">lastStmp</span> <span class="o">=</span> <span class="o">-</span><span class="n">1L</span><span class="o">;</span><span class="c1">//上一次时间戳
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="kd">public</span> <span class="nf">SnowFlake</span><span class="o">(</span><span class="kt">long</span> <span class="n">datacenterId</span><span class="o">,</span> <span class="kt">long</span> <span class="n">machineId</span><span class="o">)</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="o">(</span><span class="n">datacenterId</span> <span class="o">&gt;</span> <span class="n">MAX_DATACENTER_NUM</span> <span class="o">||</span> <span class="n">datacenterId</span> <span class="o">&lt;</span> <span class="n">0</span><span class="o">)</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">throw</span> <span class="k">new</span> <span class="n">IllegalArgumentException</span><span class="o">(</span><span class="s">&#34;datacenterId can&#39;t be greater than MAX_DATACENTER_NUM or less than 0&#34;</span><span class="o">);</span>
+</span></span><span class="line"><span class="cl">        <span class="o">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="o">(</span><span class="n">machineId</span> <span class="o">&gt;</span> <span class="n">MAX_MACHINE_NUM</span> <span class="o">||</span> <span class="n">machineId</span> <span class="o">&lt;</span> <span class="n">0</span><span class="o">)</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">throw</span> <span class="k">new</span> <span class="n">IllegalArgumentException</span><span class="o">(</span><span class="s">&#34;machineId can&#39;t be greater than MAX_MACHINE_NUM or less than 0&#34;</span><span class="o">);</span>
+</span></span><span class="line"><span class="cl">        <span class="o">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">this</span><span class="o">.</span><span class="na">datacenterId</span> <span class="o">=</span> <span class="n">datacenterId</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">this</span><span class="o">.</span><span class="na">machineId</span> <span class="o">=</span> <span class="n">machineId</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 产生下一个ID
+</span></span></span><span class="line"><span class="cl"><span class="cm">     *
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * @return
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">public</span> <span class="kd">synchronized</span> <span class="kt">long</span> <span class="nf">nextId</span><span class="o">()</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        <span class="kt">long</span> <span class="n">currStmp</span> <span class="o">=</span> <span class="n">getNewstmp</span><span class="o">();</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="o">(</span><span class="n">currStmp</span> <span class="o">&lt;</span> <span class="n">lastStmp</span><span class="o">)</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">throw</span> <span class="k">new</span> <span class="n">RuntimeException</span><span class="o">(</span><span class="s">&#34;Clock moved backwards.  Refusing to generate id&#34;</span><span class="o">);</span>
+</span></span><span class="line"><span class="cl">        <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="o">(</span><span class="n">currStmp</span> <span class="o">==</span> <span class="n">lastStmp</span><span class="o">)</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">//相同毫秒内，序列号自增
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="n">sequence</span> <span class="o">=</span> <span class="o">(</span><span class="n">sequence</span> <span class="o">+</span> <span class="n">1</span><span class="o">)</span> <span class="o">&amp;</span> <span class="n">MAX_SEQUENCE</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">//同一毫秒的序列数已经达到最大
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="k">if</span> <span class="o">(</span><span class="n">sequence</span> <span class="o">==</span> <span class="n">0L</span><span class="o">)</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">                <span class="n">currStmp</span> <span class="o">=</span> <span class="n">getNextMill</span><span class="o">();</span>
+</span></span><span class="line"><span class="cl">            <span class="o">}</span>
+</span></span><span class="line"><span class="cl">        <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">//不同毫秒内，序列号置为0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="n">sequence</span> <span class="o">=</span> <span class="n">0L</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">        <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="n">lastStmp</span> <span class="o">=</span> <span class="n">currStmp</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="o">(</span><span class="n">currStmp</span> <span class="o">-</span> <span class="n">START_STMP</span><span class="o">)</span> <span class="o">&lt;&lt;</span> <span class="n">TIMESTMP_LEFT</span> <span class="c1">//时间戳部分
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                <span class="o">|</span> <span class="n">datacenterId</span> <span class="o">&lt;&lt;</span> <span class="n">DATACENTER_LEFT</span>       <span class="c1">//数据中心部分
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                <span class="o">|</span> <span class="n">machineId</span> <span class="o">&lt;&lt;</span> <span class="n">MACHINE_LEFT</span>             <span class="c1">//机器标识部分
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                <span class="o">|</span> <span class="n">sequence</span><span class="o">;</span>                             <span class="c1">//序列号部分
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kt">long</span> <span class="nf">getNextMill</span><span class="o">()</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        <span class="kt">long</span> <span class="n">mill</span> <span class="o">=</span> <span class="n">getNewstmp</span><span class="o">();</span>
+</span></span><span class="line"><span class="cl">        <span class="k">while</span> <span class="o">(</span><span class="n">mill</span> <span class="o">&lt;=</span> <span class="n">lastStmp</span><span class="o">)</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">            <span class="n">mill</span> <span class="o">=</span> <span class="n">getNewstmp</span><span class="o">();</span>
+</span></span><span class="line"><span class="cl">        <span class="o">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">mill</span><span class="o">;</span>
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">private</span> <span class="kt">long</span> <span class="nf">getNewstmp</span><span class="o">()</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">System</span><span class="o">.</span><span class="na">currentTimeMillis</span><span class="o">();</span>
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="n">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">SnowFlake</span> <span class="n">snowFlake</span> <span class="o">=</span> <span class="k">new</span> <span class="n">SnowFlake</span><span class="o">(</span><span class="n">2</span><span class="o">,</span> <span class="n">3</span><span class="o">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="n">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="o">(</span><span class="n">1</span> <span class="o">&lt;&lt;</span> <span class="n">12</span><span class="o">);</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">            <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">snowFlake</span><span class="o">.</span><span class="na">nextId</span><span class="o">());</span>
+</span></span><span class="line"><span class="cl">        <span class="o">}</span>
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h2 id="redis">Redis</h2>
+<p>我们可以利用Redis中的<code>incr</code>命令来原子的获取自增ID</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">seq_id</span><span class="w"> </span><span class="mi">1</span><span class="w">     </span><span class="o">//</span><span class="w"> </span><span class="err">初始化自增</span><span class="n">ID</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">OK</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">incr</span><span class="w"> </span><span class="n">seq_id</span><span class="w">      </span><span class="o">//</span><span class="w"> </span><span class="err">自增并返回结果</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="nb">integer</span><span class="p">)</span><span class="w"> </span><span class="mi">2</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>使用Redis实现起来特别简单且高效，但是我们还需要考虑到<!-- raw HTML omitted --><strong>持久化</strong><!-- raw HTML omitted -->时带来的一些问题</p>
+<ul>
+<li><strong>RDB持久化</strong>：由于其是定期保存一次数据库的快照，为了保证效率他也存在着一定的时间间隔。倘若在我们刚保存一次快照后，连续获取了几次ID，而此时还没来得及做下一次持久化就宕机了。当我们通过持久化重启Redis后，这段时间生成的ID就会被重复使用。</li>
+<li><strong>AOF持久化</strong>：AOF相当于是逻辑日志，其会通过保存我们执行过的命令来进行持久化。它并不像RDB出现一段时间的数据丢失而导致的ID重复的情况，但是在它恢复的过程中需要重新执行保存的命令，因此随着ID数量的增多，它重启恢复数据的时间也会越来越慢。</li>
+</ul>
+<h2 id="总结">总结</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th></th>
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数据库自增ID</td>
+<td>实现简单，ID单调自增，数值类型查询效率高</td>
+<td>单点问题，在高并发时可能会有宕机的风险</td>
+</tr>
+<tr>
+<td>数据库多主集群</td>
+<td>解决了单点问题，一定程度上提高了稳定性</td>
+<td>可拓展性不强，随着业务规模的不断扩大， 集群也会随之增加，但是新主节点的加入较为麻烦，需要人工操作</td>
+</tr>
+<tr>
+<td>号段模式</td>
+<td>不强依赖数据库，提高了效率</td>
+<td>当为了保证高可用而使用多主集群时，仍然需要去修改起始值和步长</td>
+</tr>
+<tr>
+<td>雪花算法</td>
+<td>1.可以根据业务特性自由分配比特位，较为灵活。2.不依赖第三方系统，独立部署</td>
+<td>强依赖机器时钟，如果出现时钟回拨则会导致系统不可用</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>实现起来简单且高效</td>
+<td>持久化恢复存在问题，如RDB重复ID，AOF速度慢</td>
+</tr>
+</tbody>
+</table></div>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
+        
+            <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8Fid/">分布式ID</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 24, 2022 15:50 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性哈希</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性模型</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEgossip/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性协议：Gossip</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性协议：ZAB</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEbully/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性协议：Bully</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#数据库">数据库</a>
+      <ol>
+        <li><a href="#自增id">自增ID</a></li>
+        <li><a href="#多主模式">多主模式</a></li>
+      </ol>
+    </li>
+    <li><a href="#号段模式">号段模式</a></li>
+    <li><a href="#雪花算法">雪花算法</a></li>
+    <li><a href="#redis">Redis</a></li>
+    <li><a href="#总结">总结</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

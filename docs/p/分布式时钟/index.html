@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='分布式时钟 逻辑时钟与物理时钟 对于分布式系统来说，时钟分为逻辑时钟与物理时钟两种。物理时钟对应的是我们真实世界的时间，一般由操作系统提供，而逻辑时钟则一般被实现为一个单调递增的计数器。
+ 为什么在分布式系统中不直接使用物理时钟，而是使用逻辑时钟呢？
+ 对于分布式系统而言，即使我们可以使用一些工具去同步集群内的时间，但是使所有节点的时间保持一致这个目标依旧是很难达成的。而如果我们使用不同节点产生的不一致的物理时间来进行一致性计算，就会导致结果出现很大的偏差，因此分布式系统就通过另外的方法来记录事件的顺序关系，也就是上面提到的逻辑时间。
+如何实现逻辑时钟? Lamport timestamps  Leslie Lamport 在1978年提出逻辑时钟的概念，并描述了一种逻辑时钟的表示方法，这个方法被称为 Lamport 时间戳（Lamport timestamps）。
+ 分布式系统中按是否存在节点交互可分为三类事件，一类发生于节点内部，二是发送事件，三是接收事件。Lamport 时间戳原理如下图：
+ 每个事件对应一个 Lamport 时间戳，初始值为0 如果事件在节点内发生，时间戳加1 如果事件属于发送事件，时间戳加1并在消息中带上该时间戳 如果事件属于接收事件，时间戳 = Max(本地时间戳，消息中的时间戳) &#43; 1  假设有事件 a、b，C(a)、C(b )分别表示事件 a、b 对应的 Lamport 时间戳，如果 a 发生在b 之前，记作 a⇒b，则有C(a)&amp;lt;C(b)，例如图1中有 C1→B1，那么 C(C1)&amp;lt;C(B1)。通过该定义，事件集中 Lamport 时间戳不等的事件可进行比较，我们获得事件的偏序关系(partial order)。注意：如果C(a)&amp;lt;C(b)，并不能说明a⇒b，也就是说C(a)&amp;lt;C(b是a⇒b的必要不充分条件
+如果 C(a) = C(b)，那a、b事件的顺序又是怎样的？值得注意的是当 C(a) = C(b)的时候，它们肯定没有因果关系，所以它们之间的先后顺序其实并不会影响结果，我们这里只需要给出一种确定的方式来定义它们之间的先后就能得到全序关系。注意：Lamport逻辑时钟只保证因果关系（偏序）的正确性，不保证绝对时序的正确性。
+通过以上定义，我们可以对所有事件排序，获得事件的全序关系。以上图例子，我们可以进行排序： C1 ⇒ B1 ⇒ B2 ⇒ A1 ⇒ B3 ⇒ A2 ⇒ C2 ⇒ B4 ⇒ C3 ⇒ A3 ⇒ B5 ⇒ C4 ⇒ C5 ⇒ A4'><title>分布式时钟</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E6%97%B6%E9%92%9F/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='分布式时钟'>
+<meta property='og:description' content='分布式时钟 逻辑时钟与物理时钟 对于分布式系统来说，时钟分为逻辑时钟与物理时钟两种。物理时钟对应的是我们真实世界的时间，一般由操作系统提供，而逻辑时钟则一般被实现为一个单调递增的计数器。
+ 为什么在分布式系统中不直接使用物理时钟，而是使用逻辑时钟呢？
+ 对于分布式系统而言，即使我们可以使用一些工具去同步集群内的时间，但是使所有节点的时间保持一致这个目标依旧是很难达成的。而如果我们使用不同节点产生的不一致的物理时间来进行一致性计算，就会导致结果出现很大的偏差，因此分布式系统就通过另外的方法来记录事件的顺序关系，也就是上面提到的逻辑时间。
+如何实现逻辑时钟? Lamport timestamps  Leslie Lamport 在1978年提出逻辑时钟的概念，并描述了一种逻辑时钟的表示方法，这个方法被称为 Lamport 时间戳（Lamport timestamps）。
+ 分布式系统中按是否存在节点交互可分为三类事件，一类发生于节点内部，二是发送事件，三是接收事件。Lamport 时间戳原理如下图：
+ 每个事件对应一个 Lamport 时间戳，初始值为0 如果事件在节点内发生，时间戳加1 如果事件属于发送事件，时间戳加1并在消息中带上该时间戳 如果事件属于接收事件，时间戳 = Max(本地时间戳，消息中的时间戳) &#43; 1  假设有事件 a、b，C(a)、C(b )分别表示事件 a、b 对应的 Lamport 时间戳，如果 a 发生在b 之前，记作 a⇒b，则有C(a)&amp;lt;C(b)，例如图1中有 C1→B1，那么 C(C1)&amp;lt;C(B1)。通过该定义，事件集中 Lamport 时间戳不等的事件可进行比较，我们获得事件的偏序关系(partial order)。注意：如果C(a)&amp;lt;C(b)，并不能说明a⇒b，也就是说C(a)&amp;lt;C(b是a⇒b的必要不充分条件
+如果 C(a) = C(b)，那a、b事件的顺序又是怎样的？值得注意的是当 C(a) = C(b)的时候，它们肯定没有因果关系，所以它们之间的先后顺序其实并不会影响结果，我们这里只需要给出一种确定的方式来定义它们之间的先后就能得到全序关系。注意：Lamport逻辑时钟只保证因果关系（偏序）的正确性，不保证绝对时序的正确性。
+通过以上定义，我们可以对所有事件排序，获得事件的全序关系。以上图例子，我们可以进行排序： C1 ⇒ B1 ⇒ B2 ⇒ A1 ⇒ B3 ⇒ A2 ⇒ C2 ⇒ B4 ⇒ C3 ⇒ A3 ⇒ B5 ⇒ C4 ⇒ C5 ⇒ A4'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E6%97%B6%E9%92%9F/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='分布式' /><meta property='article:tag' content='分布式时钟' /><meta property='article:published_time' content='2022-05-24T15:45:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-24T15:49:04&#43;08:00'/>
+<meta name="twitter:title" content="分布式时钟">
+<meta name="twitter:description" content="分布式时钟 逻辑时钟与物理时钟 对于分布式系统来说，时钟分为逻辑时钟与物理时钟两种。物理时钟对应的是我们真实世界的时间，一般由操作系统提供，而逻辑时钟则一般被实现为一个单调递增的计数器。
+ 为什么在分布式系统中不直接使用物理时钟，而是使用逻辑时钟呢？
+ 对于分布式系统而言，即使我们可以使用一些工具去同步集群内的时间，但是使所有节点的时间保持一致这个目标依旧是很难达成的。而如果我们使用不同节点产生的不一致的物理时间来进行一致性计算，就会导致结果出现很大的偏差，因此分布式系统就通过另外的方法来记录事件的顺序关系，也就是上面提到的逻辑时间。
+如何实现逻辑时钟? Lamport timestamps  Leslie Lamport 在1978年提出逻辑时钟的概念，并描述了一种逻辑时钟的表示方法，这个方法被称为 Lamport 时间戳（Lamport timestamps）。
+ 分布式系统中按是否存在节点交互可分为三类事件，一类发生于节点内部，二是发送事件，三是接收事件。Lamport 时间戳原理如下图：
+ 每个事件对应一个 Lamport 时间戳，初始值为0 如果事件在节点内发生，时间戳加1 如果事件属于发送事件，时间戳加1并在消息中带上该时间戳 如果事件属于接收事件，时间戳 = Max(本地时间戳，消息中的时间戳) &#43; 1  假设有事件 a、b，C(a)、C(b )分别表示事件 a、b 对应的 Lamport 时间戳，如果 a 发生在b 之前，记作 a⇒b，则有C(a)&amp;lt;C(b)，例如图1中有 C1→B1，那么 C(C1)&amp;lt;C(B1)。通过该定义，事件集中 Lamport 时间戳不等的事件可进行比较，我们获得事件的偏序关系(partial order)。注意：如果C(a)&amp;lt;C(b)，并不能说明a⇒b，也就是说C(a)&amp;lt;C(b是a⇒b的必要不充分条件
+如果 C(a) = C(b)，那a、b事件的顺序又是怎样的？值得注意的是当 C(a) = C(b)的时候，它们肯定没有因果关系，所以它们之间的先后顺序其实并不会影响结果，我们这里只需要给出一种确定的方式来定义它们之间的先后就能得到全序关系。注意：Lamport逻辑时钟只保证因果关系（偏序）的正确性，不保证绝对时序的正确性。
+通过以上定义，我们可以对所有事件排序，获得事件的全序关系。以上图例子，我们可以进行排序： C1 ⇒ B1 ⇒ B2 ⇒ A1 ⇒ B3 ⇒ A2 ⇒ C2 ⇒ B4 ⇒ C3 ⇒ A3 ⇒ B5 ⇒ C4 ⇒ C5 ⇒ A4">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" style="background-color: #2a9d8f; color: #fff;">
+                分布式
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E5%88%86%E5%B8%83%E5%BC%8F%E6%97%B6%E9%92%9F/">分布式时钟</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 24, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="分布式时钟">分布式时钟</h1>
+<h2 id="逻辑时钟与物理时钟">逻辑时钟与物理时钟</h2>
+<p>对于分布式系统来说，时钟分为<strong>逻辑时钟</strong>与<strong>物理时钟</strong>两种。<strong>物理时钟对应的是我们真实世界的时间，一般由操作系统提供，而逻辑时钟则一般被实现为一个单调递增的计数器</strong>。</p>
+<blockquote>
+<p><strong>为什么在分布式系统中不直接使用物理时钟，而是使用逻辑时钟呢？</strong></p>
+</blockquote>
+<p>对于分布式系统而言，即使我们可以使用一些工具去同步集群内的时间，但是<strong>使所有节点的时间保持一致</strong>这个目标依旧是很难达成的。而如果我们使用不同节点产生的不一致的物理时间来进行一致性计算，就会导致结果出现很大的偏差，因此分布式系统就通过另外的方法来记录事件的顺序关系，也就是上面提到的逻辑时间。</p>
+<h2 id="如何实现逻辑时钟">如何实现逻辑时钟?</h2>
+<h3 id="lamport-timestamps">Lamport timestamps</h3>
+<blockquote>
+<p>Leslie Lamport 在1978年提出逻辑时钟的概念，并描述了一种逻辑时钟的表示方法，这个方法被称为 Lamport 时间戳（Lamport timestamps）。</p>
+</blockquote>
+<p>分布式系统中按是否存在节点交互可分为三类事件，一类发生于节点内部，二是发送事件，三是接收事件。Lamport 时间戳原理如下图：</p>
+<p><img src="http://img.orekilee.top//imgbed/distributed/distributed30.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ol>
+<li>每个事件对应一个 Lamport 时间戳，初始值为0</li>
+<li>如果事件在节点内发生，时间戳加1</li>
+<li>如果事件属于发送事件，时间戳加1并在消息中带上该时间戳</li>
+<li>如果事件属于接收事件，时间戳 = Max(本地时间戳，消息中的时间戳) + 1</li>
+</ol>
+<p>假设有事件 a、b，C(a)、C(b )分别表示事件 a、b 对应的 Lamport 时间戳，如果 a 发生在b 之前，记作 <code>a⇒b</code>，则有<code>C(a)&lt;C(b)，例如图1中有 </code>C1→B1，那么 <code>C(C1)&lt;C(B1)</code>。通过该定义，事件集中 Lamport 时间戳不等的事件可进行比较，我们获得事件的偏序关系(partial order)。<strong>注意：如果<code>C(a)&lt;C(b)</code>，并不能说明<code>a⇒b</code>，也就是说<code>C(a)&lt;C(b</code>是<code>a⇒b</code>的必要不充分条件</strong></p>
+<p>如果<code> C(a) = C(b)</code>，那a、b事件的顺序又是怎样的？值得注意的是当 <code>C(a) = C(b)</code>的时候，它们肯定没有因果关系，所以它们之间的先后顺序其实并不会影响结果，我们这里只需要给出一种确定的方式来定义它们之间的先后就能得到全序关系。<strong>注意：Lamport逻辑时钟只保证因果关系（偏序）的正确性，不保证绝对时序的正确性。</strong></p>
+<p>通过以上定义，我们可以对所有事件排序，获得事件的全序关系。以上图例子，我们可以进行排序：                     <code>C1 ⇒ B1 ⇒ B2 ⇒ A1 ⇒ B3 ⇒ A2 ⇒ C2 ⇒ B4 ⇒ C3 ⇒ A3 ⇒ B5 ⇒ C4 ⇒ C5 ⇒ A4</code></p>
+<p>观察上面的全序关系你可以发现，从时间轴来看 B5 是早于 A3 发生的，但是在全序关系里面我们根据上面的定义给出的却是 A3 早于 B5，可以发现 Lamport 逻辑时钟是一个正确的算法，即有因果关系的事件时序不会错，但并不是一个公平的算法，即没有因果关系的事件时序不一定符合实际情况。</p>
+<h3 id="vector-clock">Vector clock</h3>
+<p>因此 Vector clock 就在 Lamport timestamps 的基础上加以改进，它通过 vector 结构记录了本节点与其他节点的 Lamport timestamps。其原理如下图</p>
+<p><img src="http://img.orekilee.top//imgbed/distributed/distributed31.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>从上图可以看出，Vector clock 与 Lamport timestamps 的规则几乎一模一样。</p>
+<p>假设有事件 a、b 分别在节点 P、Q 上发生，Vector clock 分别为 Ta、Tb，如果 <code>Tb[Q] &gt; Ta[Q]</code> 并且 <code>Tb[P] &gt;= Ta[P]</code>，则a发生于b之前，记作<code>a⇒b</code>。到目前为止还和 Lamport timestamps 差别不大，那 Vector clock 怎么判别同时发生关系呢？</p>
+<p>如果 <code>Tb[Q] &gt; Ta[Q]</code> 并且 <code>Tb[P] &lt; Ta[P]</code>，则认为 a、b 同时发生，记作 <code>a &lt;=&gt; b</code>。例如图 2 中节点 B 上的第4 个事件 (A:2，B:4，C:1) 与节点 C 上的第 2 个事件 (B:3，C:2) 没有因果关系、属于同时发生事件。</p>
+<h3 id="version-vector">Version vector</h3>
+<p>基于 Vector clock 我们可以获得任意两个事件的顺序关系，或为先后顺序或为同时发生，识别事件顺序在工程实践中有很重要的引申应用，最常见的应用是<strong>发现数据冲突</strong>。这时，就诞生了 Version vector。</p>
+<p>分布式系统中为了保证可用性，数据往往存在多个副本，而这多个副本又可能会被同时更新，这就会导致副本之间产生数据不一致的情况。Version vector 的目的就是为了<strong>发现这些数据冲突</strong>，其实现与 Vector clock类似，下图则是其具体运作流程。</p>
+<p><img src="http://img.orekilee.top//imgbed/distributed/distributed32.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<ul>
+<li>client端写入数据，该请求被Sx处理并创建相应的 vector ([Sx, 1])，记为数据 D1</li>
+<li>第 2 次请求也被 Sx 处理，数据修改为 D2，vector 修改为 ([Sx, 2])</li>
+<li>第 3、第 4 次请求分别被 Sy、Sz 处理，client 端先读取到 D2，然后 D3、D4 被写入 Sy、Sz</li>
+<li>第 5 次更新时 client 端读取到 D2、D3和D4 3个数据版本，通过类似 Vector clock 判断同时发生关系的方法可判断 D3、D4 存在数据冲突，最终通过一定方法解决数据冲突并写入 D5</li>
+</ul>
+<p>Vector clock只用于发现数据冲突，不能解决数据冲突。解决数据冲突因场景而异，具体方法有以<strong>最后更新为准(last write win)</strong>，或<strong>将冲突的数据交给client由client端决定如何处理</strong>，或通<strong>过quorum决议事先避免数据冲突的情况发生</strong>。</p>
+<blockquote>
+<p>由于记录了所有数据在所有节点上的逻辑时钟信息，Vector clock 和 Version vector 在实际应用中可能面临的一个问题是 vector 过大，用于数据管理的元数据甚至大于数据本身。</p>
+</blockquote>
+<p>解决该问题的方法是使用 server id 取代 client id 创建 vector (因为 server 的数量相对 client 稳定)，或设定最大的 size、如果超过该 size 值则淘汰最旧的 vector 信息。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
+        
+            <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E6%97%B6%E9%92%9F/">分布式时钟</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 24, 2022 15:49 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性哈希</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性模型</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEgossip/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性协议：Gossip</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性协议：ZAB</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEbully/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性协议：Bully</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#逻辑时钟与物理时钟">逻辑时钟与物理时钟</a></li>
+    <li><a href="#如何实现逻辑时钟">如何实现逻辑时钟?</a>
+      <ol>
+        <li><a href="#lamport-timestamps">Lamport timestamps</a></li>
+        <li><a href="#vector-clock">Vector clock</a></li>
+        <li><a href="#version-vector">Version vector</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

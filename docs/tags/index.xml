@@ -6,7 +6,159 @@
         <description>Recent content in Tags on 凌桓&#39;s BLOG</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en-us</language>
-        <lastBuildDate>Mon, 23 May 2022 23:48:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Tue, 24 May 2022 17:20:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>分布式</title>
+        <link>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F/</link>
+        <pubDate>Tue, 24 May 2022 17:20:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>一致性哈希</title>
+        <link>https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/</link>
+        <pubDate>Tue, 24 May 2022 17:20:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>一致性模型</title>
+        <link>https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/</link>
+        <pubDate>Tue, 24 May 2022 16:40:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>Gossip</title>
+        <link>https://blog.orekilee.top/tags/gossip/</link>
+        <pubDate>Tue, 24 May 2022 16:30:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/gossip/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>一致性协议</title>
+        <link>https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AE/</link>
+        <pubDate>Tue, 24 May 2022 16:30:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AE/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>ZAB</title>
+        <link>https://blog.orekilee.top/tags/zab/</link>
+        <pubDate>Tue, 24 May 2022 16:20:23 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/zab/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>ZooKeeper</title>
+        <link>https://blog.orekilee.top/tags/zookeeper/</link>
+        <pubDate>Tue, 24 May 2022 16:20:23 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/zookeeper/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>Bully</title>
+        <link>https://blog.orekilee.top/tags/bully/</link>
+        <pubDate>Tue, 24 May 2022 16:20:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/bully/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>Raft</title>
+        <link>https://blog.orekilee.top/tags/raft/</link>
+        <pubDate>Tue, 24 May 2022 15:59:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/raft/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>Paxos</title>
+        <link>https://blog.orekilee.top/tags/paxos/</link>
+        <pubDate>Tue, 24 May 2022 15:58:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/paxos/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>分布式锁</title>
+        <link>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/</link>
+        <pubDate>Tue, 24 May 2022 15:54:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>分布式ID</title>
+        <link>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8Fid/</link>
+        <pubDate>Tue, 24 May 2022 15:50:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8Fid/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>分布式事务</title>
+        <link>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/</link>
+        <pubDate>Tue, 24 May 2022 15:48:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>分布式时钟</title>
+        <link>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E6%97%B6%E9%92%9F/</link>
+        <pubDate>Tue, 24 May 2022 15:45:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E6%97%B6%E9%92%9F/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>BASE</title>
+        <link>https://blog.orekilee.top/tags/base/</link>
+        <pubDate>Tue, 24 May 2022 15:43:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/base/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>CAP</title>
+        <link>https://blog.orekilee.top/tags/cap/</link>
+        <pubDate>Tue, 24 May 2022 15:43:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/cap/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>Flink</title>
+        <link>https://blog.orekilee.top/tags/flink/</link>
+        <pubDate>Tue, 24 May 2022 14:40:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/flink/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>大数据</title>
+        <link>https://blog.orekilee.top/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE/</link>
+        <pubDate>Tue, 24 May 2022 14:40:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>实时计算</title>
+        <link>https://blog.orekilee.top/tags/%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97/</link>
+        <pubDate>Tue, 24 May 2022 14:40:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97/</guid>
+        <description></description>
+        </item>
+        <item>
         <title>KV存储</title>
         <link>https://blog.orekilee.top/tags/kv%E5%AD%98%E5%82%A8/</link>
         <pubDate>Mon, 23 May 2022 23:48:13 +0800</pubDate>
@@ -36,38 +188,6 @@
         <pubDate>Mon, 23 May 2022 22:20:13 +0800</pubDate>
         
         <guid>https://blog.orekilee.top/tags/%E6%90%9C%E7%B4%A2%E5%BC%95%E6%93%8E/</guid>
-        <description></description>
-        </item>
-        <item>
-        <title>ZAB</title>
-        <link>https://blog.orekilee.top/tags/zab/</link>
-        <pubDate>Mon, 23 May 2022 21:14:13 +0800</pubDate>
-        
-        <guid>https://blog.orekilee.top/tags/zab/</guid>
-        <description></description>
-        </item>
-        <item>
-        <title>ZooKeeper</title>
-        <link>https://blog.orekilee.top/tags/zookeeper/</link>
-        <pubDate>Mon, 23 May 2022 21:14:13 +0800</pubDate>
-        
-        <guid>https://blog.orekilee.top/tags/zookeeper/</guid>
-        <description></description>
-        </item>
-        <item>
-        <title>分布式</title>
-        <link>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F/</link>
-        <pubDate>Mon, 23 May 2022 21:14:13 +0800</pubDate>
-        
-        <guid>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F/</guid>
-        <description></description>
-        </item>
-        <item>
-        <title>一致性协议</title>
-        <link>https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AE/</link>
-        <pubDate>Mon, 23 May 2022 21:14:13 +0800</pubDate>
-        
-        <guid>https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AE/</guid>
         <description></description>
         </item>
         <item>

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>分布式锁 on 凌桓&#39;s BLOG</title>
+        <link>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/</link>
+        <description>Recent content in 分布式锁 on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language>
+        <lastBuildDate>Tue, 24 May 2022 15:54:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>分布式锁</title>
+        <link>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/</link>
+        <pubDate>Tue, 24 May 2022 15:54:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/</guid>
+        <description>&lt;h1 id=&#34;分布式锁&#34;&gt;分布式锁&lt;/h1&gt;
+&lt;p&gt;随着互联网技术的不断发展、数据量的大幅增加、业务逻辑的复杂化导致传统的集中式系统已经无法应用于当前的业务场景，因此分布式系统被应用在越来越多的地方，但是在分布式系统中，由于网络、机器（如网络延迟、分区，机器宕机）等情况导致场景更加复杂，充满了不可靠的情况。为了保证一致性，在这种情况下我们就需要用到&lt;strong&gt;分布式锁&lt;/strong&gt;。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;那么分布式锁需要具备哪些条件呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;获取、释放锁的性能要高&lt;/li&gt;
+&lt;li&gt;判断锁的获取操作必须要是原子的（防止同一个锁被多个节点获取）&lt;/li&gt;
+&lt;li&gt;网络或者机器出现问题导致无法继续工作时，必须要释放锁（防止死锁）&lt;/li&gt;
+&lt;li&gt;可重入的，一个线程可以多次获取同一把锁（防止死锁）&lt;/li&gt;
+&lt;li&gt;阻塞锁（依据业务需求）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;但是目前并没有能够满足上面所有要求的完美结局方案，对于分布式锁，我们通常使用以下三种方法来实现&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;数据库&lt;/li&gt;
+&lt;li&gt;Redis(缓存)&lt;/li&gt;
+&lt;li&gt;Zookeeper&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;数据库&#34;&gt;数据库&lt;/h2&gt;
+&lt;h3 id=&#34;唯一索引&#34;&gt;唯一索引&lt;/h3&gt;
+&lt;p&gt;我们可以利用数据库中的&lt;strong&gt;唯一索引&lt;/strong&gt;来实现。由于唯一索引能够保证记录只被插入一次，因此我们可以利用其判断当前是否处于锁定状态。所以当想要获取锁的时候，就向数据库中插入一条记录，而释放锁的时候就删除这条记录即可。&lt;/p&gt;
+&lt;p&gt;但是该方法存在以下问题&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;锁没有失效时间&lt;/strong&gt;，如果解锁失败的话其他进程无法再获得该锁（死锁）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;非阻塞锁&lt;/strong&gt;，插入失败就直接报错，没有办法进入队列重试&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不可重入&lt;/strong&gt;，同一线程在没有释放锁之前无法重复获得该锁&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;对于数据库来说我们还可以选择使用排他锁、乐观锁等方法来实现分布式锁，但是由于这些方法对原表有侵入、占用数据库连接等情况，一般情况下都不做考虑，因此这里也就不详细描述。&lt;/p&gt;
+&lt;h2 id=&#34;redis&#34;&gt;Redis&lt;/h2&gt;
+&lt;h3 id=&#34;setnxexpire&#34;&gt;SETNX、EXPIRE&lt;/h3&gt;
+&lt;p&gt;我们可以利用&lt;code&gt;setnx(set if not exist)&lt;/code&gt;命令来实现锁。只有在缓存中不存在Key的时候才会set并返回true，而Key已存在的时候就直接返回false。同时为了防止获取锁失败而导致的死锁情况，我们可以利用&lt;code&gt;expire&lt;/code&gt;命令对这个key设置一个超时时间。&lt;/p&gt;
+&lt;p&gt;为了防止我们&lt;code&gt;setnx&lt;/code&gt;成功之后线程发生异常中断导致我们来不及设置&lt;code&gt;expire&lt;/code&gt;而导致死锁，我们通常会使用以下命令来设置&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;8
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;SET&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;key&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;random_value&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;NX&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;EX&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;30000&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;&lt;/span&gt;&lt;span class=&#34;cm&#34;&gt;/*
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;  EX seconds – 设置键key的过期时间，单位时秒
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;  PX milliseconds – 设置键key的过期时间，单位时毫秒
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;  NX – 只有键key不存在的时候才会设置key的值
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;  XX – 只有键key存在的时候才会设置key的值
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cm&#34;&gt;*/&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;该命令仅在Key不存在（NX选项）时才插入，并且设置到期时间为30000毫秒（PX选项），value设置为随机值，该值在所有客户端和所有锁定请求中必须唯一（防止被他人误删）。&lt;/p&gt;
+&lt;p&gt;当我们想要释放锁时，为了保证安全（防止误删除另一个客户端创建的锁），仅当密钥存在且存储在密钥上的值恰好是期望的值时，才删除该密钥，下面是以lua脚本完成的删除逻辑&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-lua&#34; data-lang=&#34;lua&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kr&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;redis.call&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&amp;#34;get&amp;#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;KEYS&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;])&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;==&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;ARGV&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;kr&#34;&gt;then&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kr&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;redis.call&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&amp;#34;del&amp;#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;,&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;KEYS&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;[&lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;])&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kr&#34;&gt;else&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;kr&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kr&#34;&gt;end&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;这种方法虽然实现起来非常简单，但是其存在着&lt;strong&gt;单点问题&lt;/strong&gt;，它加锁时只作用于一个Redis节点上，如果该节点出现故障故障，即使使用哨兵来保证高可用，也会出现锁丢失的情况，如下场景&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;在Redis的Master节点拿到锁，此时锁还没有同步到Slave节点&lt;/li&gt;
+&lt;li&gt;此时Master发生故障，哨兵主导进行故障转移，Slave节点升级为Master节点&lt;/li&gt;
+&lt;li&gt;由于锁没来得及同步，因此导致锁丢失&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;考虑到这种情况，Redis作者antirez基于分布式环境下提出了一种更高级的分布式锁的实现方式：&lt;strong&gt;Redlock&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;redlock算法&#34;&gt;RedLock算法&lt;/h3&gt;
+&lt;p&gt;Redlock 是 Redis 的作者 antirez 给出的集群模式的 Redis 分布式锁，它基于 N 个&lt;strong&gt;完全独立&lt;/strong&gt;（&lt;strong&gt;不存在主从复制或者其他集群协调机制&lt;/strong&gt;）的 Redis节点（通常情况下 N 设置成 5，为了资源的合理利用通常为奇数）。&lt;/p&gt;
+&lt;p&gt;算法的流程如下&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;获取当前时间&lt;/li&gt;
+&lt;li&gt;客户端依次尝试从5个(奇数)相互独立的Redis实例中使用&lt;strong&gt;相同的key和具有唯一性的value&lt;/strong&gt;获取锁&lt;/li&gt;
+&lt;li&gt;计算获取锁消耗的时间，只有&lt;strong&gt;时间小于锁的过期时间&lt;/strong&gt;，并且从**大多数（N / 2 + 1）**实例上获取了锁，才认为获取锁成功；&lt;/li&gt;
+&lt;li&gt;如果获取了锁，则重新计算有效期时间，即&lt;strong&gt;原有效时间减去获取锁消耗的时间&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;如果客户端获取锁失败，则释放所有实例上的锁&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;虽然RedLock算法比上面的单点Redis锁更可靠，但是由于分布式的复杂性，实现起来的条件也更加的苛刻。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;由于必须获取**（N / 2 + 1）**个节点上的锁，所以可能会出现锁冲突的情况（即每个人都获取了一些锁，但是没有人获取一半以上的锁）。针对这个问题，其借鉴了Raft算法的思路，即产生冲突后为每个节点设置一个随机开始时间，在时间到后重新尝试获取锁，但是这也导致了获取锁的成本增加。&lt;/li&gt;
+&lt;li&gt;如果5个节点有2个宕机，锁的可用性会极大降低，因为必须等待这两个宕机节点的结果超时才能返回。另外只剩3个节点，客户端必须获取到这全部3个节点的锁才能拥有锁，加锁难度也加大了。&lt;/li&gt;
+&lt;li&gt;如果出现网络分区，那么可能出现客户端永远也无法获取锁的情况。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;介于以上情况，我们还可以选择更加可靠的方法，即Zookeeper实现的分布式锁。&lt;/p&gt;
+&lt;h2 id=&#34;zookeeper&#34;&gt;Zookeeper&lt;/h2&gt;
+&lt;p&gt;Zookeeper是一个为分布式应用提供一致性服务的软件，它内部是一个分层的文件系统目录树结构，规定同一个目录下只能有一个唯一文件名。&lt;/p&gt;
+&lt;p&gt;由于Zookeeper同样没有实现锁API，所以我们利用其数据节点来表示锁，数据节点分为以下三种类型&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;永久节点&lt;/strong&gt;：节点创建后永久存在，不会因为会话的消失而消失&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;临时节点&lt;/strong&gt;：与永久节点相反，当客户端结束会话后立即删除&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;顺序节点&lt;/strong&gt;：会在节点名的后面加一个数字后缀，并且是有序的，例如生成的有序节点为 /lock/node-0000000000，它的下一个有序节点则为 /lock/node-0000000001，以此类推。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;实现原理&#34;&gt;实现原理&lt;/h3&gt;
+&lt;p&gt;除了上面介绍的节点外，我们还需要用到Watcher（监视器）来注册对节点状态的监听&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Watcher：注册一个该节点的监视器，当节点状态发生变化时，Watcher就会触发，此时Zookeeper将会向客户端发送一条通知（Watcher只能被触发一次）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;根据上述特性，我们就可以使用临时顺序节点与Watcher来实现分布式锁&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;创建一个锁目录/lock&lt;/li&gt;
+&lt;li&gt;当需要获取锁时，就在lock目录下创建临时顺序节点&lt;/li&gt;
+&lt;li&gt;获取/lock下的子节点列表，判断自己创建的子节点是否为当前子节点列表中序号最小的子节点，如果是则认为获得锁；否则到lock目录下注册一个子节点变更的Watcher监听，获得子节点的变更通知后重复此步骤直至获得锁&lt;/li&gt;
+&lt;li&gt;执行完业务逻辑后，主动删除自己的节点来释放锁。此时会触发其他节点的Watcher，让其他人获取锁。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;blockquote&gt;
+&lt;p&gt;那如果出现网络中断或者机器宕机，锁还能释放吗？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;这里需要注意的是，我们使用的是临时节点，所以当客户端因为某种原因无法继续工作时，就会导致会话的中断，临时节点就会被Zookeeprer自动删除。这也就是Zookeeper相较于Redis更加可靠的原因。&lt;/p&gt;
+&lt;h3 id=&#34;羊群效应&#34;&gt;羊群效应&lt;/h3&gt;
+&lt;p&gt;上面这个实现方法，大体上能够满足一般的分布式集群竞争锁的需求，并且能够保证一定的性能。但是随着机器规模的扩大，其效率会越来越低。&lt;/p&gt;
+&lt;p&gt;为什么呢？我们思考一下锁的释放流程&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;在我们获取锁失败后，会注册一个对lock目录的Watcher监控，当有节点变更消息时，就会通知给所有注册了的机器。然而这个通知除了使序号最小的节点获取锁外，对其他的节点没有产生任何实际作用。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;性能瓶颈的原因就是上面这个问题，大量的&lt;strong&gt;Watcher通知&lt;/strong&gt;和&lt;strong&gt;子节点列表获取&lt;/strong&gt;两个操作重复运行，并且绝大多数运行结果都是判断出自己并非是序号最小的节点，从而继续等待下一次的通知，浪费了大量的资源。&lt;/p&gt;
+&lt;p&gt;如果集群规模较大，不仅会对Zookeeper服务器造成巨大的性能影响和网络冲击，更严重的时候甚至会因为多个节点对应的客户端同时释放锁导致大量的节点消失，从而短时间内向剩余客户端发送大量的事件通知——这就是所谓的&lt;strong&gt;羊群效应&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;改进方法&#34;&gt;改进方法&lt;/h3&gt;
+&lt;p&gt;羊群效应出现根源在于其没有找到事件的真正关注点，对于分布式锁的竞争过程来说，它的核心逻辑就是&lt;strong&gt;判断自己是否是所有子节点中序号最小的&lt;/strong&gt;。那么问题就简单了，我们&lt;strong&gt;只需要关注比自己序号小的那一个相关节点的变更情况&lt;/strong&gt;就可以了，而不再需要关注全局的子列表变更情况。&lt;/p&gt;
+&lt;p&gt;于是，改进后的获取流程如下&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;创建一个锁目录/lock&lt;/li&gt;
+&lt;li&gt;当需要获取锁时，就在lock目录下创建临时顺序节点&lt;/li&gt;
+&lt;li&gt;获取/lock下的子节点列表，判断自己创建的子节点是否为当前子节点列表中序号最小的子节点，如果是则认为获得锁；否则到Watcher自己的次小节点（防止羊群效应）&lt;/li&gt;
+&lt;li&gt;执行完业务逻辑后，主动删除自己的节点来释放锁，此时会触发顺序的下一个节点的Watcher&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;方案&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;优点&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;缺点&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;应用场景&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;&lt;strong&gt;数据库&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;直接使用数据库，操作简单&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;分布式系统的性能瓶颈大部分都在数据库，而使用数据库锁加大了负担&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;业务逻辑简单，对性能要求不高&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;&lt;strong&gt;Redis&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;性能较高，且实现起来方便&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;锁超时机制不可靠，当线程获取锁时，可能因为处理时间过长导致锁超时失效&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;追求高性能，允许偶发的锁失效问题&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;&lt;strong&gt;ZooKeeper&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;不依赖超时时间释放锁，可靠性高&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;由于频繁的创建和删除节点，性能比不上Redis锁&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;系统要求高可靠性&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

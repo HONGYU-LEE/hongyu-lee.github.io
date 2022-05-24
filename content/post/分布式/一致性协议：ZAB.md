@@ -1,8 +1,6 @@
 ---
-title: ZAB 协议
-date: 2022-05-23T21:14:13+08:00
-lastmod: 2022-05-23T21:14:13+08:00
-enableGitInfo : true
+title: 一致性协议：ZAB
+date: 2022-05-24T16:20:23+08:00
 categories:
     - ZooKeeper
     - 分布式
@@ -13,7 +11,7 @@ tags:
     - ZAB
 ---
 
-# ZAB协议
+# 一致性协议：ZAB
 
 **ZAB（ZooKeeper Atomic Broadcast 原子广播）** 协议是为分布式协调服务ZooKeeper专门设计的一种支持崩溃恢复的原子广播协议。 在ZooKeeper中，主要依赖ZAB协议来实现分布式数据一致性，基于该协议，ZooKeeper实现了一种主备模式的系统架构来保持集群中各个副本之间的数据一致性。
 

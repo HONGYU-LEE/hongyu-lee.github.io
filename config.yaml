@@ -2,7 +2,7 @@ baseurl: https://blog.orekilee.top/
 #baseurl: https://example.com
 languageCode: en-us
 theme: hugo-theme-stack
-paginate: 5
+paginate: 10
 title: 凌桓's BLOG
 
 publishDir: docs
@@ -57,7 +57,7 @@ params:
 
     comments:
         enabled: true
-        provider: remark42
+        provider: waline
 
         disqusjs:
             shortname:
@@ -86,17 +86,17 @@ params:
 
         # Waline client configuration see: https://waline.js.org/en/reference/client.html
         waline:
-            serverURL:
-            lang:
-            visitor:
-            avatar:
+            serverURL: "https://comment.orekilee.top/"
+            lang: "zh-CN"
+            visitor: false                                          
+            avatar: "wavatar"
             emoji:
                 - https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo
             requiredMeta:
                 - name
                 - email
                 - url
-            placeholder:
+            placeholder: "休得弄脏我的评论，注册后再与我对话"  
             locale:
                 admin: Admin
 
@@ -138,13 +138,13 @@ params:
             - type: search
             - type: archives
               params:
-                  limit: 5
+                  limit: 10
             - type: categories
               params:
-                  limit: 10
+                  limit: 20
             - type: tag-cloud
               params:
-                  limit: 10
+                  limit: 50
         page:
             - type: toc
 

@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='Flink 状态管理 通常意义上，函数里所有需要任务去维护并用来计算结果的数据都属于任务的状态，可以把状态想象成任务的业务逻辑所需要访问的本地或实例变量。
+如上图，任务首先会接受一些输入数据。在处理这些数据的过程中，任务对其状态进行读取或更新，并根据状态的输入数据计算结果。我们以一个持续计算接收到多少条记录的简单任务为例。当任务收到一个新的记录后，首先会访问状态获取当前统计的记录数目，然后把数目增加并更新状态，最后将更新后的状态数目发送出去。
+Flink会负责进行状态的管理，包括状态一致性、故障处理以及高效存取相关的问题都由Flink负责搞定，这样开发人员就可以专注于自己的应用逻辑。
+在Flink中，状态都是和特定operator（算子）相关联，为了让Flink的Runtime（运行）层知道算子有哪些状态，算子需要自己对其进行注册。根据作用域的不同，状态可以分为以下两类
+ operator state（算子状态） keyed state（键值分区状态）  算子状态 算子状态的作用域是某个算子任务，这意味着所有在同一个并行任务之内的记录都能访问到相同的状态**（每一个并行的子任务都共享一个状态）。算子状态不能通过其他任务访问，无论该任务是否来自相同算子（相同算子的不同任务之间也不能访问）**。
+Flink为算子状态提供了三种数据结构
+ 列表状态（list state）：将状态表示为一组数据的列表。（每一个并行的子任务共享一个状态） 联合列表状态（union list state）：同样将状态表示为数据的列表，但在进行故障恢复或者从某个保存点（savepoint）启动应用的时候，状态恢复的方式和普通的列表状态有所不同。（把之前的每一个状态广播到对应的每一个算子中） 广播状态（broadcast state）：专门为那些需要保证算子的每个任务状态都相同的场景而设计。（把同一个状态广播给所有算子子任务）  键值分区状态 键值分区状态会按照算子输入记录所定义的键值来进行维护或访问。Flink为每个键值都维护了一个状态实例，该实例总是位于那个处理对应键值记录的算子任务上。当任务在处理一个记录时，会自动把状态的访问范围限制为当前记录的键值，因此所有键值相同的记录都能访问到一样的状态。
+Flink为键值分区状态提供以下几种数据结构
+ 单值状态（value state）：每个键对应存储一个任意类型的值。 列表状态（list state）：每个键对应存储一个值的列表。 映射状态（map state）：每个键对应存储一个键值映射。 聚合状态（Reducing state &amp;amp; Aggregating State）：每个键对应存储一个用于聚合操作的列表  状态后端（State Backends） 有状态算子的任务通常会对每一条到来的记录读写状态，因此高效的状态访问对于记录处理的低延迟而言至关重要。为了保证快速访问状态，每个并行任务都会把状态维护在本地。至于状态具体的存储、访问和维护，则是由一个名为状态后端的可拔插（pluggable） 组件来决定。状态后端主要负责两件事情：本地状态管理和将状态以检查点的形式写入远程存储。
+目前，Flink提供了三种状态后端，状态后端的选择会影响有状态应用的鲁棒性及性能。
+  MemoryStateBackend
+ MemoryStateBackend将状态以常规对象的方式存储在TaskManager进程的JVM堆，并在生成Checkpoints时会将状态发送至JobManager并保存到它的堆内存中。 如果状态过大，则可能导致JVM上的任务由于OutOfMemoryError而终止，并且可能由于堆中放置了过多常驻内存的对象而引发垃圾回收停顿问题。 由于内存具有易失性，所以一旦JobManager出现故障就会导致状态丢失，因此MemoryStateBackend通常用于开发和调试。 内存访问速度快，延迟低，但容错性也低。    FsStateBackend
+ 与MemoryStateBackend一样将本地状态存储在TaskManager进程的JVM堆里，不同的是将Checkpoints存到了远程持久化文件系统（FileSystem）中。 受到TaskManager内存大小的限制，并且也可能导致垃圾回收停顿问题。 FsStateBackend既让本地访问享有内存的速度，又可以支持故障容错。    RocksDBStateBackend
+  RocksDBStateBackend会将全部状态序列化后存到本地RocksDB实例中
+  由于磁盘I/O以及序列化/反序列化对象的性能开销，相较于内存中维护状态而言， 读写性能会偏低。'><title>Flink 状态管理</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/flink-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Flink 状态管理'>
+<meta property='og:description' content='Flink 状态管理 通常意义上，函数里所有需要任务去维护并用来计算结果的数据都属于任务的状态，可以把状态想象成任务的业务逻辑所需要访问的本地或实例变量。
+如上图，任务首先会接受一些输入数据。在处理这些数据的过程中，任务对其状态进行读取或更新，并根据状态的输入数据计算结果。我们以一个持续计算接收到多少条记录的简单任务为例。当任务收到一个新的记录后，首先会访问状态获取当前统计的记录数目，然后把数目增加并更新状态，最后将更新后的状态数目发送出去。
+Flink会负责进行状态的管理，包括状态一致性、故障处理以及高效存取相关的问题都由Flink负责搞定，这样开发人员就可以专注于自己的应用逻辑。
+在Flink中，状态都是和特定operator（算子）相关联，为了让Flink的Runtime（运行）层知道算子有哪些状态，算子需要自己对其进行注册。根据作用域的不同，状态可以分为以下两类
+ operator state（算子状态） keyed state（键值分区状态）  算子状态 算子状态的作用域是某个算子任务，这意味着所有在同一个并行任务之内的记录都能访问到相同的状态**（每一个并行的子任务都共享一个状态）。算子状态不能通过其他任务访问，无论该任务是否来自相同算子（相同算子的不同任务之间也不能访问）**。
+Flink为算子状态提供了三种数据结构
+ 列表状态（list state）：将状态表示为一组数据的列表。（每一个并行的子任务共享一个状态） 联合列表状态（union list state）：同样将状态表示为数据的列表，但在进行故障恢复或者从某个保存点（savepoint）启动应用的时候，状态恢复的方式和普通的列表状态有所不同。（把之前的每一个状态广播到对应的每一个算子中） 广播状态（broadcast state）：专门为那些需要保证算子的每个任务状态都相同的场景而设计。（把同一个状态广播给所有算子子任务）  键值分区状态 键值分区状态会按照算子输入记录所定义的键值来进行维护或访问。Flink为每个键值都维护了一个状态实例，该实例总是位于那个处理对应键值记录的算子任务上。当任务在处理一个记录时，会自动把状态的访问范围限制为当前记录的键值，因此所有键值相同的记录都能访问到一样的状态。
+Flink为键值分区状态提供以下几种数据结构
+ 单值状态（value state）：每个键对应存储一个任意类型的值。 列表状态（list state）：每个键对应存储一个值的列表。 映射状态（map state）：每个键对应存储一个键值映射。 聚合状态（Reducing state &amp;amp; Aggregating State）：每个键对应存储一个用于聚合操作的列表  状态后端（State Backends） 有状态算子的任务通常会对每一条到来的记录读写状态，因此高效的状态访问对于记录处理的低延迟而言至关重要。为了保证快速访问状态，每个并行任务都会把状态维护在本地。至于状态具体的存储、访问和维护，则是由一个名为状态后端的可拔插（pluggable） 组件来决定。状态后端主要负责两件事情：本地状态管理和将状态以检查点的形式写入远程存储。
+目前，Flink提供了三种状态后端，状态后端的选择会影响有状态应用的鲁棒性及性能。
+  MemoryStateBackend
+ MemoryStateBackend将状态以常规对象的方式存储在TaskManager进程的JVM堆，并在生成Checkpoints时会将状态发送至JobManager并保存到它的堆内存中。 如果状态过大，则可能导致JVM上的任务由于OutOfMemoryError而终止，并且可能由于堆中放置了过多常驻内存的对象而引发垃圾回收停顿问题。 由于内存具有易失性，所以一旦JobManager出现故障就会导致状态丢失，因此MemoryStateBackend通常用于开发和调试。 内存访问速度快，延迟低，但容错性也低。    FsStateBackend
+ 与MemoryStateBackend一样将本地状态存储在TaskManager进程的JVM堆里，不同的是将Checkpoints存到了远程持久化文件系统（FileSystem）中。 受到TaskManager内存大小的限制，并且也可能导致垃圾回收停顿问题。 FsStateBackend既让本地访问享有内存的速度，又可以支持故障容错。    RocksDBStateBackend
+  RocksDBStateBackend会将全部状态序列化后存到本地RocksDB实例中
+  由于磁盘I/O以及序列化/反序列化对象的性能开销，相较于内存中维护状态而言， 读写性能会偏低。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/flink-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='Flink' /><meta property='article:tag' content='实时计算' /><meta property='article:tag' content='大数据' /><meta property='article:published_time' content='2022-05-24T14:35:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-24T15:33:37&#43;08:00'/>
+<meta name="twitter:title" content="Flink 状态管理">
+<meta name="twitter:description" content="Flink 状态管理 通常意义上，函数里所有需要任务去维护并用来计算结果的数据都属于任务的状态，可以把状态想象成任务的业务逻辑所需要访问的本地或实例变量。
+如上图，任务首先会接受一些输入数据。在处理这些数据的过程中，任务对其状态进行读取或更新，并根据状态的输入数据计算结果。我们以一个持续计算接收到多少条记录的简单任务为例。当任务收到一个新的记录后，首先会访问状态获取当前统计的记录数目，然后把数目增加并更新状态，最后将更新后的状态数目发送出去。
+Flink会负责进行状态的管理，包括状态一致性、故障处理以及高效存取相关的问题都由Flink负责搞定，这样开发人员就可以专注于自己的应用逻辑。
+在Flink中，状态都是和特定operator（算子）相关联，为了让Flink的Runtime（运行）层知道算子有哪些状态，算子需要自己对其进行注册。根据作用域的不同，状态可以分为以下两类
+ operator state（算子状态） keyed state（键值分区状态）  算子状态 算子状态的作用域是某个算子任务，这意味着所有在同一个并行任务之内的记录都能访问到相同的状态**（每一个并行的子任务都共享一个状态）。算子状态不能通过其他任务访问，无论该任务是否来自相同算子（相同算子的不同任务之间也不能访问）**。
+Flink为算子状态提供了三种数据结构
+ 列表状态（list state）：将状态表示为一组数据的列表。（每一个并行的子任务共享一个状态） 联合列表状态（union list state）：同样将状态表示为数据的列表，但在进行故障恢复或者从某个保存点（savepoint）启动应用的时候，状态恢复的方式和普通的列表状态有所不同。（把之前的每一个状态广播到对应的每一个算子中） 广播状态（broadcast state）：专门为那些需要保证算子的每个任务状态都相同的场景而设计。（把同一个状态广播给所有算子子任务）  键值分区状态 键值分区状态会按照算子输入记录所定义的键值来进行维护或访问。Flink为每个键值都维护了一个状态实例，该实例总是位于那个处理对应键值记录的算子任务上。当任务在处理一个记录时，会自动把状态的访问范围限制为当前记录的键值，因此所有键值相同的记录都能访问到一样的状态。
+Flink为键值分区状态提供以下几种数据结构
+ 单值状态（value state）：每个键对应存储一个任意类型的值。 列表状态（list state）：每个键对应存储一个值的列表。 映射状态（map state）：每个键对应存储一个键值映射。 聚合状态（Reducing state &amp;amp; Aggregating State）：每个键对应存储一个用于聚合操作的列表  状态后端（State Backends） 有状态算子的任务通常会对每一条到来的记录读写状态，因此高效的状态访问对于记录处理的低延迟而言至关重要。为了保证快速访问状态，每个并行任务都会把状态维护在本地。至于状态具体的存储、访问和维护，则是由一个名为状态后端的可拔插（pluggable） 组件来决定。状态后端主要负责两件事情：本地状态管理和将状态以检查点的形式写入远程存储。
+目前，Flink提供了三种状态后端，状态后端的选择会影响有状态应用的鲁棒性及性能。
+  MemoryStateBackend
+ MemoryStateBackend将状态以常规对象的方式存储在TaskManager进程的JVM堆，并在生成Checkpoints时会将状态发送至JobManager并保存到它的堆内存中。 如果状态过大，则可能导致JVM上的任务由于OutOfMemoryError而终止，并且可能由于堆中放置了过多常驻内存的对象而引发垃圾回收停顿问题。 由于内存具有易失性，所以一旦JobManager出现故障就会导致状态丢失，因此MemoryStateBackend通常用于开发和调试。 内存访问速度快，延迟低，但容错性也低。    FsStateBackend
+ 与MemoryStateBackend一样将本地状态存储在TaskManager进程的JVM堆里，不同的是将Checkpoints存到了远程持久化文件系统（FileSystem）中。 受到TaskManager内存大小的限制，并且也可能导致垃圾回收停顿问题。 FsStateBackend既让本地访问享有内存的速度，又可以支持故障容错。    RocksDBStateBackend
+  RocksDBStateBackend会将全部状态序列化后存到本地RocksDB实例中
+  由于磁盘I/O以及序列化/反序列化对象的性能开销，相较于内存中维护状态而言， 读写性能会偏低。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/flink/" style="background-color: #2a9d8f; color: #fff;">
+                Flink
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/flink-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86/">Flink 状态管理</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 24, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="flink-状态管理">Flink 状态管理</h1>
+<p>通常意义上，函数里<strong>所有需要任务去维护并用来计算结果的数据都属于任务的状态</strong>，可以把<strong>状态想象成任务的业务逻辑所需要访问的本地或实例变量</strong>。</p>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk19.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如上图，任务首先会接受一些输入数据。在处理这些数据的过程中，任务对其状态进行读取或更新，并根据状态的输入数据计算结果。我们以一个持续计算接收到多少条记录的简单任务为例。当任务收到一个新的记录后，首先会访问状态获取当前统计的记录数目，然后把数目增加并更新状态，最后将更新后的状态数目发送出去。</p>
+<p><strong>Flink会负责进行状态的管理</strong>，包括状态一致性、故障处理以及高效存取相关的问题都由Flink负责搞定，这样开发人员就可以专注于自己的应用逻辑。</p>
+<p>在Flink中，状态都是和特定operator（算子）相关联，为了让Flink的Runtime（运行）层知道算子有哪些状态，算子需要自己对其进行注册。根据<strong>作用域的不同</strong>，状态可以分为以下两类</p>
+<ul>
+<li><strong>operator state（算子状态）</strong></li>
+<li><strong>keyed state（键值分区状态）</strong></li>
+</ul>
+<h2 id="算子状态">算子状态</h2>
+<p>算子状态的<strong>作用域是某个算子任务</strong>，这意味着所有在同一个并行任务之内的记录都能访问到相同的状态**（每一个并行的子任务都共享一个状态）<strong>。算子状态不能通过其他任务访问，无论该任务是否来自相同算子</strong>（相同算子的不同任务之间也不能访问）**。</p>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk18.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>Flink为算子状态提供了三种数据结构</p>
+<ol>
+<li><strong>列表状态（list state）</strong>：将状态表示为一组数据的列表。<strong>（每一个并行的子任务共享一个状态）</strong></li>
+<li><strong>联合列表状态（union list state）</strong>：同样将状态表示为数据的列表，但在进行故障恢复或者从某个保存点（savepoint）启动应用的时候，状态恢复的方式和普通的列表状态有所不同。<strong>（把之前的每一个状态广播到对应的每一个算子中）</strong></li>
+<li><strong>广播状态（broadcast state）</strong>：专门为那些需要保证算子的每个任务状态都相同的场景而设计。<strong>（把同一个状态广播给所有算子子任务）</strong></li>
+</ol>
+<h2 id="键值分区状态">键值分区状态</h2>
+<p>键值分区状态会按照<strong>算子输入记录所定义的键值</strong>来进行维护或访问。Flink为每个键值都维护了一个状态实例，该实例总是位于那个处理对应键值记录的算子任务上。当任务在处理一个记录时，会自动把状态的<strong>访问范围限制为当前记录的键值</strong>，因此<strong>所有键值相同的记录都能访问到一样的状态。</strong></p>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk17.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>Flink为键值分区状态提供以下几种数据结构</p>
+<ol>
+<li><strong>单值状态（value state）</strong>：每个键对应存储一个任意类型的值。</li>
+<li><strong>列表状态（list state）</strong>：每个键对应存储一个值的列表。</li>
+<li><strong>映射状态（map state）</strong>：每个键对应存储一个键值映射。</li>
+<li><strong>聚合状态（Reducing state &amp; Aggregating State）</strong>：每个键对应存储一个用于聚合操作的列表</li>
+</ol>
+<h2 id="状态后端state-backends">状态后端（State Backends）</h2>
+<p>有状态算子的任务通常会对每一条到来的记录读写状态，因此高效的状态访问对于记录处理的低延迟而言至关重要。为了保证快速访问状态，<strong>每个并行任务都会把状态维护在本地</strong>。至于状态具体的存储、访问和维护，则是由一个名为状态后端的<strong>可拔插（pluggable）</strong> 组件来决定。状态后端主要负责两件事情：<strong>本地状态管理和将状态以检查点的形式写入远程存储</strong>。</p>
+<p>目前，Flink提供了三种状态后端，状态后端的选择会影响有状态应用的鲁棒性及性能。</p>
+<ol>
+<li>
+<p><strong>MemoryStateBackend</strong></p>
+<ul>
+<li>MemoryStateBackend将状态以常规对象的方式存储在TaskManager进程的JVM堆，并在生成Checkpoints时会将状态发送至JobManager并保存到它的堆内存中。</li>
+<li>如果状态过大，则可能导致JVM上的任务由于OutOfMemoryError而终止，并且可能由于堆中放置了过多常驻内存的对象而引发垃圾回收停顿问题。</li>
+<li>由于内存具有易失性，所以一旦JobManager出现故障就会导致状态丢失，因此MemoryStateBackend通常用于开发和调试。</li>
+<li>内存访问速度快，延迟低，但容错性也低。</li>
+</ul>
+</li>
+<li>
+<p><strong>FsStateBackend</strong></p>
+<ul>
+<li>与MemoryStateBackend一样将本地状态存储在TaskManager进程的JVM堆里，不同的是将Checkpoints存到了远程持久化文件系统（FileSystem）中。</li>
+<li>受到TaskManager内存大小的限制，并且也可能导致垃圾回收停顿问题。</li>
+<li>FsStateBackend既让本地访问享有内存的速度，又可以支持故障容错。</li>
+</ul>
+</li>
+<li>
+<p><strong>RocksDBStateBackend</strong></p>
+<ul>
+<li>
+<p>RocksDBStateBackend会将全部状态序列化后存到本地RocksDB实例中</p>
+</li>
+<li>
+<p>由于磁盘I/O以及序列化/反序列化对象的性能开销，相较于内存中维护状态而言， 读写性能会偏低。</p>
+</li>
+<li>
+<p>RocksDB的支持并不直接包含在Flink中，需要额外引入依赖</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="o">&lt;</span><span class="n">dependency</span><span class="o">&gt;</span> 
+</span></span><span class="line"><span class="cl">  <span class="o">&lt;</span><span class="n">groupId</span><span class="o">&gt;</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">flink</span><span class="o">&lt;/</span><span class="n">groupId</span><span class="o">&gt;</span> 
+</span></span><span class="line"><span class="cl">  <span class="o">&lt;</span><span class="n">artifactId</span><span class="o">&gt;</span><span class="n">flink</span><span class="o">-</span><span class="n">statebackend</span><span class="o">-</span><span class="n">rocksdb_2</span><span class="o">.</span><span class="na">12</span><span class="o">&lt;/</span><span class="n">artifactId</span><span class="o">&gt;</span> 
+</span></span><span class="line"><span class="cl">  <span class="o">&lt;</span><span class="n">version</span><span class="o">&gt;</span><span class="n">1</span><span class="o">.</span><span class="na">12</span><span class="o">.</span><span class="na">1</span><span class="o">&lt;/</span><span class="n">version</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="o">&lt;/</span><span class="n">dependency</span><span class="o">&gt;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ol>
+<h2 id="有状态算子的扩缩容">有状态算子的扩缩容</h2>
+<p>流式应用的一项基本需求是<strong>根据输入数据到达速率的变化调整算子的并行度</strong>。对于无状态的算子扩缩容很容易，但是对于有状态算子来说，这就变的复杂了很多。因为我们<strong>需要把状态重新分组，分配到与之前数量不等的并行任务上</strong>。</p>
+<p>针对不同类型状态的算子，Flink提供了四种扩缩容模式</p>
+<ol>
+<li><strong>键值分区状态</strong></li>
+<li><strong>算子列表状态</strong></li>
+<li><strong>算子联合列表状态</strong></li>
+<li><strong>算子广播状态</strong></li>
+</ol>
+<h3 id="键值分区状态-1">键值分区状态</h3>
+<p>带有键值分区状态的算子在扩缩容时<strong>会根据新的任务数量对键值重新分区</strong>，但为了降低状态在不同任务之间迁移的必要成本，Flink不会对单独的键值实施再分配，而是会把所有键值分为不同的<strong>键值组（Key group）</strong>。每个键值组都包含了部分键值，Flink以此为单位把键值分配给不同任务。</p>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk12.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="算子列表状态">算子列表状态</h3>
+<p>带有算子列表状态的算子在扩缩容时会<strong>对列表中的条目进行重新分配</strong>。理论上，所有并行算子任务的列表条目会被<strong>统一收集</strong>起来，随后<strong>均匀分配到更少或更多的任务之上</strong>。如果列表条目的数量小于算子新设置的并行度，部分任务在启动时的状态就可能为空。</p>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk33.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="算子联合列表状态">算子联合列表状态</h3>
+<p>带有算子联合列表状态的算子会在扩缩容时<strong>把状态列表的全部条目广播到全部任务上</strong>，随后由任务自己决定哪些条目应该保留，哪些应该丢弃。</p>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk32.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="算子广播状态">算子广播状态</h3>
+<p>带有算子广播状态的算子在扩缩容时会<strong>把状态拷贝到全部新任务上</strong>，这样做的原因是<strong>广播状态能确保所有任务的状态相同</strong>。在缩容的情况下，由于状态经过复制不会丢失，我们可以简单的停掉多出的任务。</p>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk31.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/flink/">Flink</a>
+        
+            <a href="/tags/%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97/">实时计算</a>
+        
+            <a href="/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE/">大数据</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 24, 2022 15:33 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/flink-%E7%8A%B6%E6%80%81%E4%B8%80%E8%87%B4%E6%80%A7/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 状态一致性</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/flink-%E5%AE%B9%E9%94%99%E6%9C%BA%E5%88%B6/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 容错机制</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/flink-%E6%B5%81%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 流处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/flink-%E6%9E%B6%E6%9E%84/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 架构</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/flink-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 基本概念</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#算子状态">算子状态</a></li>
+    <li><a href="#键值分区状态">键值分区状态</a></li>
+    <li><a href="#状态后端state-backends">状态后端（State Backends）</a></li>
+    <li><a href="#有状态算子的扩缩容">有状态算子的扩缩容</a>
+      <ol>
+        <li><a href="#键值分区状态-1">键值分区状态</a></li>
+        <li><a href="#算子列表状态">算子列表状态</a></li>
+        <li><a href="#算子联合列表状态">算子联合列表状态</a></li>
+        <li><a href="#算子广播状态">算子广播状态</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

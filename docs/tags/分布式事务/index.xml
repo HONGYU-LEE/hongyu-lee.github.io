@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>分布式事务 on 凌桓&#39;s BLOG</title>
+        <link>https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/</link>
+        <description>Recent content in 分布式事务 on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language>
+        <lastBuildDate>Tue, 24 May 2022 15:48:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>分布式事务</title>
+        <link>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/</link>
+        <pubDate>Tue, 24 May 2022 15:48:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/</guid>
+        <description>&lt;h1 id=&#34;分布式事务&#34;&gt;分布式事务&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;分布式事务就是指事务的参与者、支持事务的服务器、资源服务器以及事务管理器分别位于分布式系统的不同节点之上。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;简单的说，就是一次大的操作由不同的小操作组成，这些小的操作分布在不同的服务器上，且属于不同的应用，分布式事务需要保证这些小操作&lt;strong&gt;要么全部成功，要么全部失败&lt;/strong&gt;。本质上来说，分布式事务就是为了&lt;strong&gt;保证不同数据库的数据一致性&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;2pc二阶段提交协议&#34;&gt;2PC（二阶段提交协议）&lt;/h2&gt;
+&lt;p&gt;在分布式系统中，每一个机器节点虽然都能够明确地知道自己在进行事务操作过程中的结果是成功或失败，但是却无法直接获取到其他分布式节点的操作结果。&lt;/p&gt;
+&lt;p&gt;为了保证事务处理的ACID特性，就需要引入一个称为&lt;strong&gt;协调者&lt;/strong&gt;的组件来统一调度所有分布式节点的执行逻辑，这些被调度的分布式节点则被称为&lt;strong&gt;参与者&lt;/strong&gt;。协调者负责调度参与者的行为，最终决定这些参与者是否要把事务真正进行提交，基于这个思想，衍生出了&lt;strong&gt;二阶段提交&lt;/strong&gt;和&lt;strong&gt;三阶段提交&lt;/strong&gt;两种协议。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;2PC&lt;/strong&gt;是&lt;strong&gt;Two-Phase Commit&lt;/strong&gt;的缩写，即&lt;strong&gt;二阶段提交&lt;/strong&gt;，&lt;strong&gt;是为了使基于分布式系统架构下的所有节点在进行事务处理过程中能够保持原子性和一致性而设计的一种算法&lt;/strong&gt;。目前绝大多数关系型数据库都是使用二阶段提交协议来完成分布式事务处理的。&lt;/p&gt;
+&lt;h3 id=&#34;执行流程&#34;&gt;执行流程&lt;/h3&gt;
+&lt;p&gt;顾名思义，二阶段提交协议就是将事务的提交过程分成了两个阶段来进行处理，在第一阶段的主要内容就是进行投票，来表明是否有继续执行事务的必要。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;阶段一：提交事务请求（投票阶段）&lt;/strong&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;事务询问&lt;/strong&gt;：协调者向所有参与者发出事务询问，询问是否可以执行事务操作，并等待各参与者的响应。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;执行事务&lt;/strong&gt;：各个参与者节点执行事务操作，并将undo和redo信息记入事务日志中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;各参与者向协调者反馈事务询问的响应&lt;/strong&gt;：如果参与者成功执行事务，则反馈YES响应，表示事务执行成功。如果参与者执行事务失败，则反馈NO响应，表示事务执行失败。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;在第二阶段中，会根据第一阶段参与者的反馈来决定是否能够提交事务，要么全都成功，要么全都失败。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;阶段二：执行事务提交（执行阶段）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;执行事务提交&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送提交请求&lt;/strong&gt;：协调者向所有参与者发起提交请求。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务提交&lt;/strong&gt;：参与者在收到提交请求后，会正式执行事务提交操作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反馈事务提交结果&lt;/strong&gt;：参与者在完成事务提交之后向协调者发送ACK消息。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;完成事务&lt;/strong&gt;：协调者接收到所有参与者的ACK后完成事务。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送回滚请求&lt;/strong&gt;：协调者向所有参与者发起回滚请求。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务回滚&lt;/strong&gt;：参与者在收到回滚请求后，利用阶段一记录的undo信息来执行事务回滚操作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反馈事务回滚结果&lt;/strong&gt;：参与者在完成事务回滚之后向协调者发送ACK消息。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;：协调者接收到所有参与者的ACK后完成事务中断。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed10.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed11.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h3 id=&#34;优缺点&#34;&gt;优缺点&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;优点&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;原理简单&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实现方便&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;缺点&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;同步阻塞&lt;/strong&gt;：在执行过程中，所有参与该事务操作的逻辑都会处于阻塞状态，也就是说各个参与者在等待其他参与者响应的过程中将无法执行其他操作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;单点问题&lt;/strong&gt;：在上述过程中，协调者起到了核心的调度作用。一旦协调者出现了问题，那么整个提交流程将无法运转，甚至如果在二阶段的提交流程中出现了问题，将导致其他参与者都处于锁定事务资源的状态中，无法完成事务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;数据不一致&lt;/strong&gt;：倘若在第二阶段的提交过程中，协调者向参与者发送提交请求，而由于网络原因或者是协调者本身的原因，导致只有部分参与者收到了提交请求，此时就导致了只有接收到请求的参与者进行了事务提交，而产生数据不一致的问题。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;过于保守&lt;/strong&gt;：二阶段提交协议没有设计较为完整的容错机制，任意一个节点的失败都会导致整个事务的失败&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;二阶段提交协议存在着上述几种缺陷，因此研究者在二阶段协议的基础上进行了改进&lt;/p&gt;
+&lt;h2 id=&#34;3pc三阶段提交协议&#34;&gt;3PC（三阶段提交协议）&lt;/h2&gt;
+&lt;p&gt;3PC是Three-Phase Commit的缩写，即三阶段提交，是2PC的改进版，其将二阶段提交协议的提交事务请求过程一分为二，形成了由CanCommit、PreCommit、DoCommint三个阶段组成的事务处理协议，其协议设计如下图所示
+&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed12.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;执行流程-1&#34;&gt;执行流程&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;阶段一：CanCommit&lt;/strong&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;事务询问&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;各参与者向协调者反馈事务询问的响应&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;阶段二：PreCommit&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;执行事务预提交&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送预提交请求&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务预提交&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;各参与者向协调者反馈事务执行的结果&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送中断请求&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;阶段三：DoCommit&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;执行提交&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送提交请求&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务提交&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反馈事务提交结果&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;完成事务&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;发送中断请求&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;事务回滚&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反馈事务回滚结果&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;中断事务&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;需要注意的是，在阶段三中可能会出现以下两种问题&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;协调者出现问题&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;协调者和参与者之间的网络出现故障&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;无论出现上述那种问题，最终都会导致参与者无法及时的接收到来自协调者的DoCommit或是Abort请求，针对这种异常情况，参与者都会在等待超时后继续进行事务提交。&lt;/p&gt;
+&lt;h3 id=&#34;优缺点-1&#34;&gt;优缺点&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;优点&lt;/strong&gt;：相较于二阶段提交协议，降低了参与者的阻塞范围，并且能够在出现单点故障后继续达成一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;缺点&lt;/strong&gt;：三阶段提交协议在去除阻塞的同时也引入了新的问题，那就是参与者在收到预提交的消息时，如果出现了网络分区的情况，协调者与参与者无法进行正常的网络通信，但是参与者依旧会进行事务的提交，从而导致数据的不一致。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;本地消息表异步确保&#34;&gt;本地消息表（异步确保）&lt;/h2&gt;
+&lt;p&gt;本地消息表与业务数据表处于同一个数据库中，这样就能利用本地事务来保证在对这两个表的操作满足事务特性，并且使用了&lt;strong&gt;消息队列&lt;/strong&gt;来保证&lt;strong&gt;最终一致性&lt;/strong&gt;。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;在分布式事务操作的一方完成写业务数据的操作之后向本地消息表发送一个消息，本地事务能保证这个消息一定会被写入本地消息表中。&lt;/li&gt;
+&lt;li&gt;之后将本地消息表中的消息转发到消息队列中，如果转发成功则将消息从本地消息表中删除，否则继续重新转发。&lt;/li&gt;
+&lt;li&gt;在分布式事务操作的另一方从消息队列中读取一个消息，并执行消息中的操作。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed13.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;在这里插入图片描述&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

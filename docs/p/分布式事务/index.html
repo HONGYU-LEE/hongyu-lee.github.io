@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='分布式事务 分布式事务就是指事务的参与者、支持事务的服务器、资源服务器以及事务管理器分别位于分布式系统的不同节点之上。
+简单的说，就是一次大的操作由不同的小操作组成，这些小的操作分布在不同的服务器上，且属于不同的应用，分布式事务需要保证这些小操作要么全部成功，要么全部失败。本质上来说，分布式事务就是为了保证不同数据库的数据一致性
+2PC（二阶段提交协议） 在分布式系统中，每一个机器节点虽然都能够明确地知道自己在进行事务操作过程中的结果是成功或失败，但是却无法直接获取到其他分布式节点的操作结果。
+为了保证事务处理的ACID特性，就需要引入一个称为协调者的组件来统一调度所有分布式节点的执行逻辑，这些被调度的分布式节点则被称为参与者。协调者负责调度参与者的行为，最终决定这些参与者是否要把事务真正进行提交，基于这个思想，衍生出了二阶段提交和三阶段提交两种协议。
+2PC是Two-Phase Commit的缩写，即二阶段提交，是为了使基于分布式系统架构下的所有节点在进行事务处理过程中能够保持原子性和一致性而设计的一种算法。目前绝大多数关系型数据库都是使用二阶段提交协议来完成分布式事务处理的。
+执行流程 顾名思义，二阶段提交协议就是将事务的提交过程分成了两个阶段来进行处理，在第一阶段的主要内容就是进行投票，来表明是否有继续执行事务的必要。
+阶段一：提交事务请求（投票阶段）
+ 事务询问：协调者向所有参与者发出事务询问，询问是否可以执行事务操作，并等待各参与者的响应。 执行事务：各个参与者节点执行事务操作，并将undo和redo信息记入事务日志中。 各参与者向协调者反馈事务询问的响应：如果参与者成功执行事务，则反馈YES响应，表示事务执行成功。如果参与者执行事务失败，则反馈NO响应，表示事务执行失败。  在第二阶段中，会根据第一阶段参与者的反馈来决定是否能够提交事务，要么全都成功，要么全都失败。
+阶段二：执行事务提交（执行阶段）
+ 执行事务提交  发送提交请求：协调者向所有参与者发起提交请求。 事务提交：参与者在收到提交请求后，会正式执行事务提交操作。 反馈事务提交结果：参与者在完成事务提交之后向协调者发送ACK消息。 完成事务：协调者接收到所有参与者的ACK后完成事务。   中断事务  发送回滚请求：协调者向所有参与者发起回滚请求。 事务回滚：参与者在收到回滚请求后，利用阶段一记录的undo信息来执行事务回滚操作。 反馈事务回滚结果：参与者在完成事务回滚之后向协调者发送ACK消息。 中断事务：协调者接收到所有参与者的ACK后完成事务中断。    优缺点  优点  原理简单 实现方便   缺点  同步阻塞：在执行过程中，所有参与该事务操作的逻辑都会处于阻塞状态，也就是说各个参与者在等待其他参与者响应的过程中将无法执行其他操作。 单点问题：在上述过程中，协调者起到了核心的调度作用。一旦协调者出现了问题，那么整个提交流程将无法运转，甚至如果在二阶段的提交流程中出现了问题，将导致其他参与者都处于锁定事务资源的状态中，无法完成事务。 数据不一致：倘若在第二阶段的提交过程中，协调者向参与者发送提交请求，而由于网络原因或者是协调者本身的原因，导致只有部分参与者收到了提交请求，此时就导致了只有接收到请求的参与者进行了事务提交，而产生数据不一致的问题。 过于保守：二阶段提交协议没有设计较为完整的容错机制，任意一个节点的失败都会导致整个事务的失败    二阶段提交协议存在着上述几种缺陷，因此研究者在二阶段协议的基础上进行了改进
+3PC（三阶段提交协议） 3PC是Three-Phase Commit的缩写，即三阶段提交，是2PC的改进版，其将二阶段提交协议的提交事务请求过程一分为二，形成了由CanCommit、PreCommit、DoCommint三个阶段组成的事务处理协议，其协议设计如下图所示 执行流程 阶段一：CanCommit
+ 事务询问 各参与者向协调者反馈事务询问的响应  阶段二：PreCommit
+ 执行事务预提交  发送预提交请求 事务预提交 各参与者向协调者反馈事务执行的结果   中断事务  发送中断请求 中断事务    阶段三：DoCommit'><title>分布式事务</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='分布式事务'>
+<meta property='og:description' content='分布式事务 分布式事务就是指事务的参与者、支持事务的服务器、资源服务器以及事务管理器分别位于分布式系统的不同节点之上。
+简单的说，就是一次大的操作由不同的小操作组成，这些小的操作分布在不同的服务器上，且属于不同的应用，分布式事务需要保证这些小操作要么全部成功，要么全部失败。本质上来说，分布式事务就是为了保证不同数据库的数据一致性
+2PC（二阶段提交协议） 在分布式系统中，每一个机器节点虽然都能够明确地知道自己在进行事务操作过程中的结果是成功或失败，但是却无法直接获取到其他分布式节点的操作结果。
+为了保证事务处理的ACID特性，就需要引入一个称为协调者的组件来统一调度所有分布式节点的执行逻辑，这些被调度的分布式节点则被称为参与者。协调者负责调度参与者的行为，最终决定这些参与者是否要把事务真正进行提交，基于这个思想，衍生出了二阶段提交和三阶段提交两种协议。
+2PC是Two-Phase Commit的缩写，即二阶段提交，是为了使基于分布式系统架构下的所有节点在进行事务处理过程中能够保持原子性和一致性而设计的一种算法。目前绝大多数关系型数据库都是使用二阶段提交协议来完成分布式事务处理的。
+执行流程 顾名思义，二阶段提交协议就是将事务的提交过程分成了两个阶段来进行处理，在第一阶段的主要内容就是进行投票，来表明是否有继续执行事务的必要。
+阶段一：提交事务请求（投票阶段）
+ 事务询问：协调者向所有参与者发出事务询问，询问是否可以执行事务操作，并等待各参与者的响应。 执行事务：各个参与者节点执行事务操作，并将undo和redo信息记入事务日志中。 各参与者向协调者反馈事务询问的响应：如果参与者成功执行事务，则反馈YES响应，表示事务执行成功。如果参与者执行事务失败，则反馈NO响应，表示事务执行失败。  在第二阶段中，会根据第一阶段参与者的反馈来决定是否能够提交事务，要么全都成功，要么全都失败。
+阶段二：执行事务提交（执行阶段）
+ 执行事务提交  发送提交请求：协调者向所有参与者发起提交请求。 事务提交：参与者在收到提交请求后，会正式执行事务提交操作。 反馈事务提交结果：参与者在完成事务提交之后向协调者发送ACK消息。 完成事务：协调者接收到所有参与者的ACK后完成事务。   中断事务  发送回滚请求：协调者向所有参与者发起回滚请求。 事务回滚：参与者在收到回滚请求后，利用阶段一记录的undo信息来执行事务回滚操作。 反馈事务回滚结果：参与者在完成事务回滚之后向协调者发送ACK消息。 中断事务：协调者接收到所有参与者的ACK后完成事务中断。    优缺点  优点  原理简单 实现方便   缺点  同步阻塞：在执行过程中，所有参与该事务操作的逻辑都会处于阻塞状态，也就是说各个参与者在等待其他参与者响应的过程中将无法执行其他操作。 单点问题：在上述过程中，协调者起到了核心的调度作用。一旦协调者出现了问题，那么整个提交流程将无法运转，甚至如果在二阶段的提交流程中出现了问题，将导致其他参与者都处于锁定事务资源的状态中，无法完成事务。 数据不一致：倘若在第二阶段的提交过程中，协调者向参与者发送提交请求，而由于网络原因或者是协调者本身的原因，导致只有部分参与者收到了提交请求，此时就导致了只有接收到请求的参与者进行了事务提交，而产生数据不一致的问题。 过于保守：二阶段提交协议没有设计较为完整的容错机制，任意一个节点的失败都会导致整个事务的失败    二阶段提交协议存在着上述几种缺陷，因此研究者在二阶段协议的基础上进行了改进
+3PC（三阶段提交协议） 3PC是Three-Phase Commit的缩写，即三阶段提交，是2PC的改进版，其将二阶段提交协议的提交事务请求过程一分为二，形成了由CanCommit、PreCommit、DoCommint三个阶段组成的事务处理协议，其协议设计如下图所示 执行流程 阶段一：CanCommit
+ 事务询问 各参与者向协调者反馈事务询问的响应  阶段二：PreCommit
+ 执行事务预提交  发送预提交请求 事务预提交 各参与者向协调者反馈事务执行的结果   中断事务  发送中断请求 中断事务    阶段三：DoCommit'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='分布式' /><meta property='article:tag' content='分布式事务' /><meta property='article:published_time' content='2022-05-24T15:48:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-24T15:49:50&#43;08:00'/>
+<meta name="twitter:title" content="分布式事务">
+<meta name="twitter:description" content="分布式事务 分布式事务就是指事务的参与者、支持事务的服务器、资源服务器以及事务管理器分别位于分布式系统的不同节点之上。
+简单的说，就是一次大的操作由不同的小操作组成，这些小的操作分布在不同的服务器上，且属于不同的应用，分布式事务需要保证这些小操作要么全部成功，要么全部失败。本质上来说，分布式事务就是为了保证不同数据库的数据一致性
+2PC（二阶段提交协议） 在分布式系统中，每一个机器节点虽然都能够明确地知道自己在进行事务操作过程中的结果是成功或失败，但是却无法直接获取到其他分布式节点的操作结果。
+为了保证事务处理的ACID特性，就需要引入一个称为协调者的组件来统一调度所有分布式节点的执行逻辑，这些被调度的分布式节点则被称为参与者。协调者负责调度参与者的行为，最终决定这些参与者是否要把事务真正进行提交，基于这个思想，衍生出了二阶段提交和三阶段提交两种协议。
+2PC是Two-Phase Commit的缩写，即二阶段提交，是为了使基于分布式系统架构下的所有节点在进行事务处理过程中能够保持原子性和一致性而设计的一种算法。目前绝大多数关系型数据库都是使用二阶段提交协议来完成分布式事务处理的。
+执行流程 顾名思义，二阶段提交协议就是将事务的提交过程分成了两个阶段来进行处理，在第一阶段的主要内容就是进行投票，来表明是否有继续执行事务的必要。
+阶段一：提交事务请求（投票阶段）
+ 事务询问：协调者向所有参与者发出事务询问，询问是否可以执行事务操作，并等待各参与者的响应。 执行事务：各个参与者节点执行事务操作，并将undo和redo信息记入事务日志中。 各参与者向协调者反馈事务询问的响应：如果参与者成功执行事务，则反馈YES响应，表示事务执行成功。如果参与者执行事务失败，则反馈NO响应，表示事务执行失败。  在第二阶段中，会根据第一阶段参与者的反馈来决定是否能够提交事务，要么全都成功，要么全都失败。
+阶段二：执行事务提交（执行阶段）
+ 执行事务提交  发送提交请求：协调者向所有参与者发起提交请求。 事务提交：参与者在收到提交请求后，会正式执行事务提交操作。 反馈事务提交结果：参与者在完成事务提交之后向协调者发送ACK消息。 完成事务：协调者接收到所有参与者的ACK后完成事务。   中断事务  发送回滚请求：协调者向所有参与者发起回滚请求。 事务回滚：参与者在收到回滚请求后，利用阶段一记录的undo信息来执行事务回滚操作。 反馈事务回滚结果：参与者在完成事务回滚之后向协调者发送ACK消息。 中断事务：协调者接收到所有参与者的ACK后完成事务中断。    优缺点  优点  原理简单 实现方便   缺点  同步阻塞：在执行过程中，所有参与该事务操作的逻辑都会处于阻塞状态，也就是说各个参与者在等待其他参与者响应的过程中将无法执行其他操作。 单点问题：在上述过程中，协调者起到了核心的调度作用。一旦协调者出现了问题，那么整个提交流程将无法运转，甚至如果在二阶段的提交流程中出现了问题，将导致其他参与者都处于锁定事务资源的状态中，无法完成事务。 数据不一致：倘若在第二阶段的提交过程中，协调者向参与者发送提交请求，而由于网络原因或者是协调者本身的原因，导致只有部分参与者收到了提交请求，此时就导致了只有接收到请求的参与者进行了事务提交，而产生数据不一致的问题。 过于保守：二阶段提交协议没有设计较为完整的容错机制，任意一个节点的失败都会导致整个事务的失败    二阶段提交协议存在着上述几种缺陷，因此研究者在二阶段协议的基础上进行了改进
+3PC（三阶段提交协议） 3PC是Three-Phase Commit的缩写，即三阶段提交，是2PC的改进版，其将二阶段提交协议的提交事务请求过程一分为二，形成了由CanCommit、PreCommit、DoCommint三个阶段组成的事务处理协议，其协议设计如下图所示 执行流程 阶段一：CanCommit
+ 事务询问 各参与者向协调者反馈事务询问的响应  阶段二：PreCommit
+ 执行事务预提交  发送预提交请求 事务预提交 各参与者向协调者反馈事务执行的结果   中断事务  发送中断请求 中断事务    阶段三：DoCommit">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" style="background-color: #2a9d8f; color: #fff;">
+                分布式
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 24, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="分布式事务">分布式事务</h1>
+<p><strong>分布式事务就是指事务的参与者、支持事务的服务器、资源服务器以及事务管理器分别位于分布式系统的不同节点之上。</strong></p>
+<p>简单的说，就是一次大的操作由不同的小操作组成，这些小的操作分布在不同的服务器上，且属于不同的应用，分布式事务需要保证这些小操作<strong>要么全部成功，要么全部失败</strong>。本质上来说，分布式事务就是为了<strong>保证不同数据库的数据一致性</strong></p>
+<h2 id="2pc二阶段提交协议">2PC（二阶段提交协议）</h2>
+<p>在分布式系统中，每一个机器节点虽然都能够明确地知道自己在进行事务操作过程中的结果是成功或失败，但是却无法直接获取到其他分布式节点的操作结果。</p>
+<p>为了保证事务处理的ACID特性，就需要引入一个称为<strong>协调者</strong>的组件来统一调度所有分布式节点的执行逻辑，这些被调度的分布式节点则被称为<strong>参与者</strong>。协调者负责调度参与者的行为，最终决定这些参与者是否要把事务真正进行提交，基于这个思想，衍生出了<strong>二阶段提交</strong>和<strong>三阶段提交</strong>两种协议。</p>
+<p><strong>2PC</strong>是<strong>Two-Phase Commit</strong>的缩写，即<strong>二阶段提交</strong>，<strong>是为了使基于分布式系统架构下的所有节点在进行事务处理过程中能够保持原子性和一致性而设计的一种算法</strong>。目前绝大多数关系型数据库都是使用二阶段提交协议来完成分布式事务处理的。</p>
+<h3 id="执行流程">执行流程</h3>
+<p>顾名思义，二阶段提交协议就是将事务的提交过程分成了两个阶段来进行处理，在第一阶段的主要内容就是进行投票，来表明是否有继续执行事务的必要。</p>
+<p><strong>阶段一：提交事务请求（投票阶段）</strong></p>
+<ol>
+<li><strong>事务询问</strong>：协调者向所有参与者发出事务询问，询问是否可以执行事务操作，并等待各参与者的响应。</li>
+<li><strong>执行事务</strong>：各个参与者节点执行事务操作，并将undo和redo信息记入事务日志中。</li>
+<li><strong>各参与者向协调者反馈事务询问的响应</strong>：如果参与者成功执行事务，则反馈YES响应，表示事务执行成功。如果参与者执行事务失败，则反馈NO响应，表示事务执行失败。</li>
+</ol>
+<p>在第二阶段中，会根据第一阶段参与者的反馈来决定是否能够提交事务，要么全都成功，要么全都失败。</p>
+<p><strong>阶段二：执行事务提交（执行阶段）</strong></p>
+<ul>
+<li><strong>执行事务提交</strong>
+<ol>
+<li><strong>发送提交请求</strong>：协调者向所有参与者发起提交请求。</li>
+<li><strong>事务提交</strong>：参与者在收到提交请求后，会正式执行事务提交操作。</li>
+<li><strong>反馈事务提交结果</strong>：参与者在完成事务提交之后向协调者发送ACK消息。</li>
+<li><strong>完成事务</strong>：协调者接收到所有参与者的ACK后完成事务。</li>
+</ol>
+</li>
+<li><strong>中断事务</strong>
+<ol>
+<li><strong>发送回滚请求</strong>：协调者向所有参与者发起回滚请求。</li>
+<li><strong>事务回滚</strong>：参与者在收到回滚请求后，利用阶段一记录的undo信息来执行事务回滚操作。</li>
+<li><strong>反馈事务回滚结果</strong>：参与者在完成事务回滚之后向协调者发送ACK消息。</li>
+<li><strong>中断事务</strong>：协调者接收到所有参与者的ACK后完成事务中断。</li>
+</ol>
+</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/distributed/distributed10.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><img src="http://img.orekilee.top//imgbed/distributed/distributed11.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="优缺点">优缺点</h3>
+<ul>
+<li><strong>优点</strong>
+<ol>
+<li><strong>原理简单</strong></li>
+<li><strong>实现方便</strong></li>
+</ol>
+</li>
+<li><strong>缺点</strong>
+<ol>
+<li><strong>同步阻塞</strong>：在执行过程中，所有参与该事务操作的逻辑都会处于阻塞状态，也就是说各个参与者在等待其他参与者响应的过程中将无法执行其他操作。</li>
+<li><strong>单点问题</strong>：在上述过程中，协调者起到了核心的调度作用。一旦协调者出现了问题，那么整个提交流程将无法运转，甚至如果在二阶段的提交流程中出现了问题，将导致其他参与者都处于锁定事务资源的状态中，无法完成事务。</li>
+<li><strong>数据不一致</strong>：倘若在第二阶段的提交过程中，协调者向参与者发送提交请求，而由于网络原因或者是协调者本身的原因，导致只有部分参与者收到了提交请求，此时就导致了只有接收到请求的参与者进行了事务提交，而产生数据不一致的问题。</li>
+<li><strong>过于保守</strong>：二阶段提交协议没有设计较为完整的容错机制，任意一个节点的失败都会导致整个事务的失败</li>
+</ol>
+</li>
+</ul>
+<p>二阶段提交协议存在着上述几种缺陷，因此研究者在二阶段协议的基础上进行了改进</p>
+<h2 id="3pc三阶段提交协议">3PC（三阶段提交协议）</h2>
+<p>3PC是Three-Phase Commit的缩写，即三阶段提交，是2PC的改进版，其将二阶段提交协议的提交事务请求过程一分为二，形成了由CanCommit、PreCommit、DoCommint三个阶段组成的事务处理协议，其协议设计如下图所示
+<img src="http://img.orekilee.top//imgbed/distributed/distributed12.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h2 id="执行流程-1">执行流程</h2>
+<p><strong>阶段一：CanCommit</strong></p>
+<ol>
+<li><strong>事务询问</strong></li>
+<li><strong>各参与者向协调者反馈事务询问的响应</strong></li>
+</ol>
+<p><strong>阶段二：PreCommit</strong></p>
+<ul>
+<li><strong>执行事务预提交</strong>
+<ol>
+<li><strong>发送预提交请求</strong></li>
+<li><strong>事务预提交</strong></li>
+<li><strong>各参与者向协调者反馈事务执行的结果</strong></li>
+</ol>
+</li>
+<li><strong>中断事务</strong>
+<ol>
+<li><strong>发送中断请求</strong></li>
+<li><strong>中断事务</strong></li>
+</ol>
+</li>
+</ul>
+<p><strong>阶段三：DoCommit</strong></p>
+<ul>
+<li><strong>执行提交</strong>
+<ol>
+<li><strong>发送提交请求</strong></li>
+<li><strong>事务提交</strong></li>
+<li><strong>反馈事务提交结果</strong></li>
+<li><strong>完成事务</strong></li>
+</ol>
+</li>
+<li><strong>中断事务</strong>
+<ol>
+<li><strong>发送中断请求</strong></li>
+<li><strong>事务回滚</strong></li>
+<li><strong>反馈事务回滚结果</strong></li>
+<li><strong>中断事务</strong></li>
+</ol>
+</li>
+</ul>
+<p>需要注意的是，在阶段三中可能会出现以下两种问题</p>
+<ul>
+<li><strong>协调者出现问题</strong></li>
+<li><strong>协调者和参与者之间的网络出现故障</strong></li>
+</ul>
+<p>无论出现上述那种问题，最终都会导致参与者无法及时的接收到来自协调者的DoCommit或是Abort请求，针对这种异常情况，参与者都会在等待超时后继续进行事务提交。</p>
+<h3 id="优缺点-1">优缺点</h3>
+<ul>
+<li><strong>优点</strong>：相较于二阶段提交协议，降低了参与者的阻塞范围，并且能够在出现单点故障后继续达成一致。</li>
+<li><strong>缺点</strong>：三阶段提交协议在去除阻塞的同时也引入了新的问题，那就是参与者在收到预提交的消息时，如果出现了网络分区的情况，协调者与参与者无法进行正常的网络通信，但是参与者依旧会进行事务的提交，从而导致数据的不一致。</li>
+</ul>
+<h2 id="本地消息表异步确保">本地消息表（异步确保）</h2>
+<p>本地消息表与业务数据表处于同一个数据库中，这样就能利用本地事务来保证在对这两个表的操作满足事务特性，并且使用了<strong>消息队列</strong>来保证<strong>最终一致性</strong>。</p>
+<ol>
+<li>在分布式事务操作的一方完成写业务数据的操作之后向本地消息表发送一个消息，本地事务能保证这个消息一定会被写入本地消息表中。</li>
+<li>之后将本地消息表中的消息转发到消息队列中，如果转发成功则将消息从本地消息表中删除，否则继续重新转发。</li>
+<li>在分布式事务操作的另一方从消息队列中读取一个消息，并执行消息中的操作。</li>
+</ol>
+<p><img src="http://img.orekilee.top//imgbed/distributed/distributed13.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
+        
+            <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 24, 2022 15:49 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性哈希</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性模型</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEgossip/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性协议：Gossip</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性协议：ZAB</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEbully/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">一致性协议：Bully</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#2pc二阶段提交协议">2PC（二阶段提交协议）</a>
+      <ol>
+        <li><a href="#执行流程">执行流程</a></li>
+        <li><a href="#优缺点">优缺点</a></li>
+      </ol>
+    </li>
+    <li><a href="#3pc三阶段提交协议">3PC（三阶段提交协议）</a></li>
+    <li><a href="#执行流程-1">执行流程</a>
+      <ol>
+        <li><a href="#优缺点-1">优缺点</a></li>
+      </ol>
+    </li>
+    <li><a href="#本地消息表异步确保">本地消息表（异步确保）</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

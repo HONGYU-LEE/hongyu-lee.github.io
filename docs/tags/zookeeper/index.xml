@@ -6,13 +6,13 @@
         <description>Recent content in ZooKeeper on 凌桓&#39;s BLOG</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en-us</language>
-        <lastBuildDate>Mon, 23 May 2022 21:14:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/zookeeper/index.xml" rel="self" type="application/rss+xml" /><item>
-        <title>ZAB 协议</title>
-        <link>https://blog.orekilee.top/p/zab-%E5%8D%8F%E8%AE%AE/</link>
-        <pubDate>Mon, 23 May 2022 21:14:13 +0800</pubDate>
+        <lastBuildDate>Tue, 24 May 2022 16:20:23 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/zookeeper/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>一致性协议：ZAB</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/</link>
+        <pubDate>Tue, 24 May 2022 16:20:23 +0800</pubDate>
         
-        <guid>https://blog.orekilee.top/p/zab-%E5%8D%8F%E8%AE%AE/</guid>
-        <description>&lt;h1 id=&#34;zab协议&#34;&gt;ZAB协议&lt;/h1&gt;
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/</guid>
+        <description>&lt;h1 id=&#34;一致性协议zab&#34;&gt;一致性协议：ZAB&lt;/h1&gt;
 &lt;p&gt;&lt;strong&gt;ZAB（ZooKeeper Atomic Broadcast 原子广播）&lt;/strong&gt; 协议是为分布式协调服务ZooKeeper专门设计的一种支持崩溃恢复的原子广播协议。 在ZooKeeper中，主要依赖ZAB协议来实现分布式数据一致性，基于该协议，ZooKeeper实现了一种主备模式的系统架构来保持集群中各个副本之间的数据一致性。&lt;/p&gt;
 &lt;p&gt;ZAB协议包括了两种基本的模式，分别是&lt;strong&gt;崩溃恢复&lt;/strong&gt;和&lt;strong&gt;消息广播&lt;/strong&gt;。&lt;/p&gt;
 &lt;h2 id=&#34;消息广播&#34;&gt;消息广播&lt;/h2&gt;

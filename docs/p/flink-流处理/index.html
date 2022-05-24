@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='Flink 流处理 Dataflow编程 顾名思义，Dataflow程序描述了数据如何在不同操作之间流动。Dataflow程序通常表现为有向无环图（DAG），图中顶点称为算子（Operator），表示计算。而边表示数据依赖关系。
+算子是Dataflow程序的基本功能单元，他们从输入获取数据，对其进行计算，然后产生数据并发往输出以供后续处理。而所有Flink程序都由三部分算子组成。
+ Source（数据源）：负责获取输入数据。 Transformation（数据处理）：对数据进行处理加工，通常对应着多个算子。 Sink（数据汇）：负责输出数据。  执行图 类似上图的Dataflow图被称为逻辑图，因为它们表达了高层视角下的计算逻辑。为了执行Dataflow程序，需要将逻辑图转化为物理Dataflow图（执行图），后者会指定程序的执行细节。
+在Flink中，执行图按层级顺序分为以下四层
+ StreamingGraph  是根据用户通过Stream API编写的代码生成的初始流程图，用于表示程序的拓扑结构。   JobGraph  StreamGraph经过优化后生成了JobGraph，提交给JobManager的数据结构。主要的优化为将多个符合条件的节点链接在一起作为一个节点（任务链Operator Chains）后放在一个作业中执行，这样可以减少数据在节点之间流动所需要的序列化/反序列化/传输消耗。   ExecutionGraph  JobManager根据JobGraph生成ExecutionGraph，ExecutionGraph是JobGraph的并行化版本，是调度层最核心的数据结构。   物理执行图  JobManager根据ExecutionGraph对任务进行调度后，在各个TaskManager上部署作业后形成的“图”，并不是一个具体的数据结构。    并行度 Flink程序的执行具有并行、分布式的特性。
+在执行过程中，一个Stream包含一个或多个分区（partition），而每一个算子（operator）可以包含一个或多个子任务（operator subtask），这些子任务中不同的线程、不同的物理机或不同的容器中彼此互不依赖地执行。
+一个特定算子的子任务的个数被称之为并行度（paralelism）。一般情况下一个流程序的并行度可以认为就是其所有算子中最大的并行度，一个程序中不同的算子可以具有不同的并行度。
+数据传输策略 Stream在算子之间传输数据的形式可以是one-to-one（forwarding）的模式也可以是Redistributing的模式，具体是哪一种需要取决于算子的种类。
+ One-to-one  Stream维护着分区以及元素的顺序（比如在Source和map operator之间），那意味着map算子的子任务看到的元素的个数以及顺序跟Source算子的子任务生产的元素的个数、顺序相同，map、filter、flatmap等算子都是one-to-one的对应关系。 类似于Spark中的窄依赖。   Redistributing  Stream的分区会发生改变（map()跟keyBy/window之间或者keyBy/windows跟Sink之间）。每一个算子的子任务依据所选择的Transformation发送数据到不同的目标任务。 例如keyBy()基于hashCode重分区、broadcast和rebalance会随机重新分区，这些算子都会引起redistribute过程，而redistribute过程就类似于Spark中的shuffle过程。 类似于Spark中的宽依赖。    任务链 Flink 采用了一种称为任务链的优化技术，可以在特定条件下减少本地通信的开销。为了满足任务链的要求，必须将两个或多个算子设为相同的并行度，并通过本地转发（local forward） 的方式进行连接。
+相同并行度的 one-to-one 操作 （两个条件缺一不可），Flink 这样相连的算子链接在一起形成一个 task，原来的算子成为里面的 subtask。每个 task 由一个线程执行。将算子链接成 task 是个有用的优化：它减少线程间切换、缓冲的开销，并且减少延迟的同时增加整体吞吐量。'><title>Flink 流处理</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/flink-%E6%B5%81%E5%A4%84%E7%90%86/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Flink 流处理'>
+<meta property='og:description' content='Flink 流处理 Dataflow编程 顾名思义，Dataflow程序描述了数据如何在不同操作之间流动。Dataflow程序通常表现为有向无环图（DAG），图中顶点称为算子（Operator），表示计算。而边表示数据依赖关系。
+算子是Dataflow程序的基本功能单元，他们从输入获取数据，对其进行计算，然后产生数据并发往输出以供后续处理。而所有Flink程序都由三部分算子组成。
+ Source（数据源）：负责获取输入数据。 Transformation（数据处理）：对数据进行处理加工，通常对应着多个算子。 Sink（数据汇）：负责输出数据。  执行图 类似上图的Dataflow图被称为逻辑图，因为它们表达了高层视角下的计算逻辑。为了执行Dataflow程序，需要将逻辑图转化为物理Dataflow图（执行图），后者会指定程序的执行细节。
+在Flink中，执行图按层级顺序分为以下四层
+ StreamingGraph  是根据用户通过Stream API编写的代码生成的初始流程图，用于表示程序的拓扑结构。   JobGraph  StreamGraph经过优化后生成了JobGraph，提交给JobManager的数据结构。主要的优化为将多个符合条件的节点链接在一起作为一个节点（任务链Operator Chains）后放在一个作业中执行，这样可以减少数据在节点之间流动所需要的序列化/反序列化/传输消耗。   ExecutionGraph  JobManager根据JobGraph生成ExecutionGraph，ExecutionGraph是JobGraph的并行化版本，是调度层最核心的数据结构。   物理执行图  JobManager根据ExecutionGraph对任务进行调度后，在各个TaskManager上部署作业后形成的“图”，并不是一个具体的数据结构。    并行度 Flink程序的执行具有并行、分布式的特性。
+在执行过程中，一个Stream包含一个或多个分区（partition），而每一个算子（operator）可以包含一个或多个子任务（operator subtask），这些子任务中不同的线程、不同的物理机或不同的容器中彼此互不依赖地执行。
+一个特定算子的子任务的个数被称之为并行度（paralelism）。一般情况下一个流程序的并行度可以认为就是其所有算子中最大的并行度，一个程序中不同的算子可以具有不同的并行度。
+数据传输策略 Stream在算子之间传输数据的形式可以是one-to-one（forwarding）的模式也可以是Redistributing的模式，具体是哪一种需要取决于算子的种类。
+ One-to-one  Stream维护着分区以及元素的顺序（比如在Source和map operator之间），那意味着map算子的子任务看到的元素的个数以及顺序跟Source算子的子任务生产的元素的个数、顺序相同，map、filter、flatmap等算子都是one-to-one的对应关系。 类似于Spark中的窄依赖。   Redistributing  Stream的分区会发生改变（map()跟keyBy/window之间或者keyBy/windows跟Sink之间）。每一个算子的子任务依据所选择的Transformation发送数据到不同的目标任务。 例如keyBy()基于hashCode重分区、broadcast和rebalance会随机重新分区，这些算子都会引起redistribute过程，而redistribute过程就类似于Spark中的shuffle过程。 类似于Spark中的宽依赖。    任务链 Flink 采用了一种称为任务链的优化技术，可以在特定条件下减少本地通信的开销。为了满足任务链的要求，必须将两个或多个算子设为相同的并行度，并通过本地转发（local forward） 的方式进行连接。
+相同并行度的 one-to-one 操作 （两个条件缺一不可），Flink 这样相连的算子链接在一起形成一个 task，原来的算子成为里面的 subtask。每个 task 由一个线程执行。将算子链接成 task 是个有用的优化：它减少线程间切换、缓冲的开销，并且减少延迟的同时增加整体吞吐量。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/flink-%E6%B5%81%E5%A4%84%E7%90%86/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='Flink' /><meta property='article:tag' content='实时计算' /><meta property='article:tag' content='大数据' /><meta property='article:published_time' content='2022-05-24T14:29:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-24T15:31:11&#43;08:00'/>
+<meta name="twitter:title" content="Flink 流处理">
+<meta name="twitter:description" content="Flink 流处理 Dataflow编程 顾名思义，Dataflow程序描述了数据如何在不同操作之间流动。Dataflow程序通常表现为有向无环图（DAG），图中顶点称为算子（Operator），表示计算。而边表示数据依赖关系。
+算子是Dataflow程序的基本功能单元，他们从输入获取数据，对其进行计算，然后产生数据并发往输出以供后续处理。而所有Flink程序都由三部分算子组成。
+ Source（数据源）：负责获取输入数据。 Transformation（数据处理）：对数据进行处理加工，通常对应着多个算子。 Sink（数据汇）：负责输出数据。  执行图 类似上图的Dataflow图被称为逻辑图，因为它们表达了高层视角下的计算逻辑。为了执行Dataflow程序，需要将逻辑图转化为物理Dataflow图（执行图），后者会指定程序的执行细节。
+在Flink中，执行图按层级顺序分为以下四层
+ StreamingGraph  是根据用户通过Stream API编写的代码生成的初始流程图，用于表示程序的拓扑结构。   JobGraph  StreamGraph经过优化后生成了JobGraph，提交给JobManager的数据结构。主要的优化为将多个符合条件的节点链接在一起作为一个节点（任务链Operator Chains）后放在一个作业中执行，这样可以减少数据在节点之间流动所需要的序列化/反序列化/传输消耗。   ExecutionGraph  JobManager根据JobGraph生成ExecutionGraph，ExecutionGraph是JobGraph的并行化版本，是调度层最核心的数据结构。   物理执行图  JobManager根据ExecutionGraph对任务进行调度后，在各个TaskManager上部署作业后形成的“图”，并不是一个具体的数据结构。    并行度 Flink程序的执行具有并行、分布式的特性。
+在执行过程中，一个Stream包含一个或多个分区（partition），而每一个算子（operator）可以包含一个或多个子任务（operator subtask），这些子任务中不同的线程、不同的物理机或不同的容器中彼此互不依赖地执行。
+一个特定算子的子任务的个数被称之为并行度（paralelism）。一般情况下一个流程序的并行度可以认为就是其所有算子中最大的并行度，一个程序中不同的算子可以具有不同的并行度。
+数据传输策略 Stream在算子之间传输数据的形式可以是one-to-one（forwarding）的模式也可以是Redistributing的模式，具体是哪一种需要取决于算子的种类。
+ One-to-one  Stream维护着分区以及元素的顺序（比如在Source和map operator之间），那意味着map算子的子任务看到的元素的个数以及顺序跟Source算子的子任务生产的元素的个数、顺序相同，map、filter、flatmap等算子都是one-to-one的对应关系。 类似于Spark中的窄依赖。   Redistributing  Stream的分区会发生改变（map()跟keyBy/window之间或者keyBy/windows跟Sink之间）。每一个算子的子任务依据所选择的Transformation发送数据到不同的目标任务。 例如keyBy()基于hashCode重分区、broadcast和rebalance会随机重新分区，这些算子都会引起redistribute过程，而redistribute过程就类似于Spark中的shuffle过程。 类似于Spark中的宽依赖。    任务链 Flink 采用了一种称为任务链的优化技术，可以在特定条件下减少本地通信的开销。为了满足任务链的要求，必须将两个或多个算子设为相同的并行度，并通过本地转发（local forward） 的方式进行连接。
+相同并行度的 one-to-one 操作 （两个条件缺一不可），Flink 这样相连的算子链接在一起形成一个 task，原来的算子成为里面的 subtask。每个 task 由一个线程执行。将算子链接成 task 是个有用的优化：它减少线程间切换、缓冲的开销，并且减少延迟的同时增加整体吞吐量。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/flink/" style="background-color: #2a9d8f; color: #fff;">
+                Flink
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/flink-%E6%B5%81%E5%A4%84%E7%90%86/">Flink 流处理</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 24, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="flink-流处理">Flink 流处理</h1>
+<h2 id="dataflow编程">Dataflow编程</h2>
+<p>顾名思义，Dataflow程序描述了数据如何在不同操作之间流动。Dataflow程序通常表现为<strong>有向无环图（DAG）</strong>，图中顶点称为<strong>算子（Operator）</strong>，表示计算。而<strong>边表示数据依赖关系</strong>。</p>
+<p>算子是Dataflow程序的基本功能单元，他们从输入获取数据，对其进行计算，然后产生数据并发往输出以供后续处理。而所有Flink程序都由三部分算子组成。</p>
+<ul>
+<li><strong>Source（数据源）</strong>：负责获取输入数据。</li>
+<li><strong>Transformation（数据处理）</strong>：对数据进行处理加工，通常对应着多个算子。</li>
+<li><strong>Sink（数据汇）</strong>：负责输出数据。</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk6.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h2 id="执行图">执行图</h2>
+<p>类似上图的Dataflow图被称为逻辑图，因为它们表达了高层视角下的计算逻辑。为了执行Dataflow程序，需要将逻辑图转化为物理Dataflow图（执行图），后者会指定程序的执行细节。</p>
+<p>在Flink中，执行图按层级顺序分为以下四层</p>
+<ol>
+<li><strong>StreamingGraph</strong>
+<ul>
+<li>是根据用户通过Stream API编写的代码生成的初始流程图，用于<strong>表示程序的拓扑结构</strong>。</li>
+</ul>
+</li>
+<li><strong>JobGraph</strong>
+<ul>
+<li>StreamGraph经过优化后生成了JobGraph，提交给JobManager的数据结构。主要的优化为<strong>将多个符合条件的节点链接在一起作为一个节点</strong>（任务链Operator Chains）后放在一个作业中执行，这样可以减少数据在节点之间流动所需要的序列化/反序列化/传输消耗。</li>
+</ul>
+</li>
+<li><strong>ExecutionGraph</strong>
+<ul>
+<li>JobManager根据JobGraph生成ExecutionGraph，ExecutionGraph是JobGraph的<strong>并行化</strong>版本，是调度层最核心的数据结构。</li>
+</ul>
+</li>
+<li><strong>物理执行图</strong>
+<ul>
+<li>JobManager根据ExecutionGraph对任务进行调度后，在各个TaskManager上<strong>部署作业后形成的“图”</strong>，并不是一个具体的数据结构。</li>
+</ul>
+</li>
+</ol>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk2.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h2 id="并行度">并行度</h2>
+<p>Flink程序的执行具有<strong>并行、分布式</strong>的特性。</p>
+<p>在执行过程中，一个Stream包含一个或多个分区（partition），而每一个算子（operator）可以包含一个或多个子任务（operator subtask），这些子任务中不同的线程、不同的物理机或不同的容器中彼此互不依赖地执行。</p>
+<p>一个<strong>特定算子的子任务的个数被称之为并行度（paralelism）</strong>。一般情况下<strong>一个流程序的并行度可以认为就是其所有算子中最大的并行度</strong>，一个程序中不同的算子可以具有不同的并行度。</p>
+<h2 id="数据传输策略">数据传输策略</h2>
+<p>Stream在算子之间传输数据的形式可以是one-to-one（forwarding）的模式也可以是Redistributing的模式，具体是哪一种需要取决于算子的种类。</p>
+<ul>
+<li><strong>One-to-one</strong>
+<ul>
+<li><strong>Stream维护着分区以及元素的顺序</strong>（比如在Source和map operator之间），那意味着map算子的子任务看到的元素的个数以及顺序跟Source算子的子任务生产的元素的个数、顺序相同，map、filter、flatmap等算子都是one-to-one的对应关系。</li>
+<li>类似于Spark中的<strong>窄依赖</strong>。</li>
+</ul>
+</li>
+<li><strong>Redistributing</strong>
+<ul>
+<li><strong>Stream的分区会发生改变</strong>（map()跟keyBy/window之间或者keyBy/windows跟Sink之间）。每一个算子的子任务依据所选择的Transformation发送数据到不同的目标任务。</li>
+<li>例如keyBy()基于hashCode重分区、broadcast和rebalance会随机重新分区，这些算子都会引起redistribute过程，而redistribute过程就类似于Spark中的shuffle过程。</li>
+<li>类似于Spark中的<strong>宽依赖</strong>。</li>
+</ul>
+</li>
+</ul>
+<h2 id="任务链">任务链</h2>
+<p>Flink 采用了一种称为<strong>任务链</strong>的优化技术，可以在特定条件下减少本地通信的开销。为了满足任务链的要求，必须将两个或多个算子设为<strong>相同的并行度</strong>，并通过<strong>本地转发（local forward）</strong> 的方式进行连接。</p>
+<p><strong>相同并行度</strong>的 <strong>one-to-one</strong> 操作 <strong>（两个条件缺一不可）</strong>，Flink 这样相连的算子链接在一起形成一个 task，原来的算子成为里面的 subtask。每个 task 由一个线程执行。将算子链接成 task 是个有用的优化：它减少线程间切换、缓冲的开销，并且减少延迟的同时增加整体吞吐量。</p>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk5.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h2 id="时间语义">时间语义</h2>
+<p>对于流式数据处理，最大的特点就是数据上具有时间的属性特征，Flink根据时间产生的位置不同，将时间区分为如下三种时间概念</p>
+<ul>
+<li><strong>事件时间（Event Time）</strong>：数据流事件实际发生的时间。</li>
+<li><strong>接入时间（Ingestion Time）</strong>：数据进入Flink系统的时间。</li>
+<li><strong>处理时间（Processing Time）</strong>：当前流处理算子所在机器上的本地时钟时间。</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk3.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>Flink中<strong>默认使用的是处理时间</strong>，但是在<strong>大多数情况下都会使用事件时间（即实际事件的发生点，也符合事件发生进而分析的逻辑）</strong>，一般只有在Event Time无法使用的情况下才会使用接入时间和处理时间，因此我们可以通过调用执行环境的<code>setStreamTimeCharacteristic</code>方法来指定时间语义</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">//创建执行环境				
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">StreamExecutionEnvironment</span> <span class="n">env</span> <span class="o">=</span> <span class="n">StreamExecutionEnvironment</span><span class="o">.</span><span class="na">getExecutionEnvironment</span><span class="o">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//设置指定的时间语义，如下面的设置为EventTime
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">env</span><span class="o">.</span><span class="na">setStreamTimeCharacteristic</span><span class="o">(</span><span class="n">TimeCharacteristic</span><span class="o">.</span><span class="na">EventTime</span><span class="o">);</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p><strong>处理时间与事件时间的选择</strong></p>
+</blockquote>
+<p>在大部分场景由于我们需要依据事件发生的顺序来进行逻辑处理，因此都会使用事件时间。但是在一些特殊场景下，考虑到事件数据数据乱序到达以及延迟到达等问题，为了保证实时性和低延迟，处理时间就会派上用场。</p>
+<p>例如下面几种场景：</p>
+<ol>
+<li>更重视处理速度而非准确性的应用。</li>
+<li>需要周期性实时报告结果而无论其准确性（如实时监控仪表盘）。</li>
+</ol>
+<p>因此，对比处理时间和事件时间得出结论：</p>
+<ul>
+<li>处理时间提供了低延迟，但是它的结果依赖处理速度，因此具有不确定性。</li>
+<li>事件时间则与之相反，能够保证结果的准确性，并允许你处理延迟甚至无序的事件。</li>
+</ul>
+<h2 id="水位线watermarks">水位线（Watermarks）</h2>
+<p>在理想状态下，事件数据都是按照事件产生的时间顺序传输至Flink系统中。但事实上，由于网络或者分布式系统等外部因素的影响下，事件数据往往不能及时传输，导致系统的不稳定而造成<strong>数据乱序到达或者延迟到达</strong>等情况。</p>
+<p><img src="http://img.orekilee.top//imgbed/flink/fk8.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>一旦出现这种问题，如果我们严格按照Event Time来决定窗口的运行，我们既不能保证属于该窗口的数据已经全部到达，也不能无休止的等待延迟到达的数据，因此我们需要一种机制来控制数据处理的进度，这就是<strong>水位线（Watermarks）机制</strong>。</p>
+<p><strong>水位线是一个全局的进度指标</strong>，它能够衡量数据处理进度==（表达数据到达的完整性）**，保证事件数据全部到达Flink系统，即使数据乱序或者延迟到达，也能够像预期一样计算出正确和连续的结果。</p>
+<blockquote>
+<p><strong>那么它是如何做到的呢？</strong></p>
+</blockquote>
+<ul>
+<li>Flink会使用<strong>最新的事件时间减去固定时间间隔</strong>作为水位线，该时间时间为用户外部配置的支持最大延迟到达的时间长度。</li>
+<li>当一个算子接收到一个时间为T的水位线，就可以认为<strong>不会再收到任何时间戳小于或等于T的事件了（迟到事件或异常事件）</strong></li>
+<li>水位线其实就相当于一个提示算子的信号，<strong>当水位线时间戳大于时间窗口的结束时间</strong>，且窗口中含有事件数据时，此时算子就会认为某个特定时间区间的时间戳已经全部到齐，立即开始触发窗口计算或对接收的数据进行排序。</li>
+</ul>
+<p>从上面我们可以看出，水位线其实就是<strong>在结果的准确性和延迟之间做出取舍</strong>，它虽然保证了低延迟，但是伴随而来的却是低可信度。倘若我们要保证后续的延迟事件不丢失，就必须额外增加一些代码来处理他们，但是如果采用这种保守的机制，虽然可信度低高了，但是延迟又会继续增加，<strong>因此延迟和可信无法做到两全其美</strong>，需要我们依据具体场景来自己平衡。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/flink/">Flink</a>
+        
+            <a href="/tags/%E5%AE%9E%E6%97%B6%E8%AE%A1%E7%AE%97/">实时计算</a>
+        
+            <a href="/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE/">大数据</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 24, 2022 15:31 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/flink-%E7%8A%B6%E6%80%81%E4%B8%80%E8%87%B4%E6%80%A7/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 状态一致性</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/flink-%E5%AE%B9%E9%94%99%E6%9C%BA%E5%88%B6/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 容错机制</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/flink-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 状态管理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/flink-%E6%9E%B6%E6%9E%84/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 架构</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/flink-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Flink 基本概念</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#dataflow编程">Dataflow编程</a></li>
+    <li><a href="#执行图">执行图</a></li>
+    <li><a href="#并行度">并行度</a></li>
+    <li><a href="#数据传输策略">数据传输策略</a></li>
+    <li><a href="#任务链">任务链</a></li>
+    <li><a href="#时间语义">时间语义</a></li>
+    <li><a href="#水位线watermarks">水位线（Watermarks）</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

@@ -6,13 +6,176 @@
         <description>Recent content in 一致性协议 on 凌桓&#39;s BLOG</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en-us</language>
-        <lastBuildDate>Mon, 23 May 2022 21:14:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AE/index.xml" rel="self" type="application/rss+xml" /><item>
-        <title>ZAB 协议</title>
-        <link>https://blog.orekilee.top/p/zab-%E5%8D%8F%E8%AE%AE/</link>
-        <pubDate>Mon, 23 May 2022 21:14:13 +0800</pubDate>
+        <lastBuildDate>Tue, 24 May 2022 16:30:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AE/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>一致性协议：Gossip</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEgossip/</link>
+        <pubDate>Tue, 24 May 2022 16:30:13 +0800</pubDate>
         
-        <guid>https://blog.orekilee.top/p/zab-%E5%8D%8F%E8%AE%AE/</guid>
-        <description>&lt;h1 id=&#34;zab协议&#34;&gt;ZAB协议&lt;/h1&gt;
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEgossip/</guid>
+        <description>&lt;h1 id=&#34;一致性协议gossip&#34;&gt;一致性协议：Gossip&lt;/h1&gt;
+&lt;p&gt;Gossip协议（Gossip Protocol）又称Epidemic协议（Epidemic Protocol），是基于谣言传播方式的节点或者进程之间信息交换的协议，在分布式系统中被广泛使用，比如我们可以使用Gossip协议来确保网络中所有节点的数据一致。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;说到社交网络，就不得不提著名的&lt;strong&gt;六度分隔理论&lt;/strong&gt;。1967年，哈佛大学的心理学教授Stanley Milgram想要描绘一个连结人与社区的人际连系网。做过一次连锁信实验，结果发现了“六度分隔”现象。简单地说：“你和任何一个陌生人之间所间隔的人不会超过六个，也就是说，最多通过六个人你就能够认识任何一个陌生人。&lt;/p&gt;
+&lt;p&gt;数学解释该理论：若每个人平均认识260人，其六度就是260↑6 =1,188,137,600,000。消除一些节点重复，那也几乎&lt;strong&gt;覆盖&lt;/strong&gt;了整个地球人口若干多多倍，这也是Gossip协议的雏形。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Gossip基于&lt;strong&gt;六度分隔理论&lt;/strong&gt;，每个节点像谣言传播一样，随机的将信息传播到其他节点上，不断重复这个过程，直到将信息传播到整个网络中，并在一定时间内，使得系统内的所有节点数据一致。&lt;/p&gt;
+&lt;p&gt;Gossip主要有以下三个功能：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;直接邮寄（Direct Mail）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反熵（Anti-entropy）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;谣言传播（Rumor mongering）&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;直接邮寄&#34;&gt;直接邮寄&lt;/h2&gt;
+&lt;p&gt;直接发送需要更新的数据到其他节点，当数据发送失败时，将数据缓存到队列中，然后进行重传。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上面可以看出，这种方法实现简单切数据同步及时，但是可能会因为重试的缓存队列满了而丢数据，从而无法实现最终一致性。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;那么我们如何实现最终一致性呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;这时候就需要借助到了Gossip协议中的&lt;strong&gt;反熵&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;反熵&#34;&gt;反熵&lt;/h2&gt;
+&lt;p&gt;熵指混乱程度，反熵就是消除不同节点间数据的差异，提升节点间数据的相似度。&lt;/p&gt;
+&lt;p&gt;反熵的过程如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;集群中的节点每隔一段时间就随机选取某个其他节点&lt;/li&gt;
+&lt;li&gt;互相交换数据来消除两个节点之间的差异&lt;/li&gt;
+&lt;li&gt;实现数据的最终一致性&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;反熵主要通过三种方式进行：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;推（Push）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;节点A将数据（key,value,version）推送给节点B，节点B将A中比自己新的数据更新过来。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed3.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;拉（Pull）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;节点A仅将数据（key,version）推送给 B，B将本地比A新的数据（key, value, version）推送给A，A更新本地数据。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed4.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;推拉（Push/Pull）&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;同时执行上述两个步骤，同时修复两个节点的数据。&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed5.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;blockquote&gt;
+&lt;p&gt;从上面的三种反熵方式可以看出，反熵是需要节点两两交换和比对自己所有的数据，这样来看的话，通讯成本是很高的，而在实际场景下这种频繁的交换会大大影响性能。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;那有没有办法来减少反熵的次数呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;我们可以通过引入如校验和、奇偶校验、CRC校验和格雷码校验等机制来降低需要对比的数据量和通讯信息。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;执行反熵时，相关节点都是已知的，且节点数量不能太多。如果节点动态变化或节点数过多，反熵就不合适。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;那在这种场景下，有没有办法来解决动态、多节点的最终一致性呢？&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;答案是有的，那这时候就要用到Gossip协议中的&lt;strong&gt;谣言传播&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;谣言传播&#34;&gt;谣言传播&lt;/h2&gt;
+&lt;p&gt;谣言传播，就像是一个谣言的产生流程一样，每个人都会向自己身边的人传播，知道谣言散布各地。&lt;/p&gt;
+&lt;p&gt;在分布式系统中，当一个节点有了新数据后，这个节点变成活跃状态，并周期性地联系其他节点向其发送新数据，直到所有节点都存储了该数据，可以理解为之前讲的反熵中的推的方式。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed6.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;从上面可以看出，谣言传播仍然具有以下缺点：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;时间随机&lt;/strong&gt;：所有节点达到一致性是一个随机性的概率。可以使用&lt;strong&gt;闭环反熵&lt;/strong&gt;修复。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;消息冗余&lt;/strong&gt;：同一节点会多次接收同一消息，增加了消息处理的压力，每一次通信都会对网络带宽、CPU等资源造成负载，进而影响达到最终一致性的时间。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;拜占庭问题&lt;/strong&gt;：如果有恶意节点出现，那么其他节点也会出问题。所以需要先修复故障节点。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;闭环反熵&#34;&gt;闭环反熵&lt;/h2&gt;
+&lt;p&gt;对于谣言传播，所有节点达到一致性是一个随机性的概率，其达到最终一致性的时间并不可控，这并不满足我们的期望，我们更希望能在一个确定的时间范围内实现数据副本的最终一致性，因此Gossip协议又引入了&lt;strong&gt;闭环反熵&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;它按&lt;strong&gt;照一定顺序来修复节点的数据差异，先随机选择一个节点，顺着这个节点往下循环修复&lt;/strong&gt;。每个节点都会对比自身与下一个节点，将本节点存在而下个节点不存在的缺失数据发送给下一个节点来进行修复，如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed7.jpg&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;与上面的反熵不同，闭环反熵不再是一个节点不断随机选择另一个节点，来修复副本上的熵，而是设计了一个闭环的流程，一次修复所有节点的副本数据不一致。通过这种方法我们就能够将最终一致性的时间范围明确下来，使其可控。&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;上面说了那么多缺点，下面也来讲讲Gossip的几个优点&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;拓展性&lt;/strong&gt;：网络可以允许节点的动态增加和减少，新增加的节点的状态最终会与其他节点一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;容错&lt;/strong&gt;：网络中任何节点的宕机和重启都不会影响 Gossip 消息的传播，Gossip 协议具有天然的分布式系统容错特性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;去中心化&lt;/strong&gt;：Gossip协议不要求任何中心节点，所有节点都可以是对等的，任何一个节点无需知道整个网络状况，只要网络是连通的，任意一个节点就可以把消息散播到全网。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实现简单&lt;/strong&gt;：Gossip 协议中的消息会以一传十、十传百一样的指数级速度在网络中快速传播，因此系统状态的不一致可以在很快的时间内收敛到一致。消息传播速度达到了 logN。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;高性能&lt;/strong&gt;：Gossip 协议的过程极其简单，实现起来几乎没有太多复杂性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Gossip的三种功能其实都是为了实现反熵，第一种用消息队列，第二种用推拉消息，第三种用散播谣言，下面给出三个功能的使用场景&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;功能&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;应用场景&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;直接邮寄&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;实际场景，&lt;code&gt;直接邮寄&lt;/code&gt;一定要实现，性能损耗最低。通过发送更新数据或缓存重传就能修复数据的不一致。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;反熵&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;在存储组件中，节点都是已知的，采用&lt;code&gt;反熵&lt;/code&gt;修复数据副本的不一致。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;谣言传播&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;集群节点变化时，或节点较多时，采用&lt;code&gt;谣言传播&lt;/code&gt;方式，来同步更新多节点的数据，来实现最终一致性。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性协议：ZAB</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/</link>
+        <pubDate>Tue, 24 May 2022 16:20:23 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEzab/</guid>
+        <description>&lt;h1 id=&#34;一致性协议zab&#34;&gt;一致性协议：ZAB&lt;/h1&gt;
 &lt;p&gt;&lt;strong&gt;ZAB（ZooKeeper Atomic Broadcast 原子广播）&lt;/strong&gt; 协议是为分布式协调服务ZooKeeper专门设计的一种支持崩溃恢复的原子广播协议。 在ZooKeeper中，主要依赖ZAB协议来实现分布式数据一致性，基于该协议，ZooKeeper实现了一种主备模式的系统架构来保持集群中各个副本之间的数据一致性。&lt;/p&gt;
 &lt;p&gt;ZAB协议包括了两种基本的模式，分别是&lt;strong&gt;崩溃恢复&lt;/strong&gt;和&lt;strong&gt;消息广播&lt;/strong&gt;。&lt;/p&gt;
 &lt;h2 id=&#34;消息广播&#34;&gt;消息广播&lt;/h2&gt;
@@ -72,6 +235,440 @@
 &lt;!-- raw HTML omitted --&gt;
 &lt;p&gt;针对这种情况，我们需要让server2在故障恢复后能够丢弃这些只在它这个节点上提出的事务，来确保数据一致。&lt;/p&gt;
 &lt;p&gt;为了能够满足上述的两个要求，所以ZooKeeper让Leader选举算法保证新选举出来的Leader服务器拥有集群中所有机器&lt;strong&gt;最高的事务编号（ZXID最大）&lt;/strong&gt;，那么这就肯定能够保证新选举出来的Leader一定具有所有已经提交的提案，此时新的Leader就会将事务日志中尚未提交的消息同步到各个服务器中。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性协议：Bully</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEbully/</link>
+        <pubDate>Tue, 24 May 2022 16:20:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEbully/</guid>
+        <description>&lt;h1 id=&#34;一致性协议bully&#34;&gt;一致性协议：Bully&lt;/h1&gt;
+&lt;p&gt;Bully 是最常用的一种领导选举算法，&lt;strong&gt;它使用节点 ID 的大小来选举新领导者&lt;/strong&gt;。在所有活跃的节点中，选取节点 ID 最大或者最小的节点为主节点。&lt;/p&gt;
+&lt;h2 id=&#34;核心算法&#34;&gt;核心算法&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;每个节点都会获得分配给它的唯一 ID。在选举期间，ID 最大的节点成为领导者。因为 ID 最大的节点“逼迫”其他节点接受它成为领导者，它也被称为君主制领导人选举：类似于各国王室中的领导人继承顺位，由顺位最高的皇室成员来继承皇位。如果某个节点意识到系统中没有领导者，则开始选举，或者先前的领导者已经停止响应请求。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;算法核心如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;集群中每个活着的节点查找比自己 ID 大的节点，如果不存在则向其他节点发送 Victory 消息，表明自己为领导节点。&lt;/li&gt;
+&lt;li&gt;如果存在比自己 ID 大的节点，则向这些节点发送 Election 消息，并等待响应。&lt;/li&gt;
+&lt;li&gt;如果在给定的时间内，没有收到这些节点回复的消息，则自己成为领导节点，并向比自己 ID 小的节点发送 Victory 消息。&lt;/li&gt;
+&lt;li&gt;节点收到比自己 ID 小的节点发送的 Election 消息，则回复 Alive 消息。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed33.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;上图举例说明了 Bully 领导者选举算法，其中：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;节点3 注意到先前的领导者 6 已经崩溃，并且通过向比自己 ID 更大的节点发送选举消息来开始新的选举。&lt;/li&gt;
+&lt;li&gt;4 和 5 以 Alive 响应，因为它们的 ID 比 3 更大。&lt;/li&gt;
+&lt;li&gt;3 通知在这一轮中作出响应的最大 ID 节点是5。&lt;/li&gt;
+&lt;li&gt;5 被选为新领导人，它广播选举信息，通知排名较低的节点选举结果。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这种算法的一个明显问题是：它违反了“安全性”原则（即一次最多只能选出一位领导人）。&lt;strong&gt;在存在网络分区的情况下，在节点被分成两个或多个独立工作的子集的情况下，每个子集都会选举其领导者。（脑裂）&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;该算法的另一个问题是：**它对 ID较大的节点有强烈的偏好，但是如果它们不稳定，会严重威胁选举的稳定性，并可能导致不稳定节点永久性地连任。**即不稳定的高排名节点提出自己作为领导者，不久之后失败，但是在新一轮选举中又赢得选举，然后再次失败，选举过程就会如此重复而不能结束。这种情况，&lt;strong&gt;可以通过监控节点的存活性指标，并在选举期间根据这些指标来评价节点的活性，从而解决该问题。&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;算法改进&#34;&gt;算法改进&lt;/h2&gt;
+&lt;p&gt;Bully 算法虽然经典，但由于其相对简单，在实际应用中往往不能得到良好的效果。因此在分布式数据库中，我们会看到如下所述的多种演进版本来解决真实环境中的一些问题，但需要注意的是，其核心依然是经典的 Bully 算法。&lt;/p&gt;
+&lt;h3 id=&#34;故障转移节点列表&#34;&gt;故障转移节点列表&lt;/h3&gt;
+&lt;p&gt;**我们可以使用多个备选节点作为在发生领导节点崩溃后的故障转移目标，从而缩短重选时间。**每个当选的领导者都提供一个故障转移节点列表。当集群中的节点检测到领导者异常时，它通过向该领导节点提供的候选列表中排名最高的候选人发送信息，开始新一轮选举。如果其中一位候选人当选，它就会成为新的领导人，而无须经历完整的选举。&lt;/p&gt;
+&lt;p&gt;如果已经检测到领导者故障的进程本身是列表中排名最高的进程，它可以立即通知其他节点自己就是新的领导者。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed34.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;上图显示了采用这种优化方式的过程，其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;6 是具有指定候选列表 {5，4} 的领导者，它崩溃退出，3 注意到该故障，并与列表中具有最高等级的备选节点5 联系；&lt;/li&gt;
+&lt;li&gt;5 响应 3，表示它是 Alive 的，从而防止 3 与备选列表中的其他节点联系；&lt;/li&gt;
+&lt;li&gt;5 通知其他节点它是新的领导者。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果备选列表中，第一个节点是活跃的，我们在选举期间需要的步骤就会更少。&lt;/p&gt;
+&lt;h3 id=&#34;节点分角色&#34;&gt;节点分角色&lt;/h3&gt;
+&lt;p&gt;另一种算法试图通过将节点分成&lt;strong&gt;候选&lt;/strong&gt;和&lt;strong&gt;普通&lt;/strong&gt;两个子集来降低消息数量，其中只有一个候选节点可以最终成为领导者。普通节点联系候选节点、从它们之中选择优先级最高的节点作为领导者，然后将选举结果通知其余节点。&lt;/p&gt;
+&lt;p&gt;为了解决并发选举的问题，该算法引入了一个&lt;strong&gt;随机的启动延迟&lt;/strong&gt;，从而使不同节点产生了不同的启动时间，最终导致其中一个节点在其他节点之前发起了选举。该延迟时间通常大于消息在节点间往返时间。具有较高优先级的节点具有较低的延迟，较低优先级节点延迟往往很大。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed35.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;上图显示了选举过程的步骤，其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;节点 4 来自普通的集合，它发现了崩溃的领导者 6，于是通过联系候选集合中的所有剩余节点来开始新一轮选举；&lt;/li&gt;
+&lt;li&gt;候选节点响应并告知 4 它们仍然活着；&lt;/li&gt;
+&lt;li&gt;4 通知所有节点新的领导者是 2。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;该算法减小了领导选举中参与节点的数量，从而加快了在大型集群中该算法收敛的速度。&lt;/p&gt;
+&lt;h3 id=&#34;邀请算法&#34;&gt;邀请算法&lt;/h3&gt;
+&lt;p&gt;**邀请算法允许节点“邀请”其他进程加入它们的组，而不是进行组间优先级排序。**该算法允许定义多个领导者，从而形成每个组都有其自己的领导者的局面。每个节点开始时都是一个新组的领导者，其中唯一的成员就是该节点本身。&lt;/p&gt;
+&lt;p&gt;组领导者联系不属于它们组内的其他节点，并邀请它们加入该组。如果受邀节点本身是领导者，则合并两个组；否则，受邀节点回复它所在组的组长 ID，允许两个组长直接取得联系并合并组，这样大大减少了合并的操作步骤。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed40.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;上图显示了邀请算法的执行步骤，其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;四个节点形成四个独立组，每个节点都是所在组的领导，1 邀请 2 加入其组，3 邀请 4 加入其组；&lt;/li&gt;
+&lt;li&gt;2 加入节点 1的组，并且 4 加入节点3的组，1 为第一组组长，联系人另一组组长 3，剩余组成员（在本例中为 4个）获知了新的组长 1；&lt;/li&gt;
+&lt;li&gt;合并两个组，并且 1 成为扩展组的领导者。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;由于组被合并，不管是发起合并的组长成为新的领导，还是另一个组长成为新的领导。为了将合并组所需的消息数量保持在最小，一般选择具有较大 ID 的组长的领导者成为新组的领导者，这样，只有来自较小 ID 组的节点需要更新领导者。&lt;/p&gt;
+&lt;p&gt;与所讨论的其他算法类似，该算法采用“分而治之”的方法来收敛领导选举。邀请算法允许创建节点组并合并它们，而不必从头开始触发新的选举，这样就减少了完成选举所需的消息数量。&lt;/p&gt;
+&lt;h3 id=&#34;环形算法&#34;&gt;环形算法&lt;/h3&gt;
+&lt;p&gt;**在环形算法中，系统中的所有节点形成环，并且每个节点都知道该环形拓扑结构，了解其前后邻居。**当节点检测到领导者失败时，它开始新的选举，选举消息在整个环中转发，方式为：&lt;strong&gt;每个节点联系它的后继节点（环中离它最近的下一节点）&lt;/strong&gt;。如果该节点不可用，则跳过该节点，并尝试联系环中其后的节点，直到最终它们中的一个有回应。&lt;/p&gt;
+&lt;p&gt;节点联系它们的兄弟节点，收集所有活跃的节点从而形成可用的节点集。在将该节点集传递到下一个节点之前，该节点将自己添加到集合中。&lt;/p&gt;
+&lt;p&gt;该算法通过完全遍历该环来进行。当消息返回到开始选举的节点时，从活跃集合中选择排名最高的节点作为领导者。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed41.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;如上图所示，你可以看到这样一个遍历的例子：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;先前的领导 6 失败了，环中每个节点都从自己的角度保存了一份当前环的拓扑结构；&lt;/li&gt;
+&lt;li&gt;以 3 为例，说明查找新领导的流程，3 通过开始遍历来发起选举轮次，在每一步中，节点都按照既定路线进行遍历操作，5 不能到 6，所以跳过，直接到 1；&lt;/li&gt;
+&lt;li&gt;由于 5 是具有最高等级的节点，3 发起另一轮消息，分发关于新领导者的信息。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;该算法的一个优化方法是每个节点&lt;strong&gt;只发布它认为排名最高的节点，而不是一组活跃的节点，以节省空间&lt;/strong&gt;：因为 Max 最大值函数是遵循交换率的，也就是知道一个最大值就足够了。当算法返回到已经开始选举的节点时，最后就得到了 ID 最大的节点。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;另外由于环可以被拆分为两个或更多个部分，每个部分就会选举自己的领导者，这种算法也不具备“安全性”。&lt;/strong&gt; 如前所述，要使具有领导的系统正常运行，我们需要知道当前领导的状态。因此，为了系统整体的稳定性，领导者必须保证是一直活跃的，并且能够履行其职责。&lt;/p&gt;
+&lt;h2 id=&#34;脑裂的解决方案&#34;&gt;脑裂的解决方案&lt;/h2&gt;
+&lt;p&gt;在上文讨论的所有算法都容易出现脑裂的问题，即&lt;strong&gt;最终可能会在独立的两个子网中出现两个领导者，而这两个领导并不知道对方的存在。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;为了避免脑裂问题，我们一般需要引入&lt;strong&gt;法定人数&lt;/strong&gt;来选举领导。比如 Elasticsearch 选举集群领导，就使用 Bully 算法结合最小法定人数来解决脑裂问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed38.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;如上图所示，目前有 2 个网络、5 个节点，假定最小法定人数是3。A 目前作为集群的领导，A、B 在一个网络，C、D 和 E 在另外一个网络，两个网络被连接在一起。&lt;/p&gt;
+&lt;p&gt;当这个连接失败后，A、B 还能连接彼此，但与 C、D 和 E 失去了联系。同样， C、D 和 E 也能知道彼此，但无法连接到 A 和B。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/distributed39.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;此时，C、D 和 E 无法连接原有的领导 A。同时它们三个满足最小法定人数3，故开始进行新一轮的选举。假设 C 被选举为新的领导，这三个节点就可以正常进行工作了。&lt;/p&gt;
+&lt;p&gt;而在另外一个网络中，虽然 A 是曾经的领导，但是这个网络内节点数量是 2，小于最小法定人数。故 A 会主动放弃其领导角色，从而导致该网络中的节点被标记为不可用，从而拒绝提供服务。这样就有效地避免了脑裂带来的问题。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性协议：Raft</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEraft/</link>
+        <pubDate>Tue, 24 May 2022 15:59:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEraft/</guid>
+        <description>&lt;h1 id=&#34;一致性协议raft&#34;&gt;一致性协议：Raft&lt;/h1&gt;
+&lt;p&gt;由于Paxos算法相对来说较为复杂且难以理解，因此在后来又出现了一种用于替代Paxos的算法——Raft&lt;/p&gt;
+&lt;p&gt;Raft 算法是一种简单易懂的共识算法，所谓共识，就是多个节点对某个事情达成一致的看法，即使是在部分节点故障、网络延时、网络分割的情况下。它依靠&lt;strong&gt;状态机&lt;/strong&gt;和&lt;strong&gt;主从同步&lt;/strong&gt;的方式，在各个节点之间实现数据的一致性。&lt;/p&gt;
+&lt;p&gt;Raft算法的核心主要为以下两部分，下面将进行具体讲解&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;主节点选举&lt;/strong&gt;（Leader Election）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;数据同步&lt;/strong&gt;（Log Replication）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;状态机&#34;&gt;状态机&lt;/h2&gt;
+&lt;p&gt;在Raft中节点中存在三种状态，状态之间可以相互进行转换&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Leader（主节点）&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Follower（从节点）&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Candidate（竞选节点）&lt;/strong&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;同时，每个节点上会存放一个&lt;strong&gt;倒计时器&lt;/strong&gt;（Election Timeout），时间&lt;strong&gt;随机&lt;/strong&gt;在150ms到300ms之间。Leader节点会周期性的向所有Follower发送一个心跳包（Heartbeat），收到心跳包的节点会将其计时器清零后重新计时，如果在倒计时结束前没有收到Leader的心跳包，此时Follower就会变为Candidate，开始进入竞选状态。&lt;/p&gt;
+&lt;p&gt;具体的状态转移如下图&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed19.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;执行流程&#34;&gt;执行流程&lt;/h2&gt;
+&lt;h3 id=&#34;主节点选举&#34;&gt;主节点选举&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;介绍了状态机后，下面就来看看主节点的选举流程&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第一步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，在一开始时，由于没有Leader，所以此时所有节点的身份都是Follower，每一个节点上都有着自己的计数器，当计时器达到了超时时间后，该节点就会转换为Candidate，开始选举过程。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed20.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第二步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，成为Candidate的节点首先会给自己投一张票，然后向集群中的其他所有节点发起投票请求。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed21.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第三步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，收到投票请求并且还未投票的Follower节点会向发起者回复投票反馈，如果收到了超过半数的回复，此时Candidate选举成功，状态转变为Leader。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed22.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第四步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，Leader节点会立刻向其他节点发出通告，告知其他节点它已成功选举成Leader，收到通知的节点会转换为Follower。并且Leader会周期性的发送心跳包给所有Follower来表明它还存活，当Follower接收到心跳包时，就会重置计时器。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed23.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;一旦Leader节点挂掉，它就无法发出心跳包来重置Follower的倒计时器，那么当Follower的超时时间到达后，其就会转换成Candidate节点，再次重复以上过程。&lt;/p&gt;
+&lt;p&gt;上面介绍的是单节点的选举，倘若同时有多个Follower同时倒计时结束后成为Candidate，同时开始选举，并且在选举过程中所获得的票数相同，此时就陷入了僵局，谁都无法成为Leader。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed24.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;在重新选举时，由于每个节点设置的超时时间都是随机的，因此下一次同时出现多个Candidate并获得同样票数导致选举失败的情况的概率则非常低。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed25.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h3 id=&#34;数据同步&#34;&gt;数据同步&lt;/h3&gt;
+&lt;p&gt;Raft中数据同步的方式与之前写过的2PC（二阶段提交协议）有一些相似，也是分为投票和提交两个阶段，具体流程如下。&lt;/p&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第一步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，客户端将修改传入Leader中（此时修改并没有提交，只是写入日志中）。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed26.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第二步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，Leader将修改复制到集群内的所有Follower节点上，如果复制失败，会不断进行重试直至成功。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed27.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第三步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，Follow节点们成功接收到复制的数据后，会反馈结果给Leader节点，如果Leader节点接收到超过半数的Follower反馈，则表明复制成功，于是提交自己的数据，并且通知客户端数据提交成功。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed28.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;!-- raw HTML omitted --&gt;&lt;strong&gt;第四步&lt;/strong&gt;&lt;!-- raw HTML omitted --&gt;，提交成功后，Leader会通知所有的Follower让它们也提交修改，此时所有节点的值达成一致，完成数据同步流程。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed29.gif&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;为了便于理解，可以结合下面的Raft原理动画一同学习。&lt;/p&gt;
+&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;http://thesecretlivesofdata.com/raft/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Raft原理动画&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>一致性协议：Paxos</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEpaxos/</link>
+        <pubDate>Tue, 24 May 2022 15:58:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AEpaxos/</guid>
+        <description>&lt;h1 id=&#34;一致性协议paxos&#34;&gt;一致性协议：Paxos&lt;/h1&gt;
+&lt;h2 id=&#34;拜占庭将军问题&#34;&gt;拜占庭将军问题&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;拜占庭位于如今的土耳其的伊斯坦布尔，是东罗马帝国的首都。由于当时拜占庭罗马帝国国土辽阔，为了达到防御目的，每个军队都分隔很远，将军与将军之间只能靠信差传消息。在战争的时候，拜占庭军队内所有将军和副官必须达成一致的共识，决定是否有赢的机会才去攻打敌人的阵营。但是，在军队内有可能存有叛徒和敌军的间谍，叛徒可以任意行动以达到以下目标：欺骗某些将军采取进攻行动；促成一个不是所有将军都同意的决定，如当将军们不希望进攻时促成进攻行动；或者迷惑某些将军，使他们无法做出决定。如果叛徒达到了这些目的之一，则任何攻击行动的结果都是注定要失败的，只有完全达成一致的努力才能获得胜利。&lt;/p&gt;
+&lt;p&gt;这时候，在已知有成员谋反的情况下，其余忠诚的将军在不受叛徒的影响下如何达成一致的协议，拜占庭问题就此形成 。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;拜占庭将军问题的核心在于&lt;strong&gt;在缺少可信任的中央节点和可信任的通道的情况下，分布在不同地方的各个节点应如何达成共识&lt;/strong&gt;。我们可以将这个问题延伸到分布式计算领域中。&lt;/p&gt;
+&lt;p&gt;在分布式计算领域中，&lt;strong&gt;试图在异步系统和不可靠的通道上达到一致性状态是不可能的&lt;/strong&gt;，因此在对一致性的研究过程中，都往往&lt;strong&gt;假设信道是可靠的&lt;/strong&gt;，而事实上，大多数系统都是部署在同一个局域网中，因此消息被篡改的情况非常罕见；另一方面，由于机器硬件和网络原因导致的消息不完整问题，也仅仅只需要一套简单的校验算法即可避免。&lt;/p&gt;
+&lt;p&gt;那么当我们假设&lt;strong&gt;拜占庭问题不存在（所有消息都是完整的，没有被篡改）&lt;/strong&gt;，那么这种情况下需要什么算法来保证一致性呢？拜占庭将军问题的提出者Lamport提出了一种非拜占庭将军问题的一致性解决方案——&lt;strong&gt;Paxos算法&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;paxos&#34;&gt;Paxos&lt;/h2&gt;
+&lt;h3 id=&#34;问题描述&#34;&gt;问题描述&lt;/h3&gt;
+&lt;p&gt;与拜占庭将军问题一样，Lamport同样使用故事的方式来提出Paxos问题&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;希腊岛屿Paxon上的议员在议会大厅中表决通过法律，并通过服务员传递纸条的方式交流信息，每个议员会将通过的法律记录在自己的账目上。问题在于执法者和服务员都不可靠，他们随时会因为各种事情离开议会大厅，并随时可能有新的议员进入议会大厅进行法律表决，使用何种方式能够使得这个表决过程正常进行，且通过的法律不发生矛盾。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;不难看出故事中的议会大厅就是分布式系统，议员对应节点或进程，服务员传递纸条的过程就是消息传递的过程，法律即是我们需要保证一致性的值。议员和服务员的进出对应着节点/网络的失效和加入，议员的账目对应节点中的持久化存储设备。上面表决过程的正常进行可以表述为进展需求：当大部分议员在议会大厅呆了足够长时间，且期间没有议员进入或者退出，那么提出的法案应该被通过并被记录在每个议员的账目上。&lt;/p&gt;
+&lt;p&gt;Paxos算法需要解决的问题就是如何在上述分布式系统中，快速且正确地在集群内部对&lt;strong&gt;某个数据的值&lt;/strong&gt;达成&lt;strong&gt;一致&lt;/strong&gt;，并且保证不论发生以上任何异常，都不会破坏整个系统的一致性。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed16.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;为了能够使得表决过程正常进行，且通过的法律不发生矛盾，那么我们需要保证以下几点&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;在这些被提出的提案中，最后只能有一个被选定&lt;/li&gt;
+&lt;li&gt;如果没有提案被提出，那么就不会有被选定的提案&lt;/li&gt;
+&lt;li&gt;当一个提案被选定后，节点们应该可以获取被选定的提案信息&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在Paxos算法中，主要有以下三种角色，并且一个节点可能同时担任几种角色&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;提议者（Proposer）&lt;/strong&gt;：负责提出提议；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;接受者（Acceptor）&lt;/strong&gt;：对每个提议进行投票；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;告知者（Learner）&lt;/strong&gt;：被告知投票的结果，不参与投票过程。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed17.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;同时，假设不同参与者之间通过收发消息来进行通信，那么我们需要具备以下条件&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;每个参与者可能会因为出错而导致停止、重启等情况，&lt;/li&gt;
+&lt;li&gt;虽然消息在传输过程中可能会出现不可预知的延迟、重复、丢失等情况，但是消息不会被损坏或篡改（即不存在拜占庭问题）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;执行过程&#34;&gt;执行过程&lt;/h3&gt;
+&lt;p&gt;首先我们规定一个提议包含两个字段：[n, v]，其中 n 为序号（具有唯一性），v 为提议值。&lt;/p&gt;
+&lt;p&gt;Paxos执行过程主要分为两个阶段，与之前讲过的2PC（二阶段提交协议）类似。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Prepare阶段&lt;/li&gt;
+&lt;li&gt;Accept阶段&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如下图&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/distributed/distributed18.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h4 id=&#34;prepare阶段&#34;&gt;Prepare阶段&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;首先，每个Proposer都会向所有的Acceptor发送一个Prepare请求。&lt;/li&gt;
+&lt;li&gt;当Acceptor接收到一个Prepare请求，提议内容为[n1,v1]，由于之前还未接受过Prepare请求，那么它会返回一个[no previous]的Prepare响应，并且设置当前接受的提议为[n1,v1]，同时保证以后不会再接收序号小于n1的提议。&lt;/li&gt;
+&lt;li&gt;如果Acceptor再次收到一个Prepare请求，提议内容为[n2,v2]，此时会有两种情况。
+&lt;ul&gt;
+&lt;li&gt;如果n2 &amp;lt; n1，此时Acceptor就会直接抛弃该请求&lt;/li&gt;
+&lt;li&gt;如果n2 &amp;gt;= n1，此时Acceptor就会发送一个[n1,v1]的Prepare响应，设置当前接受到的提议为[n2,v2]，同时保证与上一步逻辑相同，保证以后不会再接受序号小于n2的提议。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;accept阶段&#34;&gt;Accept阶段&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;当一个Proposer接收到超过一半的Acceptor的Prepare响应时，此时它就会发送一个针对[n,v]提案的Accept请求给Acceptor。&lt;/li&gt;
+&lt;li&gt;如果一个Acceptor收到一个编号为n的提案的Accept请求，此时有两种情况。
+&lt;ul&gt;
+&lt;li&gt;如果该Acceptor没有对编号大于n的Prepare请求做出过响应，它就会接受该提案，并发送Learn提议给Learner&lt;/li&gt;
+&lt;li&gt;如果该Acceptor接受过编号大于n的Prepare请求，那么它就会拒绝、不回应或回复error。（如果一个Proposer没有收到过半的回应，那他就会重新进入第一阶段，递增提案号后重新提出Prepare请求）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;在上述过程中，每一个Proposer都有可能会产生多个提案。但只要每个Proposer都遵循如上述算法运行，就一定能保证算法执行的正确性。&lt;/p&gt;
+&lt;h4 id=&#34;learner获取提案&#34;&gt;Learner获取提案&lt;/h4&gt;
+&lt;p&gt;在Accept阶段之后Acceptor选定提案后，根据具体的应用场景不同，Learner主要采用以下三种方案来学习选定的提案&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;方案&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;优点&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;缺点&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Acceptor直接将提议发给所有的Learner&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Learner能够快速获取被选定的提议&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;通信次数过多，每个Acceptor都要和Learn产生通信（M * N）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Acceptor接受提议后将提议发给主Learner，主Learner再通知其他Learner&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;通信次数减少（M + N - 1）&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;单点问题（主Learner出现故障就会崩溃）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Acceptor将提议发一个Learner集合，Learener集合再发给其他Learener&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;解决了单点问题，集合中Learner个数越多就越可靠&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;网络通信复杂度变高&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;当Learner们发现有大多数的Acceptor接受了某一个提议，那么该提议的提议值则就是Paxos最终选择出来的结果。&lt;/p&gt;
+&lt;h3 id=&#34;活锁问题&#34;&gt;活锁问题&lt;/h3&gt;
+&lt;p&gt;在Paxos算法实际运作的时候还存在这样一种极端的情况——当有两个Proposer依次提出了一系列编号递增的提案，此时就会导致陷入死循环，无法完成第二阶段，也就是无法选定一个提案，如以下场景。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Proposer P1发出编号为n1的Prepare请求，收到过半响应，完成了阶段一的流程。&lt;/li&gt;
+&lt;li&gt;同时，Proposer P2发出编号为n2的Prepare请求（n2 &amp;gt; n1），也收到了过半的响应，完成了阶段一的流程，并且Acceptor承诺不再接受编号小于n2的提案。&lt;/li&gt;
+&lt;li&gt;P1进入第二阶段时，由于Acceptor不接受小于n2的提案，所以P1重新回到第一阶段，递增提案号为n3后重新发出Prepare请求&lt;/li&gt;
+&lt;li&gt;紧接着，P2进入第二阶段，由于Acceptor不接受小于n3的提案，此时它也重新回到第一阶段，递增提案号后重新发出Prepare请求&lt;/li&gt;
+&lt;li&gt;于是P1、P2陷入了死循环，谁都无法完成阶段二，这也就导致了没有value能被选定。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;为了保证Paxos算法的可持续性，以避免陷入上述提到的死循环，就必须选择一个主Proposer，并规定只有主Proposer才能够提出提案。这样一来，只要主Proposer和过半的Acceptor能够正常进行网络通信，那么肯定会有一个提案被批准（第二阶段的accept），则可以解决死循环导致的活锁问题。&lt;/p&gt;
 </description>
         </item>
         

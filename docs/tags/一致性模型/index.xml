@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>一致性模型 on 凌桓&#39;s BLOG</title>
+        <link>https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/</link>
+        <description>Recent content in 一致性模型 on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language>
+        <lastBuildDate>Tue, 24 May 2022 16:40:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>一致性模型</title>
+        <link>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/</link>
+        <pubDate>Tue, 24 May 2022 16:40:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B/</guid>
+        <description>&lt;h1 id=&#34;一致性模型&#34;&gt;一致性模型&lt;/h1&gt;
+&lt;h2 id=&#34;什么是一致性模型&#34;&gt;什么是一致性模型?&lt;/h2&gt;
+&lt;p&gt;在分布式系统中，C（一致性） 和 A（可用性）始终存在矛盾。若想保证可用性，就必须通过复制、分片等方式冗余存储。而一旦进行复制，又来带多副本数据一致性的问题——一个副本的数据更新之后，其他副本必须要保持同步，否则数据不一致就可能导致业务出现问题。&lt;/p&gt;
+&lt;p&gt;因此，每次更新数据对所有副本进行修改的时间以及方式决定了复制代价的大小。全局同步与性能实际上是矛盾的，而为了提高性能，往往会采用放宽一致性要求的方法。因此，&lt;strong&gt;我们需要用一致性模型来理解和推理在分布式系统中数据复制需要考虑的问题和基本假设。&lt;/strong&gt;&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;那么什么是一致性模型呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;strong&gt;一致性模型本质上是进程与数据存储的约定：如果进程遵循某些规则，那么进程对数据的读写操作都是可预期的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;下图即为 Jepsen 概括的常见的一致性模型：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/consistency1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;不可用（Unavailable）&lt;/strong&gt;：粉色代表网络分区后完全不可用。当出现网络隔离等问题的时候，为了保证数据的一致性，不提供服务。熟悉 CAP 理论的同学应该清楚，这就是典型的 CP 系统了。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;严格可用 （Sticky Available）&lt;/strong&gt;：黄色代表严格可用。即使一些节点出现问题，在一些还没出现故障的节点，仍然保证可用，但需要保证 client 的操作是一致的。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;完全可用（Highly Available）&lt;/strong&gt;：蓝色代表完全可用。就是网络全挂掉，在没有出现问题的节点上面，仍然可用。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;一致性模型主要可以分为两类：能够保证所有进程对数据的读写顺序都保持一致的一致性模型称为&lt;strong&gt;强一致性模型&lt;/strong&gt;，而不能保证的一致性模型称为&lt;strong&gt;弱一致性模型&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;强一致性模型&#34;&gt;强一致性模型&lt;/h2&gt;
+&lt;p&gt;强一致性包含&lt;strong&gt;线性一致性&lt;/strong&gt;和&lt;strong&gt;顺序一致性&lt;/strong&gt;，其中前者对安全性的约束更强，也是分布式系统中能保证的最好的一致性。&lt;/p&gt;
+&lt;h3 id=&#34;线性一致性linearizable-consistency&#34;&gt;线性一致性（Linearizable Consistency）&lt;/h3&gt;
+&lt;p&gt;线性一致性是最严格的且可实现的单对象单操作一致性模型。&lt;strong&gt;在这种模型下，写入的值在调用和完成之间的某个时间点可以被其他节点读取出来。且所有节点读到数据都是原子的，即不会读到数据转换的过程和中间未完成的状态。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;要想达到线性一致，需要满足以下条件：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任何一次读都能读取到某个数据最近的一次写的数据。&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;所有进程看到的操作顺序都跟全局时钟下的顺序一致。&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;所有进程都按照全局时钟的时间戳来区分事件的先后，那么必然所有进程看到的数据读写操作顺序一定是一样的&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;我们发现，这个要求十分苛刻，难以在现实中实现。因为各种物理限制使分布式数据不可能一瞬间去同步这种变化。（通信是必然有延迟的，一旦有延迟，时钟的同步就没法做到一致。）&lt;/p&gt;
+&lt;h3 id=&#34;顺序一致性sequential-consistency&#34;&gt;顺序一致性（Sequential Consistency）&lt;/h3&gt;
+&lt;p&gt;由于线性一致的代价高昂，因此人们想到，既然全局时钟导致严格一致性很难实现，那么我们能否放弃了全局时钟的约束，改为分布式逻辑时钟实现呢？&lt;/p&gt;
+&lt;p&gt;Lamport 在 1979 年就提出的顺序一致性正是基于上述原理。&lt;strong&gt;顺序一致性中所有的进程以相同的顺序看到所有的修改。读操作未必能及时得到此前其他进程对同一数据的写更新，但是每个进程读到的该数据的不同值的顺序是一致的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;其需要满足以下条件：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任何一次读写操作都是按照某种特定的顺序。&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;所有进程看到的读写操作顺序都保持一致。&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;我们发现他们都能够保证所有进程对数据的读写顺序保持一致。那么它与线性一致性有什么不同呢？&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;尽管顺序一致性通过逻辑时钟保证所有进程保持一致的读写操作顺序，但这些读写操作的顺序跟实际上发生的顺序并不一定一致。而线性一致性是严格保证跟实际发生的顺序一致的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;我们以下图为例：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/consistency2.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;图 a 满足了顺序一致性，但未满足线性一致性&lt;/strong&gt;。从全局时钟来看，p2 的 &lt;code&gt;read(x,0)&lt;/code&gt; 在 p1 的 &lt;code&gt;write(x,4)&lt;/code&gt; 之后，但是 p1 却读出了旧的数据。因此不满足线性一致性。但是两个进程各自的读写顺序却是合理的，进程之间也没有产生冲突，因此从这两个进程的视角来看，执行流程是这样的 &lt;code&gt;write(y,2)&lt;/code&gt;、&lt;code&gt;read(x,0)&lt;/code&gt;、 &lt;code&gt;write(x,4)&lt;/code&gt;、&lt;code&gt;read(y,2)&lt;/code&gt;。此时满足顺序一致性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图 b 满足线性一致性&lt;/strong&gt;。因为每个读操作都读到了该变量的最新写的结果，同时两个进程看到的操作顺序与全局时钟的顺序一样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图 c 不满足顺序一致性&lt;/strong&gt;。因为从进程 P1 的角度看，它对变量 y 的读操作返回了结果 0。那么就是说，P1 进程的对变量 y 的读操作在 P2 进程对变量 y 的写操作之前，x 变量也如此。此时两个进程存在冲突，因此这个顺序不满足顺序一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;弱一致性模型&#34;&gt;弱一致性模型&lt;/h2&gt;
+&lt;p&gt;弱一致性是指系统在数据成功写入之后，不承诺立即可以读到最新写入的值，也不会具体承诺多久读到，但是会尽可能保证在某个时间级别之后，可以让数据达到一致性状态。其中包含&lt;strong&gt;因果一致性&lt;/strong&gt;和&lt;strong&gt;最终一致性&lt;/strong&gt;、&lt;strong&gt;客户端一致性&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;因果一致性causal-consistency&#34;&gt;因果一致性（Causal Consistency）&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;什么是因果关系呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;如果事件 B 是由事件 A 引起的或者受事件 A 的影响，那么这两个事件就具有因果关系。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;因果一致性是一种弱化的顺序一致性模型，它仅要求有因果关系的操作顺序是一致的，没有因果关系的操作顺序是随机的。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;因果一致性的条件包括：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;所有进程必须以相同的顺序看到具有因果关系的读写操作。&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不同进程可以以不同的顺序看到并发的读写操作。&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;blockquote&gt;
+&lt;p&gt;我们如何确定是否具有因果关系呢？如何传播这些因果关系呢?&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;strong&gt;即通过逻辑时钟来保证两个写入是有因果关系的。&lt;strong&gt;而实现这个逻辑时钟的一种主要方式就是&lt;/strong&gt;向量时钟&lt;/strong&gt;。向量时钟算法利用了向量这种数据结构，将全局各个进程的逻辑时间戳广播给所有进程，每个进程发送事件时都会将当前进程已知的所有进程时间写入到一个向量中，而后进行传播。&lt;/p&gt;
+&lt;h3 id=&#34;最终一致性eventual-consistency&#34;&gt;最终一致性（Eventual Consistency）&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;最终一致性是更加弱化的一致性模型，它被表述为副本之间的数据复制完全是异步的，如果数据停止修改，那么副本之间最终会完全一致。而这个最终可能是数毫秒到数天，乃至数月，甚至是“永远”。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;对于最终一致性，我们主要关注以下两点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;最终是多久&lt;/strong&gt;。通常来说，实际运行的系统需要能够保证提供一个有下限的时间范围。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;并发冲突如何解决&lt;/strong&gt;。一段时间内可能数据可能多次更新，到底以哪个数据为准？通常采用最后写入成功或向量时钟等策略。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;因为在数据写入与读取完全不考虑别的约束条件，因此最终一致性具有最高的并发度，经常被应用于对性能要求高的场景中。&lt;/p&gt;
+&lt;h3 id=&#34;客户端一致性client-centric-consistency&#34;&gt;客户端一致性（Client-centric Consistency）&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;在最终一致性的模型中，如果客户端在数据不同步的时间窗口内访问不同的副本的同一个数据，会出现读取同一个数据却得到不同的值的情况。为了解决这个问题，有人提出了以客户端为中心的一致性模型。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;strong&gt;客户端一致性是站在一个客户端的角度来观察系统的一致性。其保证该客户端对数据存储的访问的一致性，但是它不为不同客户端的并发访问提供任何一致性保证。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;分布式数据库中，一个节点很可能同时连接到多个副本中，复制的延迟性会造成它从不同副本读取数据是不一致的。而客户端一致性就是为了定义并解决这个问题而存在的，这其中包含了&lt;strong&gt;写跟随读&lt;/strong&gt;、&lt;strong&gt;管道随机访问存储&lt;/strong&gt;两大类别。&lt;/p&gt;
+&lt;h4 id=&#34;写跟随读writes-follow-reads-consistency&#34;&gt;写跟随读（Writes-Follow-Reads Consistency）&lt;/h4&gt;
+&lt;p&gt;写跟随读的另一个名字是回话因果（session causal）。可以看到它与因果一致的区别是，&lt;strong&gt;它只针对一个客户端。&lt;/strong&gt; &lt;strong&gt;即对于一个客户端，如果一次读取到了写入的值 V1，那么这次读取之后写入了 V2。从其他节点看，写入顺序一定是 V1、V2。&lt;/strong&gt;&lt;/p&gt;
+&lt;h4 id=&#34;管道随机访问存储prampipeline-random-access-memory&#34;&gt;管道随机访问存储（PRAM，Pipeline Random Access Memory）&lt;/h4&gt;
+&lt;p&gt;管道随机访问存储的名字来源于共享内存访问模型。&lt;strong&gt;其对于单个进程的写操作都被观察到是顺序的，但不同的进程写会观察到不同的顺序。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;其可拆解为以下三种一致性：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;单调读一致性（Monotonic-read Consistency）&lt;/strong&gt;：它强调一个值被读取出来，那么后续任何读取都会读到该值，或该值之后的值，而不会读取到旧值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;单调写一致性（Monotonic-write Consistency）&lt;/strong&gt;：如果从一个节点写入两个值，它们的执行顺序是 V1、V2。那么从任何节点观察它们的执行顺序都应该是 V1、V2。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;读你所写一致性（Read-your-writes Consistency）&lt;/strong&gt;：一个节点写入数据后，在该节点或其他节点上是一定能读取到这个数据的。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;能够同时满足以上三种一致性的即为满足 PRAM。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;PRAM、因果一致、线性一致到底有什么区别呢？&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/consistency3.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;图 a 满足了顺序一致性与因果一致性&lt;/strong&gt;。图上的进程都满足相同的顺序与因果关系，因此满足顺序一致性与因果一致性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图 b 满足了因果一致性，但未满足顺序一致性&lt;/strong&gt;。对于进程 p3 和 p4 其看到的 p1 和 p2 的执行顺序不一致，因此不满足顺序一致性。但是由于 p1 与 p2 的写入没有任何因果关系，所以此时满足因果一致性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图 c 满足了 PRAM，但未满足因果一致性&lt;/strong&gt;。由于 p2 的 r(x,4) 依赖于 p1 的 w(x,4)，此时两者存在因果关系。然而对于进程 p3 和 p4 而言，其看到的 p1 和  p2 执行顺序不同，因此此时并不满足因果一致性。但此时我们再来分析它们的观察顺序，此时 p4 观察的到顺序是 &lt;code&gt;w(x.7)&lt;/code&gt;、&lt;code&gt;w(x,2)&lt;/code&gt;、&lt;code&gt;w(x,4)&lt;/code&gt;。而 p3 观察到的是 &lt;code&gt;w(x,2)&lt;/code&gt;、&lt;code&gt;w(x,4)&lt;/code&gt;、&lt;code&gt;w(x,7)&lt;/code&gt;。尽管此时它们对不同进程写操作观察的顺序不同，但是对于同一个进程的写操作观察顺序是一致的，因此其满足 PRAM 一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;下图即为上面讨论的几种一致性模型的关系：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/paper/consistency4.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;事务隔离性&#34;&gt;事务隔离性&lt;/h2&gt;
+&lt;p&gt;在一开始那张一致性模型图中，其实是有两个分支的，一个对应的就是数据库里面的隔离性（Isolation），另一个其实对应的是分布式系统的一致性（Consistency）。&lt;/p&gt;
+&lt;p&gt;事务隔离是描述并行事务之间的行为，而一致性是描述非并行事务之间的行为。其实广义的事务隔离应该是经典隔离理论与一致性模型的一种混合。&lt;/p&gt;
+&lt;h3 id=&#34;潜在问题&#34;&gt;潜在问题&lt;/h3&gt;
+&lt;p&gt;如下即数据库实现中遇到的各种各样的 isolation 问题。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;P0 Dirty Write（脏写）&lt;/strong&gt;：一个事务修改了另一个尚未提交的事务已经修改的值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P1 Dirty Read（脏读）&lt;/strong&gt;：一个事务读取到了另一个执行到一半的事务中修改的值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P2 Non-Repeatable Read（不可重复读）&lt;/strong&gt;：一个事务读取过程中读到了另一个事务更新后的结果。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P3 Phantom（幻读）&lt;/strong&gt;：某一事务 A 先挑选出了符合一定条件的数据，之后另一个事务 B 修改了符合该条件的数据，此时 A 再进行的操作都是基于旧的数据，从而产生不一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P4 Lost Update（丢失更新）&lt;/strong&gt;：更新被另一个事务覆盖。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;P4C Cursor Lost Update（游标丢失更新）&lt;/strong&gt;：与 Lost Update 类似，只是发生于 cursor 的操作过程之中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;A5A Read Skew（读倾斜）&lt;/strong&gt;：由于事务的交叉导致读取到了不一致的数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;A5B Write Skew（写倾斜）&lt;/strong&gt;：两个事务同时读取到了一致的数据，然后分别进行了满足条件的修改，但最终结果破坏了一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;隔离级别&#34;&gt;隔离级别&lt;/h3&gt;
+&lt;p&gt;对于分布式数据库来说，原始的隔离级别并没有舍弃，而是引入了一致性模型后，扩宽数据库隔离级别的内涵。其中共有如下数种隔离级别：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Read Uncommitted（读未提交）&lt;/strong&gt;：事务执行过程中能够读到未提交的修改。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Read Committed（读已提交）&lt;/strong&gt;：事务执行过程中能够读到已提交的修改。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Monotonic Atomic View（单调原子视图）&lt;/strong&gt;：在 Read Committed 的基础上加上了原子性的约束，观测到其他事务的修改时会观察到完整的修改。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cursor Stability（稳定游标）&lt;/strong&gt;：使用 cursor 读取某个数据时，这个不能被其他事务修改直至 cursor 释放或事务结束。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Snapshot Isolation（快照隔离级别）&lt;/strong&gt;：即使其他事务修改了数据，重复读取都会读到一样的数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Repeatable Read（可重复读）&lt;/strong&gt;：每个事务在独立、一致的 snapshot 上进行操作，直至提交后其他事务才可见。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Serializable（串行化）&lt;/strong&gt;：事务按照一定的次序顺序执行。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;对应的可能发生的问题如下&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P0&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P1&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P4C&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P4&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P2&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;P3&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;A5A&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;A5B&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Read Uncommitted&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Read Committed&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Cursor Stability&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;SP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;SP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;SP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Repeatable Read&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Snapshot&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;SP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;P&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;Serializable&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;NP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;P（Possible）&lt;/strong&gt;：会发生。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SP（Sometimes Possible）&lt;/strong&gt;：有时候可能发生。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;NP（Not Possible）&lt;/strong&gt;：不可能发生。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>
