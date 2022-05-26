@@ -35,7 +35,7 @@
 1 2 3 4 5 6 7 8  CREATETABLEid_generator(idint(10)NOTNULL,max_idbigint(20)NOTNULLCOMMENT&amp;#39;当前最大id&amp;#39;,stepint(20)NOTNULLCOMMENT&amp;#39;号段的步长&amp;#39;,biz_typeint(20)NOTNULLCOMMENT&amp;#39;业务类型&amp;#39;,versionint(20)NOTNULLCOMMENT&amp;#39;版本号&amp;#39;,PRIMARYKEY(`id`))  号段服务不再强依赖数据库，即使数据库不可用，号段服务也可以继续工作直到申请的ID全部使用完。但是如果此时号段服务重启，就会导致剩余的ID丢失。'>
 <meta property='og:url' content='https://blog.orekilee.top/p/%E5%88%86%E5%B8%83%E5%BC%8Fid/'>
 <meta property='og:site_name' content='凌桓&#39;s BLOG'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='分布式' /><meta property='article:tag' content='分布式ID' /><meta property='article:published_time' content='2022-05-24T15:50:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-24T15:50:33&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='分布式' /><meta property='article:tag' content='分布式ID' /><meta property='article:published_time' content='2022-05-24T15:50:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-26T15:10:15&#43;08:00'/>
 <meta name="twitter:title" content="分布式ID">
 <meta name="twitter:description" content="分布式ID ID是数据的唯一标识，传统的做法是使用数据库的自增ID，但是随着业务规模的不断发展，数据量将越来越大，于是需要进行分库分表，而分表后，每个表中的ID都会按自己的节奏进行自增，很有可能出现ID冲突的情况。这时就需要一个单独的机制来负责生成一个全局唯一的ID。这个ID也可以叫做分布式ID。
 对于一个合格的分布式ID，它应该满足以下几项条件
@@ -756,7 +756,7 @@
 
 
         <span>
-            最后更新于 May 24, 2022 15:50 CST
+            最后更新于 May 26, 2022 15:10 CST
         </span>
     </section></footer>
 

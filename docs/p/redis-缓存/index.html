@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='Redis 缓存 缓存一致性 对于缓存和数据库的更新操作，主要分为以下两种
+ 先删除缓存，再更新数据库 先更新数据库，再删除缓存   首先可能会带来疑惑的点是，为什么这里是删除缓存而不是更新缓存？
+ 按照常理来说，更新的效率通常都会比删除高，因为我们在删除了缓存后当有读操作到来时，当其查询缓存不存在时，就会去查询数据库，并将读取到的值写入到缓存中，这样的效率明显比更新低。
+但是我们还需要考虑一个问题，即缓存的使用率问题。如果在短时间内对数据库进行了10000次更新操作，那么缓存也必定会进行10000次的更新操作，那这个缓存它真的有用到那么多次吗？如果它仅仅是一个冷门数据，可能在这期间内只进行了仅仅几次的查询操作，那我们的这些更新操作不是会显得很多余吗？
+所以，我们才会去使用删除。因为在我们删除缓存后，只有在其真正使用到这个数据的时候，才会将其写入缓存，因此我们就不用每次都对缓存进行更新操作，从而保证效率。
+先删除缓存，再更新数据库 对于这种情况，能够保证缓存的一致性吗？
+答案是否定的，例如下面这种场景：  线程A写入数据，此时先删除缓存 线程B读取数据，查询缓存不存在，直接去查询数据库 线程B将查询到的旧值写入至缓存中 线程A将新数据更新至数据库中  对于上述这种情况，线程B在线程A更新数据库之前就提前读取了数据库，从而读取到了旧值，而后线程B将读取到的旧值再次写入缓存中，就出现了缓存不一致的情况。
+ 那么这个问题如何解决呢？
+ 这时候就需要引入延时双删的机制
+延时双删 为了避免在更新数据库的时候，其他的线程读取到了数据库中的旧值并将其写入缓存这种情况，我们会在数据库更新完后等待一段时间，再次删除缓存，来保证下一个到来的线程能够将正确的缓存更新回去。 流程如下
+ 线程A写入数据，此时先删除缓存 线程B读取数据，查询缓存不存在，直接去查询数据库 线程B将查询到的旧值写入至缓存中 线程A将新数据更新至数据库中，休眠一段时间 线程A将缓存再次删除，来确保缓存的一致性 其他线程查询数据库，将正确的值更新至缓存中  那么，为了保证我们能够将错误的缓存删除，所以我们的sleep时间只需要大于线程读写缓存的时间即可
+先更新数据库，再删除缓存 那么如果我们先更新数据库，再更新缓存呢？ 对于这种操作，缓存不一致的情况就更加明显了。由于磁盘I/O速度慢，在更新数据库、删除缓存这段操作之前，其他线程读取到的都是原本缓存中的旧值。甚至可能会由于缓存删除失败(如缓存服务当前不可用的情况)从而导致严重的缓存不一致问题。
+那么如何解决这个问题呢？可以使用以下几种方法
+修改缓存过期时间 这是解决这个问题最简单的方法，同时也是治标不治本的方法。
+我们可以将缓存过期时间变短，使其每隔一段时间就会去数据库中加载数据，对于更新不频繁的数据来说，就可以很好的解决不一致的问题，但若是更新特别频繁的热点数据，这个方法则失去了作用。
+由于这个方法的适用面小，且实时性和一致性不高，所以我们通常都会选择使用消息队列来解决这个问题。
+消息队列 我们可以引入一个消息队列来解决这个问题，在更新数据库后，我们往消息队列中写入数据，等到消费者从消息队列中取出数据时，再将缓存删除。借助消息队列的消息重试机制来保证我们一定能够成功删除缓存，从而确保缓存的一致性。 但是这种方法也存在几个问题
+ 引入消息队列后可能会因为消息的处理导致一定程度的延迟，从而引起短期内的消息不一致 引入消息队列后导致问题整体复杂化  所以我们只有在对实时性和一致性要求不高的情况下才会选择这种做法
+缓存淘汰策略 redis中缓存的数据是有过期时间的，当缓存数据失效时，redis会删除过期数据以节省内存，那redis是怎样怎样的策略来删除过期数据的呢？
+过期键删除策略 过期删除策略通常有以下三种
+ 定时删除：在为键设置过期时间的同时创建一个定时器，当过期时间到来时就会触发定时器中的处理函数，立即执行过期键的删除操作 定期删除：每隔一段时间就对数据库进行一次检查，删除其中的过期键。检查的数据库数量及删除的过期键数量由算法决定 惰性删除：不会主动去删除过期键。每次获取键时都会判断获取的键是否过期，如果过期则删除，没过期则返回  其中前两种为主动删除策略，最后一种为被动删除策略。下面就来谈谈这三种策略的优缺点以及Redis中究竟使用的哪一种
+定时删除 定时删除策略对于内存来说十分友好，通过定时器能够保证过期键能够在第一时间被删除，而不会一直占用内存。
+但是同样的，它对CPU时间非常不友好。在过期键比较多的时候，维护大量的定时器会给CPU带来巨大的压力，即使过期键少的时候，它也会将宝贵的CPU时间用在维护定时器，以及删除和当前任务无关的过期键上，对服务器的响应时间与吞吐量造成了一定的影响。
+惰性删除 从开始的描述可以看出，惰性删除对于CPU时间来说是最为友好的，因为我们只会在取出键的时候才会对其进行删除操作，这也就保证了我们不会在执行其他任务的时候又背地里去删除无关的过期键，合理的利用了CPU时间。'><title>Redis 缓存</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/redis-%E7%BC%93%E5%AD%98/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Redis 缓存'>
+<meta property='og:description' content='Redis 缓存 缓存一致性 对于缓存和数据库的更新操作，主要分为以下两种
+ 先删除缓存，再更新数据库 先更新数据库，再删除缓存   首先可能会带来疑惑的点是，为什么这里是删除缓存而不是更新缓存？
+ 按照常理来说，更新的效率通常都会比删除高，因为我们在删除了缓存后当有读操作到来时，当其查询缓存不存在时，就会去查询数据库，并将读取到的值写入到缓存中，这样的效率明显比更新低。
+但是我们还需要考虑一个问题，即缓存的使用率问题。如果在短时间内对数据库进行了10000次更新操作，那么缓存也必定会进行10000次的更新操作，那这个缓存它真的有用到那么多次吗？如果它仅仅是一个冷门数据，可能在这期间内只进行了仅仅几次的查询操作，那我们的这些更新操作不是会显得很多余吗？
+所以，我们才会去使用删除。因为在我们删除缓存后，只有在其真正使用到这个数据的时候，才会将其写入缓存，因此我们就不用每次都对缓存进行更新操作，从而保证效率。
+先删除缓存，再更新数据库 对于这种情况，能够保证缓存的一致性吗？
+答案是否定的，例如下面这种场景：  线程A写入数据，此时先删除缓存 线程B读取数据，查询缓存不存在，直接去查询数据库 线程B将查询到的旧值写入至缓存中 线程A将新数据更新至数据库中  对于上述这种情况，线程B在线程A更新数据库之前就提前读取了数据库，从而读取到了旧值，而后线程B将读取到的旧值再次写入缓存中，就出现了缓存不一致的情况。
+ 那么这个问题如何解决呢？
+ 这时候就需要引入延时双删的机制
+延时双删 为了避免在更新数据库的时候，其他的线程读取到了数据库中的旧值并将其写入缓存这种情况，我们会在数据库更新完后等待一段时间，再次删除缓存，来保证下一个到来的线程能够将正确的缓存更新回去。 流程如下
+ 线程A写入数据，此时先删除缓存 线程B读取数据，查询缓存不存在，直接去查询数据库 线程B将查询到的旧值写入至缓存中 线程A将新数据更新至数据库中，休眠一段时间 线程A将缓存再次删除，来确保缓存的一致性 其他线程查询数据库，将正确的值更新至缓存中  那么，为了保证我们能够将错误的缓存删除，所以我们的sleep时间只需要大于线程读写缓存的时间即可
+先更新数据库，再删除缓存 那么如果我们先更新数据库，再更新缓存呢？ 对于这种操作，缓存不一致的情况就更加明显了。由于磁盘I/O速度慢，在更新数据库、删除缓存这段操作之前，其他线程读取到的都是原本缓存中的旧值。甚至可能会由于缓存删除失败(如缓存服务当前不可用的情况)从而导致严重的缓存不一致问题。
+那么如何解决这个问题呢？可以使用以下几种方法
+修改缓存过期时间 这是解决这个问题最简单的方法，同时也是治标不治本的方法。
+我们可以将缓存过期时间变短，使其每隔一段时间就会去数据库中加载数据，对于更新不频繁的数据来说，就可以很好的解决不一致的问题，但若是更新特别频繁的热点数据，这个方法则失去了作用。
+由于这个方法的适用面小，且实时性和一致性不高，所以我们通常都会选择使用消息队列来解决这个问题。
+消息队列 我们可以引入一个消息队列来解决这个问题，在更新数据库后，我们往消息队列中写入数据，等到消费者从消息队列中取出数据时，再将缓存删除。借助消息队列的消息重试机制来保证我们一定能够成功删除缓存，从而确保缓存的一致性。 但是这种方法也存在几个问题
+ 引入消息队列后可能会因为消息的处理导致一定程度的延迟，从而引起短期内的消息不一致 引入消息队列后导致问题整体复杂化  所以我们只有在对实时性和一致性要求不高的情况下才会选择这种做法
+缓存淘汰策略 redis中缓存的数据是有过期时间的，当缓存数据失效时，redis会删除过期数据以节省内存，那redis是怎样怎样的策略来删除过期数据的呢？
+过期键删除策略 过期删除策略通常有以下三种
+ 定时删除：在为键设置过期时间的同时创建一个定时器，当过期时间到来时就会触发定时器中的处理函数，立即执行过期键的删除操作 定期删除：每隔一段时间就对数据库进行一次检查，删除其中的过期键。检查的数据库数量及删除的过期键数量由算法决定 惰性删除：不会主动去删除过期键。每次获取键时都会判断获取的键是否过期，如果过期则删除，没过期则返回  其中前两种为主动删除策略，最后一种为被动删除策略。下面就来谈谈这三种策略的优缺点以及Redis中究竟使用的哪一种
+定时删除 定时删除策略对于内存来说十分友好，通过定时器能够保证过期键能够在第一时间被删除，而不会一直占用内存。
+但是同样的，它对CPU时间非常不友好。在过期键比较多的时候，维护大量的定时器会给CPU带来巨大的压力，即使过期键少的时候，它也会将宝贵的CPU时间用在维护定时器，以及删除和当前任务无关的过期键上，对服务器的响应时间与吞吐量造成了一定的影响。
+惰性删除 从开始的描述可以看出，惰性删除对于CPU时间来说是最为友好的，因为我们只会在取出键的时候才会对其进行删除操作，这也就保证了我们不会在执行其他任务的时候又背地里去删除无关的过期键，合理的利用了CPU时间。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/redis-%E7%BC%93%E5%AD%98/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='Redis' /><meta property='article:tag' content='KV存储' /><meta property='article:tag' content='缓存' /><meta property='article:published_time' content='2022-05-26T15:05:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-26T16:13:59&#43;08:00'/>
+<meta name="twitter:title" content="Redis 缓存">
+<meta name="twitter:description" content="Redis 缓存 缓存一致性 对于缓存和数据库的更新操作，主要分为以下两种
+ 先删除缓存，再更新数据库 先更新数据库，再删除缓存   首先可能会带来疑惑的点是，为什么这里是删除缓存而不是更新缓存？
+ 按照常理来说，更新的效率通常都会比删除高，因为我们在删除了缓存后当有读操作到来时，当其查询缓存不存在时，就会去查询数据库，并将读取到的值写入到缓存中，这样的效率明显比更新低。
+但是我们还需要考虑一个问题，即缓存的使用率问题。如果在短时间内对数据库进行了10000次更新操作，那么缓存也必定会进行10000次的更新操作，那这个缓存它真的有用到那么多次吗？如果它仅仅是一个冷门数据，可能在这期间内只进行了仅仅几次的查询操作，那我们的这些更新操作不是会显得很多余吗？
+所以，我们才会去使用删除。因为在我们删除缓存后，只有在其真正使用到这个数据的时候，才会将其写入缓存，因此我们就不用每次都对缓存进行更新操作，从而保证效率。
+先删除缓存，再更新数据库 对于这种情况，能够保证缓存的一致性吗？
+答案是否定的，例如下面这种场景：  线程A写入数据，此时先删除缓存 线程B读取数据，查询缓存不存在，直接去查询数据库 线程B将查询到的旧值写入至缓存中 线程A将新数据更新至数据库中  对于上述这种情况，线程B在线程A更新数据库之前就提前读取了数据库，从而读取到了旧值，而后线程B将读取到的旧值再次写入缓存中，就出现了缓存不一致的情况。
+ 那么这个问题如何解决呢？
+ 这时候就需要引入延时双删的机制
+延时双删 为了避免在更新数据库的时候，其他的线程读取到了数据库中的旧值并将其写入缓存这种情况，我们会在数据库更新完后等待一段时间，再次删除缓存，来保证下一个到来的线程能够将正确的缓存更新回去。 流程如下
+ 线程A写入数据，此时先删除缓存 线程B读取数据，查询缓存不存在，直接去查询数据库 线程B将查询到的旧值写入至缓存中 线程A将新数据更新至数据库中，休眠一段时间 线程A将缓存再次删除，来确保缓存的一致性 其他线程查询数据库，将正确的值更新至缓存中  那么，为了保证我们能够将错误的缓存删除，所以我们的sleep时间只需要大于线程读写缓存的时间即可
+先更新数据库，再删除缓存 那么如果我们先更新数据库，再更新缓存呢？ 对于这种操作，缓存不一致的情况就更加明显了。由于磁盘I/O速度慢，在更新数据库、删除缓存这段操作之前，其他线程读取到的都是原本缓存中的旧值。甚至可能会由于缓存删除失败(如缓存服务当前不可用的情况)从而导致严重的缓存不一致问题。
+那么如何解决这个问题呢？可以使用以下几种方法
+修改缓存过期时间 这是解决这个问题最简单的方法，同时也是治标不治本的方法。
+我们可以将缓存过期时间变短，使其每隔一段时间就会去数据库中加载数据，对于更新不频繁的数据来说，就可以很好的解决不一致的问题，但若是更新特别频繁的热点数据，这个方法则失去了作用。
+由于这个方法的适用面小，且实时性和一致性不高，所以我们通常都会选择使用消息队列来解决这个问题。
+消息队列 我们可以引入一个消息队列来解决这个问题，在更新数据库后，我们往消息队列中写入数据，等到消费者从消息队列中取出数据时，再将缓存删除。借助消息队列的消息重试机制来保证我们一定能够成功删除缓存，从而确保缓存的一致性。 但是这种方法也存在几个问题
+ 引入消息队列后可能会因为消息的处理导致一定程度的延迟，从而引起短期内的消息不一致 引入消息队列后导致问题整体复杂化  所以我们只有在对实时性和一致性要求不高的情况下才会选择这种做法
+缓存淘汰策略 redis中缓存的数据是有过期时间的，当缓存数据失效时，redis会删除过期数据以节省内存，那redis是怎样怎样的策略来删除过期数据的呢？
+过期键删除策略 过期删除策略通常有以下三种
+ 定时删除：在为键设置过期时间的同时创建一个定时器，当过期时间到来时就会触发定时器中的处理函数，立即执行过期键的删除操作 定期删除：每隔一段时间就对数据库进行一次检查，删除其中的过期键。检查的数据库数量及删除的过期键数量由算法决定 惰性删除：不会主动去删除过期键。每次获取键时都会判断获取的键是否过期，如果过期则删除，没过期则返回  其中前两种为主动删除策略，最后一种为被动删除策略。下面就来谈谈这三种策略的优缺点以及Redis中究竟使用的哪一种
+定时删除 定时删除策略对于内存来说十分友好，通过定时器能够保证过期键能够在第一时间被删除，而不会一直占用内存。
+但是同样的，它对CPU时间非常不友好。在过期键比较多的时候，维护大量的定时器会给CPU带来巨大的压力，即使过期键少的时候，它也会将宝贵的CPU时间用在维护定时器，以及删除和当前任务无关的过期键上，对服务器的响应时间与吞吐量造成了一定的影响。
+惰性删除 从开始的描述可以看出，惰性删除对于CPU时间来说是最为友好的，因为我们只会在取出键的时候才会对其进行删除操作，这也就保证了我们不会在执行其他任务的时候又背地里去删除无关的过期键，合理的利用了CPU时间。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/redis/" style="background-color: #2a9d8f; color: #fff;">
+                Redis
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/redis-%E7%BC%93%E5%AD%98/">Redis 缓存</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 26, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="redis-缓存">Redis 缓存</h1>
+<h2 id="缓存一致性">缓存一致性</h2>
+<p>对于缓存和数据库的更新操作，主要分为以下两种</p>
+<ul>
+<li>先删除缓存，再更新数据库</li>
+<li>先更新数据库，再删除缓存</li>
+</ul>
+<blockquote>
+<p>首先可能会带来疑惑的点是，为什么这里是删除缓存而不是更新缓存？</p>
+</blockquote>
+<p>按照常理来说，更新的效率通常都会比删除高，因为我们在删除了缓存后当有读操作到来时，当其查询缓存不存在时，就会去查询数据库，并将读取到的值写入到缓存中，这样的效率明显比更新低。</p>
+<p>但是我们还需要考虑一个问题，即<!-- raw HTML omitted --><strong>缓存的使用率问题</strong><!-- raw HTML omitted -->。如果在短时间内对数据库进行了10000次更新操作，那么缓存也必定会进行10000次的更新操作，那这个缓存它真的有用到那么多次吗？如果它仅仅是一个冷门数据，可能在这期间内只进行了仅仅几次的查询操作，那我们的这些更新操作不是会显得很多余吗？</p>
+<p>所以，我们才会去使用删除。因为在我们删除缓存后，只有在其真正使用到这个数据的时候，才会将其写入缓存，因此我们就不用每次都对缓存进行更新操作，从而保证效率。</p>
+<h3 id="先删除缓存再更新数据库">先删除缓存，再更新数据库</h3>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis81.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+对于这种情况，能够保证缓存的一致性吗？</p>
+<p>答案是否定的，例如下面这种场景：
+<img src="http://img.orekilee.top//imgbed/redis/redis82.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<ol>
+<li>线程A写入数据，此时先删除缓存</li>
+<li>线程B读取数据，查询缓存不存在，直接去查询数据库</li>
+<li>线程B将查询到的旧值写入至缓存中</li>
+<li>线程A将新数据更新至数据库中</li>
+</ol>
+<p>对于上述这种情况，线程B在线程A更新数据库之前就提前读取了数据库，从而读取到了旧值，而后线程B将读取到的旧值再次写入缓存中，就出现了缓存不一致的情况。</p>
+<blockquote>
+<p>那么这个问题如何解决呢？</p>
+</blockquote>
+<p>这时候就需要引入<!-- raw HTML omitted --><strong>延时双删</strong><!-- raw HTML omitted -->的机制</p>
+<h4 id="延时双删">延时双删</h4>
+<p>为了避免在更新数据库的时候，其他的线程读取到了数据库中的旧值并将其写入缓存这种情况，<!-- raw HTML omitted --><strong>我们会在数据库更新完后等待一段时间，再次删除缓存</strong><!-- raw HTML omitted -->，来保证下一个到来的线程能够将正确的缓存更新回去。
+<img src="http://img.orekilee.top//imgbed/redis/redis83.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+流程如下</p>
+<ol>
+<li>线程A写入数据，此时先删除缓存</li>
+<li>线程B读取数据，查询缓存不存在，直接去查询数据库</li>
+<li>线程B将查询到的旧值写入至缓存中</li>
+<li>线程A将新数据更新至数据库中，休眠一段时间</li>
+<li>线程A将缓存再次删除，来确保缓存的一致性</li>
+<li>其他线程查询数据库，将正确的值更新至缓存中</li>
+</ol>
+<p>那么，为了保证我们能够将错误的缓存删除，所以我们的<!-- raw HTML omitted --><strong>sleep时间只需要大于线程读写缓存的时间</strong><!-- raw HTML omitted -->即可</p>
+<h3 id="先更新数据库再删除缓存">先更新数据库，再删除缓存</h3>
+<p>那么如果我们先更新数据库，再更新缓存呢？
+<img src="http://img.orekilee.top//imgbed/redis/redis84.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+对于这种操作，缓存不一致的情况就更加明显了。由于磁盘I/O速度慢，在更新数据库、删除缓存这段操作之前，其他线程读取到的都是原本缓存中的旧值。甚至可能会由于缓存删除失败(如缓存服务当前不可用的情况)从而导致严重的缓存不一致问题。</p>
+<p>那么如何解决这个问题呢？可以使用以下几种方法</p>
+<h4 id="修改缓存过期时间">修改缓存过期时间</h4>
+<p>这是解决这个问题最简单的方法，同时也是治标不治本的方法。</p>
+<p><!-- raw HTML omitted --><strong>我们可以将缓存过期时间变短，使其每隔一段时间就会去数据库中加载数据</strong><!-- raw HTML omitted -->，对于更新不频繁的数据来说，就可以很好的解决不一致的问题，但若是更新特别频繁的热点数据，这个方法则失去了作用。</p>
+<p>由于这个方法的适用面小，且实时性和一致性不高，所以我们通常都会选择使用<!-- raw HTML omitted --><strong>消息队列</strong><!-- raw HTML omitted -->来解决这个问题。</p>
+<h4 id="消息队列">消息队列</h4>
+<p>我们可以引入一个<!-- raw HTML omitted --><strong>消息队列</strong><!-- raw HTML omitted -->来解决这个问题，<!-- raw HTML omitted --><strong>在更新数据库后，我们往消息队列中写入数据，等到消费者从消息队列中取出数据时，再将缓存删除。</strong><!-- raw HTML omitted -->借助消息队列的<!-- raw HTML omitted --><strong>消息重试机制</strong><!-- raw HTML omitted -->来保证我们一定能够成功删除缓存，从而确保缓存的一致性。
+<img src="http://img.orekilee.top//imgbed/redis/redis85.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+但是这种方法也存在几个问题</p>
+<ol>
+<li>引入消息队列后可能会因为消息的处理导致一定程度的延迟，从而引起短期内的消息不一致</li>
+<li>引入消息队列后导致问题整体复杂化</li>
+</ol>
+<p>所以我们只有在对实时性和一致性要求不高的情况下才会选择这种做法</p>
+<h2 id="缓存淘汰策略">缓存淘汰策略</h2>
+<p>redis中缓存的数据是有过期时间的，当缓存数据失效时，redis会删除过期数据以节省内存，那redis是怎样怎样的策略来删除过期数据的呢？</p>
+<h3 id="过期键删除策略">过期键删除策略</h3>
+<p>过期删除策略通常有以下三种</p>
+<ul>
+<li><strong>定时删除</strong>：在为键设置过期时间的同时创建一个定时器，当过期时间到来时就会触发定时器中的处理函数，立即执行过期键的删除操作</li>
+<li><strong>定期删除</strong>：每隔一段时间就对数据库进行一次检查，删除其中的过期键。检查的数据库数量及删除的过期键数量由算法决定</li>
+<li><strong>惰性删除</strong>：不会主动去删除过期键。每次获取键时都会判断获取的键是否过期，如果过期则删除，没过期则返回</li>
+</ul>
+<p>其中前两种为<strong>主动</strong>删除策略，最后一种为<strong>被动</strong>删除策略。下面就来谈谈这三种策略的优缺点以及Redis中究竟使用的哪一种</p>
+<h4 id="定时删除">定时删除</h4>
+<p>定时删除策略对于内存来说十分友好，通过定时器能够保证过期键能够在第一时间被删除，而不会一直占用内存。</p>
+<p>但是同样的，它对CPU时间非常不友好。在过期键比较多的时候，维护大量的定时器会给CPU带来巨大的压力，即使过期键少的时候，它也会将宝贵的CPU时间用在维护定时器，以及删除和当前任务无关的过期键上，对服务器的响应时间与吞吐量造成了一定的影响。</p>
+<h4 id="惰性删除">惰性删除</h4>
+<p>从开始的描述可以看出，惰性删除对于CPU时间来说是最为友好的，因为我们只会在取出键的时候才会对其进行删除操作，这也就保证了我们不会在执行其他任务的时候又背地里去删除无关的过期键，合理的利用了CPU时间。</p>
+<p>但是！！！也正是因为这个原因，使得它对内存极度不友好。<strong>如果一个键已经过期，而只要我们不去获取这个键，就不会触发过期检查，那也就意味着他会一直占用这一块内存而不释放</strong>。</p>
+<p>这意味着什么呢？如果我们有非常多的过期键，而这些过期键又恰好因为版本迭代、项目组交替，在后续版本中并没有对其进行访问，那么它可能<strong>永远</strong>也不会被删除。我们可以将这种情况当成<strong>内存泄漏</strong>中的一种，对于Redis这种内存数据库来说，这种情况造成的后果十分严重</p>
+<h4 id="定期删除">定期删除</h4>
+<p><strong>定期删除策略其实是上述两种策略的折中选择。</strong></p>
+<p>定期删除策略相对于定时删除策略来说，由于其每隔一段时间才进行一次删除操作，通过限制了删除操作的时常和频率，大大减少了删除操作对CPU时间的影响。</p>
+<p>相比于惰性删除，并且由于定期删除过期键，有效地减少了过期键带来的空间浪费。即兼顾了CPU，又避免了内存浪费，是两者的折中选择。</p>
+<p>但是上述这些优点的前提，就是我们必须要确定一个<strong>合理的删除操作的时长和频率</strong>。</p>
+<ul>
+<li>如果删除操作过于频繁，则又退化成了定时删除策略，浪费了大量的CPU时间</li>
+<li>如果删除操作执行过少，则又会像惰性删除一样，出现大量的内存浪费问题。</li>
+</ul>
+<h4 id="redis的选择">Redis的选择</h4>
+<p>下面给出三种的效率对比</p>
+<blockquote>
+<p><strong>CPU：惰性删除 &gt; 定期删除 &gt; 定时删除</strong>
+<strong>内存利用率：定时删除 &gt; 定期删除 &gt; 惰性删除</strong></p>
+</blockquote>
+<ul>
+<li>定时删除占用太多CPU时间，影响服务器的吞吐量和性能，但是很好的避免了内存浪费</li>
+<li>惰性删除浪费太多内存，有内存泄漏的风险，但是却保证了CPU的效率</li>
+<li>定期删除属于前两种的折中，既保证了CPU时间的合理利用，又避免了内存的浪费</li>
+</ul>
+<p><strong>为了能够在合理利用CPU时间与避免浪费内存空间之间取得平衡，Redis同时使用了惰性删除和定期删除。</strong></p>
+<p>这样的搭配虽然保证了Redis强大的吞吐量以及响应速度，但是却存在因为没有定时删除机制，所以存在着内存浪费问题。</p>
+<p>由于Redis中通常存储的数据量十分庞大，这就导致了定期删除每次只能抽取其中的一部分进行删除，<strong>倘若有一部分过期键一直没有被抽取到，并且我们也一直没有访问它来触发惰性删除，这个过期键就会一直存在内存中，如果不进行处理，就可能导致内存耗尽。</strong></p>
+<p>为了解决这个问题，Redis又引入了<strong>内存淘汰机制</strong></p>
+<h3 id="内存淘汰机制">内存淘汰机制</h3>
+<p><strong>当Redis的内存占用过高时，如果内存不足以容纳新写入的数据，就会通过某种机制来删除一部分键，来减少当前占用的内存，这就是内存淘汰机制。</strong></p>
+<p>当前Redis提供了8种内存淘汰策略，除却之前的6种，还有两种Redis4.0后新增的LFU模式：volatile-lfu以及allkeys-lfu</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>名称</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>volatile-lru</td>
+<td>在<code>已设置过期时间的key中</code>，挑选<code>最近最少使用</code>的key淘汰</td>
+</tr>
+<tr>
+<td>volatile-lfu</td>
+<td>在<code>已设置过期时间的key中</code>，挑选<code>最不经常</code>使用的key淘汰</td>
+</tr>
+<tr>
+<td>volatile-ttl</td>
+<td>在<code>已设置过期时间的key中</code>，挑选<code>将要过期</code>的key淘汰</td>
+</tr>
+<tr>
+<td>volatile-random</td>
+<td>在<code>已设置过期时间的key中</code>，<code>随机挑选</code>key淘汰</td>
+</tr>
+<tr>
+<td>allkeys-lru</td>
+<td>在<code>所有key中</code>，挑选<code>最近最少使用</code>的key淘汰</td>
+</tr>
+<tr>
+<td>allkeys-lfu</td>
+<td>在<code>所有key中</code>， 挑选<code>最不经常</code>使用的key淘汰</td>
+</tr>
+<tr>
+<td>allkeys-random</td>
+<td>在<code>所有key中</code>，<code>随机挑选</code>key淘汰</td>
+</tr>
+<tr>
+<td>no-eviction</td>
+<td>当内存不足以写入新数据时，<code>写入操作会报错，并且不会淘汰数据</code>(不常用)</td>
+</tr>
+</tbody>
+</table></div>
+<p>乍一看策略很多很难记，其实总共就是四种不同的淘汰策略，以及两种key的选择范围</p>
+<p><strong>选择范围</strong></p>
+<ul>
+<li><strong>allkeys</strong>：淘汰的范围为所有的key</li>
+<li><strong>volatile</strong>：淘汰的范围为已设置过期时间的key</li>
+</ul>
+<p><strong>淘汰策略</strong></p>
+<ul>
+<li><strong>LRU</strong>：Least recently used，即淘汰最近最少使用的key</li>
+<li><strong>LFU</strong>：Least Frequently Used，即淘汰最不经常使用的key</li>
+<li><strong>TTL</strong>：Time To Live，即淘汰生命时间最短，即将要过期的key</li>
+<li><strong>Random</strong>：随机淘汰</li>
+</ul>
+<p>其中LRU和LFU较为常用，如果有想了解其算法原理的，可以看看我的往期博客
+<a class="link" href="https://blog.csdn.net/qq_35423154/article/details/107876954"  target="_blank" rel="noopener"
+    >高级数据结构与算法 | LRU缓存机制（Least Recently Used）</a>
+<a class="link" href="https://blog.csdn.net/qq_35423154/article/details/109826279"  target="_blank" rel="noopener"
+    >高级数据结构与算法 | LFU缓存机制（Least Frequently Used）</a></p>
+<h2 id="缓存常见问题">缓存常见问题</h2>
+<h3 id="缓存雪崩">缓存雪崩</h3>
+<p>缓存雪崩指的是在短时间内，有大量缓存的键同时过期，由于缓存过期，导致此时所有的请求就直接查询数据库，而数据库很难抵挡这样巨大的压力，严重情况下就会导致数据库被大流量打死，直接宕机。</p>
+<p>下面是正常的查询流程以及缓存雪崩后的查询流程
+<img src="http://img.orekilee.top//imgbed/redis/redis76.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis77.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p>缓存雪崩的解决方法有以下几种</p>
+<ol>
+<li><strong>随机化过期时间</strong>，为了避免缓存同时过期，在设置缓存时在原有时间上添加随机时间，使失效时间分散开来</li>
+<li><strong>加锁排队</strong>，加锁排队可以起到缓冲的作用，防止大量请求同时操作数据库，但是也正因为如此也减少了吞吐量，导致响应时间变慢，用户体验变差。</li>
+<li><strong>设置二级缓存</strong>，即加入一个本地缓存作为备案，当Redis缓存失效后就暂时使用本地缓存进行代替，避免直接访问数据库。</li>
+<li><strong>设置热点数据永不过期</strong>，有更新操作时直接更新缓存即可</li>
+</ol>
+<h3 id="缓存击穿">缓存击穿</h3>
+<p>缓存击穿与缓存雪崩很像，不过一个是针对大量缓存一个是针对热点缓存。</p>
+<p>缓存击穿即当某个热点缓存突然失效，而正好对其有着大量的请求，此时这些请求就会直接向数据库进行查询，导致数据库面临巨大的压力</p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis78.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+缓存击穿的解决方法有以下几种</p>
+<ol>
+<li><strong>设置热点数据永不过期</strong>，有更新操作时直接更新缓存即可</li>
+<li><strong>加锁排队</strong>，通过加锁来减少同一时间的访问量，缓解压力</li>
+</ol>
+<h3 id="缓存穿透">缓存穿透</h3>
+<p>缓存穿透是指查询的数据在缓存中和数据库中都不存在，此时请求就会直接绕过缓存抵达数据库，导致数据库压力过大。(由于主键通常都是从1开始自增，此时大量查询负数或者特别大的数据就会导致缓存穿透)。
+出于容错考虑，由于这些数据在数据库中不存在，所以不会将结果保存到缓存中。而又因为缓存中没有这些数据，所以每次请求都会绕过缓存，直接向数据库查询，这就是缓存穿透。
+<img src="http://img.orekilee.top//imgbed/redis/redis79.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+缓存穿透的解决方法有以下几种</p>
+<ol>
+<li><strong>参数校验</strong>，对于那些不合法的请求就直接返回空结果，不进行查询</li>
+<li><strong>布隆过滤器</strong>，可以根据布隆过滤器来判断数据在不在数据库，虽然布隆过滤器查询存在不一定准确，但是如果布隆过滤器中查不到，则一定说明不存在，就不会进入数据库查询</li>
+<li><strong>缓存空结果</strong>，将每次查询的结果进行缓存，即使查询不到的也缓存一个空结果，当有非法请求时就直接返回空结果</li>
+</ol>
+<h3 id="缓存预热">缓存预热</h3>
+<p>与上面三种不同，<strong>缓存预热并不是一个需要解决的问题，而是一种优化的策略</strong>，通过这种策略能够更快的响应用户的查询。</p>
+<p><strong>缓存预热指的是在启动系统的时候，提前将查询的结果预存到缓存中</strong>，这样用户查询时就可以直接从缓存中读取，减少了用户的等待时间
+<img src="http://img.orekilee.top//imgbed/redis/redis80.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+缓存预热的实现方法有以下三种</p>
+<ol>
+<li><strong>把需要缓存的函数写入到系统的构造函数中</strong>，这样系统就会在启动的时候自动的加载数据并缓存数据</li>
+<li><strong>把需要缓存的函数挂载到前端页面或者后端的接口上</strong>，手动触发缓存预热</li>
+<li><strong>设置定时任务</strong>，定时自动进行缓存预热</li>
+</ol>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/redis/">Redis</a>
+        
+            <a href="/tags/kv%E5%AD%98%E5%82%A8/">KV存储</a>
+        
+            <a href="/tags/%E7%BC%93%E5%AD%98/">缓存</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 26, 2022 16:13 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/redis-%E5%A4%9A%E6%9C%BA%E6%9C%8D%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 多机服务</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E4%BA%8B%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 事务</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E6%8C%81%E4%B9%85%E5%8C%96%E7%AD%96%E7%95%A5/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 持久化策略</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 数据类型</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 数据结构</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#缓存一致性">缓存一致性</a>
+      <ol>
+        <li><a href="#先删除缓存再更新数据库">先删除缓存，再更新数据库</a>
+          <ol>
+            <li><a href="#延时双删">延时双删</a></li>
+          </ol>
+        </li>
+        <li><a href="#先更新数据库再删除缓存">先更新数据库，再删除缓存</a>
+          <ol>
+            <li><a href="#修改缓存过期时间">修改缓存过期时间</a></li>
+            <li><a href="#消息队列">消息队列</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#缓存淘汰策略">缓存淘汰策略</a>
+      <ol>
+        <li><a href="#过期键删除策略">过期键删除策略</a>
+          <ol>
+            <li><a href="#定时删除">定时删除</a></li>
+            <li><a href="#惰性删除">惰性删除</a></li>
+            <li><a href="#定期删除">定期删除</a></li>
+            <li><a href="#redis的选择">Redis的选择</a></li>
+          </ol>
+        </li>
+        <li><a href="#内存淘汰机制">内存淘汰机制</a></li>
+      </ol>
+    </li>
+    <li><a href="#缓存常见问题">缓存常见问题</a>
+      <ol>
+        <li><a href="#缓存雪崩">缓存雪崩</a></li>
+        <li><a href="#缓存击穿">缓存击穿</a></li>
+        <li><a href="#缓存穿透">缓存穿透</a></li>
+        <li><a href="#缓存预热">缓存预热</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

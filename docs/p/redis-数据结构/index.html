@@ -1,0 +1,1714 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='数据结构 SDS 结构分析 由于C字符串存在大量问题，所以在Redis中，并没有使用C风格字符串，而是自己构建了一个简单动态字符串即SDS（simple dynamic string）
+1 2 3 4 5 6 7 8  struct sdshdr { // buf 中已占用空间的长度  int len; // buf 中剩余可用空间的长度  int free; // 数据空间  char buf[]; };   为解决C字符串缓冲区溢出问题以及长度计算问题，SDS中引入了len来统计当前已使用空间长度，free来计算剩余的空间长度
+C字符串的主要缺陷就是因为它没有记录自己的长度，而如果在需要了解长度时，就只能通过O（N）的效率进行一次遍历 并且因为C字符串没有统计剩余空间的字段，也没有容量字段，所以很容易就会因为strcat等函数造成缓冲区的溢出，为弥补这一缺陷，redis在sds中增加了free字段 通过标记剩余空间，当对SDS进行插入操作时，就会提前判断当前剩余空间是否足够，如果不足则会先进行空间的拓展，再进行插入，这样就解决了缓冲区溢出的问题
+内存策略 由于Redis作为一个高效的内存数据库，用于速度要求严苛，插入删除频繁 的场景，为了提高内存分配的效率，防止大量使用内存重分配而调用系统函数导致的性能损失问题（用户态和内核态的切换），Redis主要依靠空间预分配和惰性空间释放来解决这个问题
+空间预分配 为减少空间分配的次数，当需要进行空间拓展时，不仅仅会为SDS分配修改所必须要的空间，并且会为SDS预分配额外的未使用空间。
+预分配未使用空间的策略如下
+ 当SDS修改后的长度小于1MB时，将会预分配大小和当前len一样的空间(free = len)，也就是使空间增长一倍，来减少因为初始时申请大空间导致的连续分配问题 当SDS修改后的长度大于等于1MB时，每次分配都会分配1MB的空间，防止空间的浪费。  惰性空间释放 当我们对SDS进行删除操作时，并不会立即回收删除后空余的空间，而是将空余空间以free字段记录下来，以备后面使用。 这样做的目的在于防止因为空间缩短后因为再度插入导致的空间拓展问题。 并且如果有需求需要真正释放空间，Redis也提供了对应的API，所以不必担心会因为惰性的空间释放而导致的内存浪费问题。
+总结 比起 C 字符串， SDS 具有以下优点：
+ 常数复杂度获取字符串长度。（len字段） 杜绝缓冲区溢出。（free字段） 减少修改字符串长度时所需的内存重分配次数。（空间预分配，惰性空间释放） 二进制安全。（以二进制形式处理） 兼容部分 C 字符串函数。（底层基于C字符串，以空字符结尾）  链表 结构分析 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45  typedef struct listNode { // 前置节点  struct listNode *prev; // 后置节点  struct listNode *next; // 节点的值  void *value; } listNode; /* * 双端链表迭代器 */ typedef struct listIter { // 当前迭代到的节点  listNode *next; // 迭代的方向  int direction; } listIter; /* * 双端链表结构 */ typedef struct list { // 表头节点  listNode *head; // 表尾节点  listNode *tail; // 节点值复制函数  void *(*dup)(void *ptr); // 节点值释放函数  void (*free)(void *ptr); // 节点值对比函数  int (*match)(void *ptr, void *key); // 链表所包含的节点数量  unsigned long len; } list;   从上面的结构可以看出，Redis的链表是一个带头尾的双端无环链表，并且通过len字段记录了链表节点的长度 同时为了实现多态与泛型，链表中还提供了dup，free，match属性来设置相关的函数，使得链表支持不同类型的值的存储'><title>Redis 数据结构</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/redis-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Redis 数据结构'>
+<meta property='og:description' content='数据结构 SDS 结构分析 由于C字符串存在大量问题，所以在Redis中，并没有使用C风格字符串，而是自己构建了一个简单动态字符串即SDS（simple dynamic string）
+1 2 3 4 5 6 7 8  struct sdshdr { // buf 中已占用空间的长度  int len; // buf 中剩余可用空间的长度  int free; // 数据空间  char buf[]; };   为解决C字符串缓冲区溢出问题以及长度计算问题，SDS中引入了len来统计当前已使用空间长度，free来计算剩余的空间长度
+C字符串的主要缺陷就是因为它没有记录自己的长度，而如果在需要了解长度时，就只能通过O（N）的效率进行一次遍历 并且因为C字符串没有统计剩余空间的字段，也没有容量字段，所以很容易就会因为strcat等函数造成缓冲区的溢出，为弥补这一缺陷，redis在sds中增加了free字段 通过标记剩余空间，当对SDS进行插入操作时，就会提前判断当前剩余空间是否足够，如果不足则会先进行空间的拓展，再进行插入，这样就解决了缓冲区溢出的问题
+内存策略 由于Redis作为一个高效的内存数据库，用于速度要求严苛，插入删除频繁 的场景，为了提高内存分配的效率，防止大量使用内存重分配而调用系统函数导致的性能损失问题（用户态和内核态的切换），Redis主要依靠空间预分配和惰性空间释放来解决这个问题
+空间预分配 为减少空间分配的次数，当需要进行空间拓展时，不仅仅会为SDS分配修改所必须要的空间，并且会为SDS预分配额外的未使用空间。
+预分配未使用空间的策略如下
+ 当SDS修改后的长度小于1MB时，将会预分配大小和当前len一样的空间(free = len)，也就是使空间增长一倍，来减少因为初始时申请大空间导致的连续分配问题 当SDS修改后的长度大于等于1MB时，每次分配都会分配1MB的空间，防止空间的浪费。  惰性空间释放 当我们对SDS进行删除操作时，并不会立即回收删除后空余的空间，而是将空余空间以free字段记录下来，以备后面使用。 这样做的目的在于防止因为空间缩短后因为再度插入导致的空间拓展问题。 并且如果有需求需要真正释放空间，Redis也提供了对应的API，所以不必担心会因为惰性的空间释放而导致的内存浪费问题。
+总结 比起 C 字符串， SDS 具有以下优点：
+ 常数复杂度获取字符串长度。（len字段） 杜绝缓冲区溢出。（free字段） 减少修改字符串长度时所需的内存重分配次数。（空间预分配，惰性空间释放） 二进制安全。（以二进制形式处理） 兼容部分 C 字符串函数。（底层基于C字符串，以空字符结尾）  链表 结构分析 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45  typedef struct listNode { // 前置节点  struct listNode *prev; // 后置节点  struct listNode *next; // 节点的值  void *value; } listNode; /* * 双端链表迭代器 */ typedef struct listIter { // 当前迭代到的节点  listNode *next; // 迭代的方向  int direction; } listIter; /* * 双端链表结构 */ typedef struct list { // 表头节点  listNode *head; // 表尾节点  listNode *tail; // 节点值复制函数  void *(*dup)(void *ptr); // 节点值释放函数  void (*free)(void *ptr); // 节点值对比函数  int (*match)(void *ptr, void *key); // 链表所包含的节点数量  unsigned long len; } list;   从上面的结构可以看出，Redis的链表是一个带头尾的双端无环链表，并且通过len字段记录了链表节点的长度 同时为了实现多态与泛型，链表中还提供了dup，free，match属性来设置相关的函数，使得链表支持不同类型的值的存储'>
+<meta property='og:url' content='https://blog.orekilee.top/p/redis-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='Redis' /><meta property='article:tag' content='KV存储' /><meta property='article:tag' content='缓存' /><meta property='article:published_time' content='2022-05-26T15:02:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-26T15:26:17&#43;08:00'/>
+<meta name="twitter:title" content="Redis 数据结构">
+<meta name="twitter:description" content="数据结构 SDS 结构分析 由于C字符串存在大量问题，所以在Redis中，并没有使用C风格字符串，而是自己构建了一个简单动态字符串即SDS（simple dynamic string）
+1 2 3 4 5 6 7 8  struct sdshdr { // buf 中已占用空间的长度  int len; // buf 中剩余可用空间的长度  int free; // 数据空间  char buf[]; };   为解决C字符串缓冲区溢出问题以及长度计算问题，SDS中引入了len来统计当前已使用空间长度，free来计算剩余的空间长度
+C字符串的主要缺陷就是因为它没有记录自己的长度，而如果在需要了解长度时，就只能通过O（N）的效率进行一次遍历 并且因为C字符串没有统计剩余空间的字段，也没有容量字段，所以很容易就会因为strcat等函数造成缓冲区的溢出，为弥补这一缺陷，redis在sds中增加了free字段 通过标记剩余空间，当对SDS进行插入操作时，就会提前判断当前剩余空间是否足够，如果不足则会先进行空间的拓展，再进行插入，这样就解决了缓冲区溢出的问题
+内存策略 由于Redis作为一个高效的内存数据库，用于速度要求严苛，插入删除频繁 的场景，为了提高内存分配的效率，防止大量使用内存重分配而调用系统函数导致的性能损失问题（用户态和内核态的切换），Redis主要依靠空间预分配和惰性空间释放来解决这个问题
+空间预分配 为减少空间分配的次数，当需要进行空间拓展时，不仅仅会为SDS分配修改所必须要的空间，并且会为SDS预分配额外的未使用空间。
+预分配未使用空间的策略如下
+ 当SDS修改后的长度小于1MB时，将会预分配大小和当前len一样的空间(free = len)，也就是使空间增长一倍，来减少因为初始时申请大空间导致的连续分配问题 当SDS修改后的长度大于等于1MB时，每次分配都会分配1MB的空间，防止空间的浪费。  惰性空间释放 当我们对SDS进行删除操作时，并不会立即回收删除后空余的空间，而是将空余空间以free字段记录下来，以备后面使用。 这样做的目的在于防止因为空间缩短后因为再度插入导致的空间拓展问题。 并且如果有需求需要真正释放空间，Redis也提供了对应的API，所以不必担心会因为惰性的空间释放而导致的内存浪费问题。
+总结 比起 C 字符串， SDS 具有以下优点：
+ 常数复杂度获取字符串长度。（len字段） 杜绝缓冲区溢出。（free字段） 减少修改字符串长度时所需的内存重分配次数。（空间预分配，惰性空间释放） 二进制安全。（以二进制形式处理） 兼容部分 C 字符串函数。（底层基于C字符串，以空字符结尾）  链表 结构分析 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45  typedef struct listNode { // 前置节点  struct listNode *prev; // 后置节点  struct listNode *next; // 节点的值  void *value; } listNode; /* * 双端链表迭代器 */ typedef struct listIter { // 当前迭代到的节点  listNode *next; // 迭代的方向  int direction; } listIter; /* * 双端链表结构 */ typedef struct list { // 表头节点  listNode *head; // 表尾节点  listNode *tail; // 节点值复制函数  void *(*dup)(void *ptr); // 节点值释放函数  void (*free)(void *ptr); // 节点值对比函数  int (*match)(void *ptr, void *key); // 链表所包含的节点数量  unsigned long len; } list;   从上面的结构可以看出，Redis的链表是一个带头尾的双端无环链表，并且通过len字段记录了链表节点的长度 同时为了实现多态与泛型，链表中还提供了dup，free，match属性来设置相关的函数，使得链表支持不同类型的值的存储">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/redis/" style="background-color: #2a9d8f; color: #fff;">
+                Redis
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/redis-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">Redis 数据结构</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 26, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="数据结构">数据结构</h1>
+<h2 id="sds">SDS</h2>
+<h3 id="结构分析">结构分析</h3>
+<p>由于C字符串存在大量问题，所以在Redis中，并没有使用C风格字符串，而是自己构建了一个简单动态字符串即SDS（simple dynamic string）</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">sdshdr</span> <span class="p">{</span>    
+</span></span><span class="line"><span class="cl">    <span class="c1">// buf 中已占用空间的长度
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="n">len</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// buf 中剩余可用空间的长度
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="n">free</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 数据空间
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">char</span> <span class="n">buf</span><span class="p">[];</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>为解决C字符串缓冲区溢出问题以及长度计算问题，SDS中引入了len来统计当前已使用空间长度，free来计算剩余的空间长度</p>
+<p>C字符串的主要缺陷就是因为它没有记录自己的长度，而如果在需要了解长度时，就只能通过O（N）的效率进行一次遍历
+<img src="http://img.orekilee.top//imgbed/redis/redis4.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis5.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+并且因为C字符串没有统计剩余空间的字段，也没有容量字段，所以很容易就会因为strcat等函数造成缓冲区的溢出，为弥补这一缺陷，redis在sds中增加了free字段
+<img src="http://img.orekilee.top//imgbed/redis/redis6.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+通过标记剩余空间，当对SDS进行插入操作时，就会提前判断当前剩余空间是否足够，如果不足则会先进行空间的拓展，再进行插入，这样就解决了缓冲区溢出的问题</p>
+<h3 id="内存策略">内存策略</h3>
+<p>由于Redis作为一个高效的内存数据库，用于速度要求严苛，插入删除频繁
+的场景，为了提高内存分配的效率，防止大量使用内存重分配而调用系统函数导致的性能损失问题（用户态和内核态的切换），Redis主要依靠<strong>空间预分配</strong>和<strong>惰性空间释放来</strong>解决这个问题</p>
+<h4 id="空间预分配">空间预分配</h4>
+<p><strong>为减少空间分配的次数</strong>，当需要进行空间拓展时，<strong>不仅仅会为SDS分配修改所必须要的空间，并且会为SDS预分配额外的未使用空间。</strong></p>
+<p>预分配未使用空间的策略如下</p>
+<ul>
+<li>当SDS修改后的长度小于1MB时，将会预分配大小和当前len一样的空间(free = len)，也就是使空间增长一倍，来减少因为初始时申请大空间导致的连续分配问题</li>
+<li>当SDS修改后的长度大于等于1MB时，每次分配都会分配1MB的空间，防止空间的浪费。</li>
+</ul>
+<h4 id="惰性空间释放">惰性空间释放</h4>
+<p><strong>当我们对SDS进行删除操作时，并不会立即回收删除后空余的空间，而是将空余空间以free字段记录下来，以备后面使用。</strong>
+<strong>这样做的目的在于防止因为空间缩短后因为再度插入导致的空间拓展问题</strong>。
+并且如果有需求需要真正释放空间，Redis也提供了对应的API，所以不必担心会因为惰性的空间释放而导致的内存浪费问题。</p>
+<h3 id="总结">总结</h3>
+<p>比起 C 字符串， SDS 具有以下优点：</p>
+<ol>
+<li>常数复杂度获取字符串长度。（len字段）</li>
+<li>杜绝缓冲区溢出。（free字段）</li>
+<li>减少修改字符串长度时所需的内存重分配次数。（空间预分配，惰性空间释放）</li>
+<li>二进制安全。（以二进制形式处理）</li>
+<li>兼容部分 C 字符串函数。（底层基于C字符串，以空字符结尾）</li>
+</ol>
+<h2 id="链表">链表</h2>
+<h3 id="结构分析-1">结构分析</h3>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">listNode</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 前置节点
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">struct</span> <span class="n">listNode</span> <span class="o">*</span><span class="n">prev</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    <span class="c1">// 后置节点
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">struct</span> <span class="n">listNode</span> <span class="o">*</span><span class="n">next</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    <span class="c1">// 节点的值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="o">*</span><span class="n">value</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">listNode</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cm">/*
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * 双端链表迭代器
+</span></span></span><span class="line"><span class="cl"><span class="cm"> */</span>
+</span></span><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">listIter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 当前迭代到的节点
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">listNode</span> <span class="o">*</span><span class="n">next</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    <span class="c1">// 迭代的方向
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="n">direction</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">listIter</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cm">/*
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * 双端链表结构
+</span></span></span><span class="line"><span class="cl"><span class="cm"> */</span>
+</span></span><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">list</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 表头节点
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">listNode</span> <span class="o">*</span><span class="n">head</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 表尾节点
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">listNode</span> <span class="o">*</span><span class="n">tail</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 节点值复制函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="n">dup</span><span class="p">)(</span><span class="kt">void</span> <span class="o">*</span><span class="n">ptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 节点值释放函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">free</span><span class="p">)(</span><span class="kt">void</span> <span class="o">*</span><span class="n">ptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 节点值对比函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="n">match</span><span class="p">)(</span><span class="kt">void</span> <span class="o">*</span><span class="n">ptr</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 链表所包含的节点数量
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">len</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">list</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/redis/redis7.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+从上面的结构可以看出，Redis的链表是一个带头尾的双端无环链表，并且通过len字段记录了链表节点的长度
+<img src="http://img.orekilee.top//imgbed/redis/redis8.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p>同时为了实现多态与泛型，链表中还提供了dup，free，match属性来设置相关的函数，使得链表支持不同类型的值的存储</p>
+<h3 id="总结-1">总结</h3>
+<ul>
+<li>链表被广泛用于实现 Redis 的各种功能， 比如列表键， 发布与订阅， 慢查询， 监视器， 等等。</li>
+<li>每个链表节点由一个 listNode 结构来表示， 每个节点都有一个指向前置节点和后置节点的指针， 所以 Redis 的链表实现是双端链表。</li>
+<li>每个链表使用一个 list 结构来表示， 这个结构带有表头节点指针、表尾节点指针、以及链表长度等信息。</li>
+<li>因为链表表头节点的前置节点和表尾节点的后置节点都指向 NULL ， 所以 Redis 的链表实现是无环链表。</li>
+<li>通过为链表设置不同的类型特定函数， Redis 的链表可以用于保存各种不同类型的值。</li>
+</ul>
+<h2 id="字典">字典</h2>
+<h3 id="结构分析-2">结构分析</h3>
+<p>Redis的字典底层采用了哈希表来进行实现。</p>
+<p>首先看看字典底层哈希表的结构</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">dictht</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 哈希表数组
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">dictEntry</span> <span class="o">**</span><span class="n">table</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 哈希表大小
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">size</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    <span class="c1">// 哈希表大小掩码，用于计算索引值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// 总是等于 size - 1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">sizemask</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 该哈希表已有节点的数量
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">used</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">dictht</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/redis/redis9.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+哈希表中记录了当前的总长度，已有节点，以及当前索引大小（用于哈希函数来计算节点位置)</p>
+<p>为解决哈希冲突，Redis字典采用了链地址法来构造了哈希桶的结构，也就是哈希数组中的每个元素都是一个链表。
+<img src="http://img.orekilee.top//imgbed/redis/redis10.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p>下面来看看哈希节点的结构</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">dictEntry</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 键
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="o">*</span><span class="n">key</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    <span class="c1">// 值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">union</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="kt">void</span> <span class="o">*</span><span class="n">val</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="kt">uint64_t</span> <span class="n">u64</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="kt">int64_t</span> <span class="n">s64</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span> <span class="n">v</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 指向下个哈希表节点，形成链表
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">struct</span> <span class="n">dictEntry</span> <span class="o">*</span><span class="n">next</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">dictEntry</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>可以看到，为保证键值对适用于多重类型，key值使用的时void<em>的形式，而value使用了64位有符号整型和64位无符号整型，void</em>指针的一个联合体，每个节点使用next来链接成一个链表</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">dictType</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 计算哈希值的函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">unsigned</span> <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="n">hashFunction</span><span class="p">)(</span><span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 复制键的函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="n">keyDup</span><span class="p">)(</span><span class="kt">void</span> <span class="o">*</span><span class="n">privdata</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 复制值的函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="n">valDup</span><span class="p">)(</span><span class="kt">void</span> <span class="o">*</span><span class="n">privdata</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">obj</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 对比键的函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="n">keyCompare</span><span class="p">)(</span><span class="kt">void</span> <span class="o">*</span><span class="n">privdata</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">key1</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">key2</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 销毁键的函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">keyDestructor</span><span class="p">)(</span><span class="kt">void</span> <span class="o">*</span><span class="n">privdata</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">key</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    <span class="c1">// 销毁值的函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">valDestructor</span><span class="p">)(</span><span class="kt">void</span> <span class="o">*</span><span class="n">privdata</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">obj</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">dictType</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>为保证字典具有多态及泛型，dictType中提供了如哈希函数以及K-V的各种操作函数，使得字典适用于多重情景</p>
+<h3 id="rehash">rehash</h3>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cm">/*
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * 字典
+</span></span></span><span class="line"><span class="cl"><span class="cm"> */</span>
+</span></span><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">dict</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 类型特定函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">dictType</span> <span class="o">*</span><span class="n">type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 私有数据
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="o">*</span><span class="n">privdata</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 哈希表
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">dictht</span> <span class="n">ht</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// rehash 索引
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// 当 rehash 不在进行时，值为 -1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="n">rehashidx</span><span class="p">;</span> <span class="cm">/* rehashing not in progress if rehashidx == -1 */</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 目前正在运行的安全迭代器的数量
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="n">iterators</span><span class="p">;</span> <span class="cm">/* number of iterators currently running */</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">dict</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>从字典的结构中，我们可以看到里面同时存放了两个哈希表，以及一个rehashidx属性。
+这就牵扯到了字典的核心之一，rehash。</p>
+<p>Redis作为一个插入频繁且对效率要求高的数据库，当插入的数据过多时，就会因为哈希表中的负载因子过高而导致查询或者插入的效率降低，此时就需要通过rehash来进行重新扩容并重新映射。
+但是如果只是用一个哈希表，映射时就会导致数据库暂时不可用，作为一个使用频繁的数据库，短期的停机几乎是不可容许的问题，所以Redis设计时采用了双哈希的结构，并采用了渐进式rehash的方法来解决这个问题。
+<img src="http://img.orekilee.top//imgbed/redis/redis11.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p><strong>rehash的步骤如下</strong></p>
+<ul>
+<li>为ht[1]的哈希表分配空间</li>
+<li>将ht[0]中的键值对重新映射到ht[1]上</li>
+<li>当ht[0]的数据迁移完成，此时ht[0]为一个空表，此时释放ht[0]，并让ht[1]成为新的ht[0]，再为ht[1]创建一个新的空白哈希表，为下一次的rehash做准备
+<img src="http://img.orekilee.top//imgbed/redis/redis12.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis13.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis14.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h3 id="渐进式rehash">渐进式rehash</h3>
+<p>由于数据库中可能存在大量的数据，而rehash的时候又过长，为了避免因为rehash造成的服务器停机，rehash的过程并不是一次完成的，而是一个多次的，渐进式的过程。
+<img src="http://img.orekilee.top//imgbed/redis/redis15.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis16.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis17.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis18.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis19.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis20.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis21.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+在渐进式rehash的时候，由于数据不断的进行迁移，无法确定数据处于哪一个表上， 此时如果进行插入、删除、查找的操作时就会在两个表上进行，如果在一个表中没找到对应数据，就会到另一个表中继续查找。</p>
+<p>并且如果此时新插入节点，都会统一的防止在新表ht[1]中，防止对ht[0]的rehash造成干扰，保证ht[0]节点的只减少不增加</p>
+<h3 id="总结-2">总结</h3>
+<ul>
+<li>字典被广泛用于实现 Redis 的各种功能， 其中包括数据库和哈希键。</li>
+<li>Redis 中的字典使用哈希表作为底层实现， 每个字典带有两个哈希表， 一个用于平时使用， 另一个仅在进行 rehash 时使用。</li>
+<li>当字典被用作数据库的底层实现， 或者哈希键的底层实现时， Redis 使用 MurmurHash2 算法来计算键的哈希值。</li>
+<li>哈希表使用链地址法来解决键冲突， 被分配到同一个索引上的多个键值对会连接成一个单向链表。</li>
+<li>在对哈希表进行扩展或者收缩操作时， 程序需要将现有哈希表包含的所有键值对 rehash 到新哈希表里面， 并且这个 rehash 过程并不是一次性地完成的， 而是渐进式地完成的。</li>
+</ul>
+<h2 id="跳表">跳表</h2>
+<p>跳表是一个较为少见的数据结构，如果不了解的可以看看我之前的博客
+<a class="link" href="https://blog.csdn.net/qq_35423154/article/details/108477428"  target="_blank" rel="noopener"
+    >看了这篇博客，还敢说你不懂跳表吗？</a>
+由于跳表的实现简单且性能可与平衡树相媲美，对于大量插入删除的数据库来说，跳表只需要进行简单的链表插入和索引的选拔，而不像平衡树一样需要进行整体平衡的维持。并且由于在范围查找上的效率远远强于平衡树，所以Redis底层选取跳表来作为有序集合的底层之一。</p>
+<h3 id="结构分析-3">结构分析</h3>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">zskiplistNode</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 成员对象
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">robj</span> <span class="o">*</span><span class="n">obj</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 分值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">double</span> <span class="n">score</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 后退指针
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">struct</span> <span class="n">zskiplistNode</span> <span class="o">*</span><span class="n">backward</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 层
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">struct</span> <span class="n">zskiplistLevel</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="c1">// 前进指针
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">struct</span> <span class="n">zskiplistNode</span> <span class="o">*</span><span class="n">forward</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="c1">// 跨度
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="kt">unsigned</span> <span class="kt">int</span> <span class="n">span</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">}</span> <span class="n">level</span><span class="p">[];</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">zskiplistNode</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>跳跃表的查询从最顶层出发，通过前进指针来往后查找，通过比较节点的分数来判断当前节点是否与索引匹配，如果查找不到则进入下层继续查找，并记录下跨越的层数span来进行排位。
+<img src="http://img.orekilee.top//imgbed/redis/redis22.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+同时为了处理特殊情况，还准备了一个后退指针来进行从表尾到表头的遍历，但是与前进不同，后退指针并不存在跳跃，而是只能一个一个向后查询
+<img src="http://img.orekilee.top//imgbed/redis/redis23.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cm">/*
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * 跳跃表
+</span></span></span><span class="line"><span class="cl"><span class="cm"> */</span>
+</span></span><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">zskiplist</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 表头节点和表尾节点
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">struct</span> <span class="n">zskiplistNode</span> <span class="o">*</span><span class="n">header</span><span class="p">,</span> <span class="o">*</span><span class="n">tail</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 表中节点的数量
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">length</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 表中层数最大的节点的层数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="n">level</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">zskiplist</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>跳跃表通过保存表头和表尾节点，来快速访问表头和表尾。并且保存了节点的数量来实现O(1)的长度计算
+<img src="http://img.orekilee.top//imgbed/redis/redis24.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+为了避免因为层数过高导致的大量空间损失，Redis跳跃表的节点高度最高位32层。</p>
+<h3 id="总结-3">总结</h3>
+<ul>
+<li>跳跃表是有序集合的底层实现之一， 除此之外它在 Redis 中没有其他应用。</li>
+<li>Redis 的跳跃表实现由 zskiplist 和 zskiplistNode 两个结构组成， 其中 zskiplist 用于保存跳跃表信息（比如表头节点、表尾节点、长度）， 而 zskiplistNode 则用于表示跳跃表节点。</li>
+<li>每个跳跃表节点的层高都是 1 至 32 之间的随机数。</li>
+<li>在同一个跳跃表中， 多个节点可以包含相同的分值， 但每个节点的成员对象必须是唯一的。</li>
+<li>跳跃表中的节点按照分值大小进行排序， 当分值相同时， 节点按照成员对象的大小进行排序。</li>
+</ul>
+<h2 id="整数集合">整数集合</h2>
+<p>整数集合时集合键的底层实现之一，当集合中的元素全部都是整数值的时候，并且集合中元素不多时，Redis就会使用整数集合来作为集合键的底层结构。<strong>整数集合具有去重且排序的特性</strong></p>
+<h3 id="结构分析-4">结构分析</h3>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">intset</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 编码方式
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">uint32_t</span> <span class="n">encoding</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 集合包含的元素数量
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">uint32_t</span> <span class="n">length</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 保存元素的数组
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int8_t</span> <span class="n">contents</span><span class="p">[];</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">intset</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>在上面的结构中，虽然content数组的类型是一个8bit的整型，但是数据真正存储的方式并不是这个类型，而是根据encoding来决定具体的类型，8bit只是作为一个基本单位来进行使用。</p>
+<p>例如此时encoding设置为INTSET_ENC_INT16时，数组存储的格式就有每个元素16bit
+<img src="http://img.orekilee.top//imgbed/redis/redis25.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+如果encoding设置为INTSET_ENC_INT64时，数组存储的格式就有每个元素64bit
+<img src="http://img.orekilee.top//imgbed/redis/redis26.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h3 id="升级">升级</h3>
+<p><strong>升级的流程</strong></p>
+<ol>
+<li>根据插入的类型来决定集合升级的类型，拓展数组的整体空间并为新节点分配空间</li>
+<li>对集合中所有数据类型进行升级，在保持有序的前提下将所有升级后的元素移动到合适的位置上</li>
+<li>将新节点插入到集合的对应位置</li>
+</ol>
+<p><strong>新元素的插入位置</strong>
+由于会引起升级的元素的类型都必顶比数组中的所有数据都大，所以也就决定了其要么比所有数据都大，要么比所有数据都小（负数），所以插入位置只能是首部和尾部</p>
+<ul>
+<li>当新元素比所有数据都大时在尾部插入</li>
+<li>当新元素比所有数据都小时在首部插入</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis27.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis28.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+如果插入一个32位的数据，则引起全体升级</p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis29.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p>分配底层空间</p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis30.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis31.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p>整体升级并挪动位置</p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis32.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p>插入元素</p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis33.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h3 id="降级">降级</h3>
+<p>在整数列表中<strong>升级是一个不可逆的过程，即使将所有高类型的数据删除了，也不会进行降级。</strong>
+理由是防止因为降级后再次升级带来的大量数据挪动的问题，在保证了效率的同时，也带来了一定程度上的空间浪费（非必要时尽量不要升级）
+<img src="http://img.orekilee.top//imgbed/redis/redis34.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis35.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<strong>升级带来的好处</strong></p>
+<ol>
+<li><strong>灵活</strong> ： 由于C语言是一个静态类型语言，为了避免出现类型错误通常会将不同类型分开，例如如果要存储16bit、32bit、64bit的整型就需要3个数组，但是使用整数集合就可以通过升级的策略来进行元素类型的自适应，就可以任意的将各种类型的整数插入进去，而不必担心类型错误</li>
+<li><strong>节约内存</strong>：与上面类似，如果我们只有一个64bit的数组，而里面存储了不少16bit、32bit的元素，则会造成空间的大量浪费。而使用整数集合则可以同时保存多个类型，只需要确保升级的操作只在必要时进行，就不会造成空间的浪费</li>
+</ol>
+<h3 id="总结-4">总结</h3>
+<ul>
+<li>整数集合是集合键的底层实现之一。</li>
+<li>整数集合的底层实现为数组， 这个数组以有序、无重复的方式保存集合元素， 在有需要时， 程序会根据新添加元素的类型， 改变这个数组的类型。</li>
+<li>升级操作为整数集合带来了操作上的灵活性， 并且尽可能地节约了内存。</li>
+<li>整数集合只支持升级操作， 不支持降级操作。</li>
+</ul>
+<h2 id="压缩列表">压缩列表</h2>
+<p>压缩列表（ziplist）是列表键和哈希键的底层实现之一。</p>
+<p>当一个列表键只包含少量列表项， 并且每个列表项要么就是小整数值， 要么就是长度比较短的字符串， 那么 Redis 就会使用压缩列表来做列表键的底层实现。<strong>主要核心就是为了节约空间</strong></p>
+<h3 id="结构分析-5">结构分析</h3>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis36.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis37.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis38.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+例如这张图，可以看出当前包含三个节点，总空间为0x50(十进制80），到尾部的偏移量为0x3c(十进制60)，节点数量为0x3(十进制3)</p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis39.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<strong>每个压缩列表节点可以由一个整数或者一个字节数组组成</strong></p>
+<p><strong>整数的类型可以是以下六种之一</strong>：</p>
+<ul>
+<li>4位的介于0-12的无符号整数</li>
+<li>1字节的有符号整数</li>
+<li>3字节的有符号整数</li>
+<li>int16_t</li>
+<li>int32_t</li>
+<li>int64_t</li>
+</ul>
+<p><strong>字节数组可以是以下三种之一</strong>：</p>
+<ul>
+<li>长度小于等于63（2^6 -1)字节的字节数组</li>
+<li>长度小于等于16383（2^14 -1)字节的字节数组</li>
+<li>长度小于等于4294967295（2^32 -1)字节的字节数组</li>
+</ul>
+<p>而压缩列表节点又有三个属性组成，分别是previous_entry_length，encoding，content。</p>
+<p><strong>previous_entry_length</strong>
+这个属性记录了压缩列表前一个节点的长度，该属性根据前一个节点的大小不同可以是1个字节或者5个字节。</p>
+<ul>
+<li>如果前一个节点的长度小于254个字节，那么previous_entry_length的大小为1个字节，即前一个节点的长度可以使用1个字节表示</li>
+<li>如果前一个节点的长度大于等于254个字节，那么previous_entry_length的大小为5个字节，第一个字节会被设置为0xFE(十进制的254），之后的四个字节则用于保存前一个节点的长度。</li>
+</ul>
+<p>小于254字节时的表示
+<img src="http://img.orekilee.top//imgbed/redis/redis40.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+大于等于254字节时的表示
+<img src="http://img.orekilee.top//imgbed/redis/redis41.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<strong>为什么要这样设计呢？</strong>
+由于压缩列表中的数据以一种不规则的方式进行紧邻，无法通过后退指针来找到上一个元素，而通过保存上一个节点的长度，用当前的地址减去这个长度，就可以很容易的获取到了上一个节点的位置，通过一个一个节点向前回溯，来达到从表尾往表头遍历的操作</p>
+<p><strong>encoding</strong>
+encoding通过以下规则来记录content的类型</p>
+<ul>
+<li>一字节、两字节或者五字节长， 值的最高位为 00 、 01 或者 10 的是字节数组编码： 这种编码表示节点的 content 属性保存着字节数组， 数组的长度由编码除去最高两位之后的其他位记录；</li>
+<li>一字节长， 值的最高位以 11 开头的是整数编码： 这种编码表示节点的 content 属性保存着整数值， 整数值的类型和长度由编码除去最高两位之后的其他位记录；
+<img src="http://img.orekilee.top//imgbed/redis/redis42.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></li>
+</ul>
+<p><strong>content</strong>
+<strong>content属性负责保存节点的值，值的具体类型由上一个字段encoding来决定。</strong></p>
+<p>例如存储字节数组，00表示类型为字节数组，01011表示长度为11
+<img src="http://img.orekilee.top//imgbed/redis/redis43.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+存储整数值，表示存储的为整数，类型为int16_t
+<img src="http://img.orekilee.top//imgbed/redis/redis44.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h3 id="连锁更新">连锁更新</h3>
+<p><strong>当添加或删除节点时，可能就会因为previous_entry_length的变化导致发生连锁的更新操作。</strong></p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis45.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+假设e1的previous_entry_length只有1个字节，而新插入的节点大小超过了254字节，此时由于e1
+的previous_entry_length无法该长度，就会将previous_entry_length的长度更新为5字节。
+<img src="http://img.orekilee.top//imgbed/redis/redis46.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+但是问题来了，假设e1原本的大小为252字节，当previous_entry_length更新后它的大小则超过了254，此时又会引发对e2的更新。
+顺着这个思路，一直更新下去
+<img src="http://img.orekilee.top//imgbed/redis/redis47.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis48.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+同理，删除也会引发连锁的更新
+<img src="http://img.orekilee.top//imgbed/redis/redis49.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+从上图可以看出来，在最坏情况下，会从插入位置一直连锁更新到末尾，即执行了N次空间重分配， 而每次空间重分配的最坏复杂度为 O(N) ， 所以连锁更新的最坏复杂度为 O(N^2) 。</p>
+<p>即使存在这种情况，但是并不影响我们使用压缩列表</p>
+<ul>
+<li><strong>压缩列表里要恰好有多个连续的、长度介于 250 字节至 253 字节之间的节点， 连锁更新才有可能被引发， 这种情况就和连中彩票一样，很少见</strong></li>
+<li><strong>即使出现连锁更新， 但只要被更新的节点数量不多， 就不会对性能造成任何影响： 比如说， 对三五个节点进行连锁更新是绝对不会影响性能的；</strong></li>
+</ul>
+<h3 id="总结-5">总结</h3>
+<ul>
+<li>压缩列表是一种为节约内存而开发的顺序型数据结构。</li>
+<li>压缩列表被用作列表键和哈希键的底层实现之一。</li>
+<li>压缩列表可以包含多个节点，每个节点可以保存一个字节数组或者整数值。</li>
+<li>添加新节点到压缩列表， 或者从压缩列表中删除节点， 可能会引发连锁更新操作， 但这种操作出现的几率并不高。</li>
+</ul>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/redis/">Redis</a>
+        
+            <a href="/tags/kv%E5%AD%98%E5%82%A8/">KV存储</a>
+        
+            <a href="/tags/%E7%BC%93%E5%AD%98/">缓存</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 26, 2022 15:26 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/redis-%E5%A4%9A%E6%9C%BA%E6%9C%8D%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 多机服务</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E4%BA%8B%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 事务</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E7%BC%93%E5%AD%98/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 缓存</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E6%8C%81%E4%B9%85%E5%8C%96%E7%AD%96%E7%95%A5/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 持久化策略</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 数据类型</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#sds">SDS</a>
+      <ol>
+        <li><a href="#结构分析">结构分析</a></li>
+        <li><a href="#内存策略">内存策略</a>
+          <ol>
+            <li><a href="#空间预分配">空间预分配</a></li>
+            <li><a href="#惰性空间释放">惰性空间释放</a></li>
+          </ol>
+        </li>
+        <li><a href="#总结">总结</a></li>
+      </ol>
+    </li>
+    <li><a href="#链表">链表</a>
+      <ol>
+        <li><a href="#结构分析-1">结构分析</a></li>
+        <li><a href="#总结-1">总结</a></li>
+      </ol>
+    </li>
+    <li><a href="#字典">字典</a>
+      <ol>
+        <li><a href="#结构分析-2">结构分析</a></li>
+        <li><a href="#rehash">rehash</a></li>
+        <li><a href="#渐进式rehash">渐进式rehash</a></li>
+        <li><a href="#总结-2">总结</a></li>
+      </ol>
+    </li>
+    <li><a href="#跳表">跳表</a>
+      <ol>
+        <li><a href="#结构分析-3">结构分析</a></li>
+        <li><a href="#总结-3">总结</a></li>
+      </ol>
+    </li>
+    <li><a href="#整数集合">整数集合</a>
+      <ol>
+        <li><a href="#结构分析-4">结构分析</a></li>
+        <li><a href="#升级">升级</a></li>
+        <li><a href="#降级">降级</a></li>
+        <li><a href="#总结-4">总结</a></li>
+      </ol>
+    </li>
+    <li><a href="#压缩列表">压缩列表</a>
+      <ol>
+        <li><a href="#结构分析-5">结构分析</a></li>
+        <li><a href="#连锁更新">连锁更新</a></li>
+        <li><a href="#总结-5">总结</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

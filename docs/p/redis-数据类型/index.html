@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='数据类型 基础数据类型 String 字符串类型（SDS）即简单动态字符串，它是以键值对key-value的形式进行存储的，根据 key 来存储和获取value值
+依据不同情况，字符串在底层会使用 int 、 raw 或者 embstr 三种不同的编码格式
+ 如果数据为可以使用long类型来保存的整数，则使用int 如果数据为可以使用long double类型来保存的浮点数，则使用embstr或者raw 如果数据为字符串，或者长度过大没办法用long来表示的整数，以及长度过大无法用long double表示的浮点数，则使用embstr或者raw。当数据小于39字节时，使用embstr，当大于39字节时使用raw   基本用法 1 2 3 4 5 6  127.0.0.1:6379&amp;gt;sethelloworld//设置key-valueOK127.0.0.1:6379&amp;gt;gethello//根据key获取value&amp;#34;world&amp;#34;127.0.0.1:6379&amp;gt;strlenhello//计算value长度(integer)5  使用场景  存放用户（登录）信息； 存放文章详情和列表信息； 存放和累计网页的统计信息。  Hash 字典类型 (Hash) 又被成为散列类型或者是哈希表类型，它是将⼀个键值 (key) 和⼀个特殊的“哈希表”关联起来。 哈希类型的底层数据结构可以是压缩列表（ZipList)或者字典（Dict）
+ 当哈希对象的所有键值对的键和值的字符串长度都小于64字节，并且保存的键值对数量小于512个时，使用压缩列表 如果不满足上述条件中的任意一个，都会使用字典   基本用法 1 2 3 4 5 6  127.0.0.1:6379&amp;gt;hsethash1nameleeage20//设置key-value的映射(integer)2127.0.0.1:6379&amp;gt;hgethash1name//获取key为name的value&amp;#34;lee&amp;#34;127.0.0.1:6379&amp;gt;hgethash1age//获取key为age的value&amp;#34;20&amp;#34;  使用场景  存储用户信息或者某个物品的信息，无需序列化，直接建立映射  List 列表类型 (List) 是⼀个使用线性结构存储的结构，它的元素插入会按照先后顺序存储到链表结构中。 列表类型的底层数据结构可以是压缩列表（ZipList)或者链表（LinkedList）
+ 当列表对象的所有字符串元素长度都小于64字节，并且保存的元素数量小于512个时，使用压缩列表 如果不满足上述条件中的任意一个，都会使用链表   基本用法 1 2 3 4 5 6  127.'><title>Redis 数据类型</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/redis-%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Redis 数据类型'>
+<meta property='og:description' content='数据类型 基础数据类型 String 字符串类型（SDS）即简单动态字符串，它是以键值对key-value的形式进行存储的，根据 key 来存储和获取value值
+依据不同情况，字符串在底层会使用 int 、 raw 或者 embstr 三种不同的编码格式
+ 如果数据为可以使用long类型来保存的整数，则使用int 如果数据为可以使用long double类型来保存的浮点数，则使用embstr或者raw 如果数据为字符串，或者长度过大没办法用long来表示的整数，以及长度过大无法用long double表示的浮点数，则使用embstr或者raw。当数据小于39字节时，使用embstr，当大于39字节时使用raw   基本用法 1 2 3 4 5 6  127.0.0.1:6379&amp;gt;sethelloworld//设置key-valueOK127.0.0.1:6379&amp;gt;gethello//根据key获取value&amp;#34;world&amp;#34;127.0.0.1:6379&amp;gt;strlenhello//计算value长度(integer)5  使用场景  存放用户（登录）信息； 存放文章详情和列表信息； 存放和累计网页的统计信息。  Hash 字典类型 (Hash) 又被成为散列类型或者是哈希表类型，它是将⼀个键值 (key) 和⼀个特殊的“哈希表”关联起来。 哈希类型的底层数据结构可以是压缩列表（ZipList)或者字典（Dict）
+ 当哈希对象的所有键值对的键和值的字符串长度都小于64字节，并且保存的键值对数量小于512个时，使用压缩列表 如果不满足上述条件中的任意一个，都会使用字典   基本用法 1 2 3 4 5 6  127.0.0.1:6379&amp;gt;hsethash1nameleeage20//设置key-value的映射(integer)2127.0.0.1:6379&amp;gt;hgethash1name//获取key为name的value&amp;#34;lee&amp;#34;127.0.0.1:6379&amp;gt;hgethash1age//获取key为age的value&amp;#34;20&amp;#34;  使用场景  存储用户信息或者某个物品的信息，无需序列化，直接建立映射  List 列表类型 (List) 是⼀个使用线性结构存储的结构，它的元素插入会按照先后顺序存储到链表结构中。 列表类型的底层数据结构可以是压缩列表（ZipList)或者链表（LinkedList）
+ 当列表对象的所有字符串元素长度都小于64字节，并且保存的元素数量小于512个时，使用压缩列表 如果不满足上述条件中的任意一个，都会使用链表   基本用法 1 2 3 4 5 6  127.'>
+<meta property='og:url' content='https://blog.orekilee.top/p/redis-%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='Redis' /><meta property='article:tag' content='KV存储' /><meta property='article:tag' content='缓存' /><meta property='article:published_time' content='2022-05-26T15:03:13&#43;08:00'/><meta property='article:modified_time' content='2022-05-26T15:25:41&#43;08:00'/>
+<meta name="twitter:title" content="Redis 数据类型">
+<meta name="twitter:description" content="数据类型 基础数据类型 String 字符串类型（SDS）即简单动态字符串，它是以键值对key-value的形式进行存储的，根据 key 来存储和获取value值
+依据不同情况，字符串在底层会使用 int 、 raw 或者 embstr 三种不同的编码格式
+ 如果数据为可以使用long类型来保存的整数，则使用int 如果数据为可以使用long double类型来保存的浮点数，则使用embstr或者raw 如果数据为字符串，或者长度过大没办法用long来表示的整数，以及长度过大无法用long double表示的浮点数，则使用embstr或者raw。当数据小于39字节时，使用embstr，当大于39字节时使用raw   基本用法 1 2 3 4 5 6  127.0.0.1:6379&amp;gt;sethelloworld//设置key-valueOK127.0.0.1:6379&amp;gt;gethello//根据key获取value&amp;#34;world&amp;#34;127.0.0.1:6379&amp;gt;strlenhello//计算value长度(integer)5  使用场景  存放用户（登录）信息； 存放文章详情和列表信息； 存放和累计网页的统计信息。  Hash 字典类型 (Hash) 又被成为散列类型或者是哈希表类型，它是将⼀个键值 (key) 和⼀个特殊的“哈希表”关联起来。 哈希类型的底层数据结构可以是压缩列表（ZipList)或者字典（Dict）
+ 当哈希对象的所有键值对的键和值的字符串长度都小于64字节，并且保存的键值对数量小于512个时，使用压缩列表 如果不满足上述条件中的任意一个，都会使用字典   基本用法 1 2 3 4 5 6  127.0.0.1:6379&amp;gt;hsethash1nameleeage20//设置key-value的映射(integer)2127.0.0.1:6379&amp;gt;hgethash1name//获取key为name的value&amp;#34;lee&amp;#34;127.0.0.1:6379&amp;gt;hgethash1age//获取key为age的value&amp;#34;20&amp;#34;  使用场景  存储用户信息或者某个物品的信息，无需序列化，直接建立映射  List 列表类型 (List) 是⼀个使用线性结构存储的结构，它的元素插入会按照先后顺序存储到链表结构中。 列表类型的底层数据结构可以是压缩列表（ZipList)或者链表（LinkedList）
+ 当列表对象的所有字符串元素长度都小于64字节，并且保存的元素数量小于512个时，使用压缩列表 如果不满足上述条件中的任意一个，都会使用链表   基本用法 1 2 3 4 5 6  127.">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/redis/" style="background-color: #2a9d8f; color: #fff;">
+                Redis
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/redis-%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B/">Redis 数据类型</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">May 26, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="数据类型">数据类型</h1>
+<h2 id="基础数据类型">基础数据类型</h2>
+<h3 id="string">String</h3>
+<p>字符串类型（SDS）即简单动态字符串，它是以键值对key-value的形式进行存储的，根据 key 来存储和获取value值</p>
+<p>依据不同情况，字符串在底层会使用 <strong>int 、 raw 或者 embstr</strong> 三种不同的编码格式</p>
+<ul>
+<li>如果数据为可以使用<strong>long类型</strong>来保存的<strong>整数</strong>，则使用<strong>int</strong></li>
+<li>如果数据为可以使用<strong>long double类型</strong>来保存的<strong>浮点数</strong>，则使用<strong>embstr或者raw</strong></li>
+<li>如果数据为字符串，或者长度过大没办法用long来表示的整数，以及长度过大无法用long double表示的浮点数，则使用<strong>embstr或者raw</strong>。当数据小于39字节时，使用embstr，当大于39字节时使用raw
+<img src="http://img.orekilee.top//imgbed/distributed/redis50.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis51.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis52.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h4 id="基本用法">基本用法</h4>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">hello</span><span class="w"> </span><span class="n">world</span><span class="w">	</span><span class="o">//</span><span class="err">设置</span><span class="k">key</span><span class="o">-</span><span class="n">value</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">OK</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="k">get</span><span class="w"> </span><span class="n">hello</span><span class="w">	</span><span class="o">//</span><span class="err">根据</span><span class="n">key获取value</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="s2">&#34;world&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">strlen</span><span class="w"> </span><span class="n">hello</span><span class="w">	</span><span class="o">//</span><span class="err">计算</span><span class="n">value长度</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="nb">integer</span><span class="p">)</span><span class="w"> </span><span class="mi">5</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/redis/redis53.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h4 id="使用场景">使用场景</h4>
+<ul>
+<li>存放用户（登录）信息；</li>
+<li>存放文章详情和列表信息；</li>
+<li>存放和累计网页的统计信息。</li>
+</ul>
+<h3 id="hash">Hash</h3>
+<p>字典类型 (Hash) 又被成为散列类型或者是哈希表类型，它是将⼀个键值 (key) 和⼀个特殊的“哈希表”关联起来。
+<img src="http://img.orekilee.top//imgbed/redis/redis54.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p>哈希类型的底层数据结构可以是<strong>压缩列表</strong>（ZipList)或者<strong>字典</strong>（Dict）</p>
+<ul>
+<li>当哈希对象的<strong>所有键值对的键和值的字符串长度都小于64字节</strong>，并且<strong>保存的键值对数量小于512个</strong>时，使用<strong>压缩列表</strong></li>
+<li>如果<strong>不满足上述条件中的任意一个</strong>，都会使用<strong>字典</strong>
+<img src="http://img.orekilee.top//imgbed/redis/redis55.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis56.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis57.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h4 id="基本用法-1">基本用法</h4>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">hset</span><span class="w"> </span><span class="n">hash1</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="n">lee</span><span class="w"> </span><span class="n">age</span><span class="w"> </span><span class="mi">20</span><span class="w">	</span><span class="o">//</span><span class="err">设置</span><span class="k">key</span><span class="o">-</span><span class="n">value的映射</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="nb">integer</span><span class="p">)</span><span class="w"> </span><span class="mi">2</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">hget</span><span class="w"> </span><span class="n">hash1</span><span class="w"> </span><span class="n">name</span><span class="w">	</span><span class="o">//</span><span class="err">获取</span><span class="n">key为name的value</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="s2">&#34;lee&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">hget</span><span class="w"> </span><span class="n">hash1</span><span class="w"> </span><span class="n">age</span><span class="w">	</span><span class="o">//</span><span class="err">获取</span><span class="n">key为age的value</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="s2">&#34;20&#34;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/redis/redis58.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h4 id="使用场景-1">使用场景</h4>
+<ul>
+<li>存储用户信息或者某个物品的信息，无需序列化，直接建立映射</li>
+</ul>
+<h3 id="list">List</h3>
+<p>列表类型 (List) 是⼀个使用<strong>线性结构存储</strong>的结构，它的元素插入会<strong>按照先后顺序</strong>存储到链表结构中。 
+列表类型的底层数据结构可以是<strong>压缩列表</strong>（ZipList)或者<strong>链表</strong>（LinkedList）</p>
+<ul>
+<li>当列表对象的<strong>所有字符串元素长度都小于64字节</strong>，并且<strong>保存的元素数量小于512个</strong>时，使用<strong>压缩列表</strong></li>
+<li>如果<strong>不满足上述条件中的任意一个</strong>，都会使用<strong>链表</strong>
+<img src="http://img.orekilee.top//imgbed/redis/redis59.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis60.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></li>
+</ul>
+<h4 id="基本用法-2">基本用法</h4>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">lpush</span><span class="w"> </span><span class="n">list1</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="mi">5</span><span class="w">	</span><span class="o">//</span><span class="err">依次头插</span><span class="mi">1</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="mi">5</span><span class="err">，此时数据为</span><span class="mi">5</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="nb">integer</span><span class="p">)</span><span class="w"> </span><span class="mi">5</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">rpop</span><span class="w"> </span><span class="n">list1</span><span class="w">	</span><span class="o">//</span><span class="err">尾删</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="s2">&#34;1&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">lpop</span><span class="w"> </span><span class="n">list1</span><span class="w">	</span><span class="o">//</span><span class="err">头删</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="s2">&#34;5&#34;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/redis/redis61.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h4 id="使用场景-2">使用场景</h4>
+<ul>
+<li><strong>消息队列</strong>：列表类型可以使用 rpush 实现先进先出的功能，同时又可以使用 lpop 轻松的弹出（查询并删除）第⼀个元素，所以列表类型可以用来实现消息队列；</li>
+<li><strong>文章列表</strong>：对于博客站点来说，当用户和文章都越来越多时，为了加快程序的响应速度，我们可以把用户自己的文章存入到 List 中，因为 List 是有序的结构，所以这样不仅可以完美的实现分页功能，而且加速了程序的响应速度。</li>
+</ul>
+<h3 id="set">Set</h3>
+<p>集合类型 (Set) 是⼀个<strong>无序并唯⼀</strong>的键值集合。</p>
+<p>集合类型的底层数据结构可以是<strong>整数集合</strong>（IntSet)或者<strong>字典</strong>（Dict）</p>
+<ul>
+<li>当集合对象的<strong>所有元素都是整数值</strong>，并且<strong>保存的元素数量小于512个</strong>时，使用<strong>整数集合</strong></li>
+<li>如果<strong>不满足上述条件中的任意一个</strong>，都会使用<strong>字典</strong>
+<img src="http://img.orekilee.top//imgbed/redis/redis62.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis63.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></li>
+</ul>
+<h4 id="基本用法-3">基本用法</h4>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sadd</span><span class="w"> </span><span class="n">testSet</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="n">v4</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="n">v4</span><span class="w"> </span><span class="n">v1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="nb">integer</span><span class="p">)</span><span class="w"> </span><span class="mi">4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">smembers</span><span class="w"> </span><span class="n">testSet</span><span class="w">	</span><span class="o">//</span><span class="err">去重且无序</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="s2">&#34;v2&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="s2">&#34;v1&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="s2">&#34;v4&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="s2">&#34;v3&#34;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/redis/redis64.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h4 id="使用场景-3">使用场景</h4>
+<ul>
+<li>微博关注我的人和我关注的人都适合用集合存储，可以保证人员不会重复；</li>
+<li>中奖人信息也适合用集合类型存储，这样可以保证⼀个人不会重复中奖。</li>
+</ul>
+<h3 id="zset">Zset</h3>
+<p>有序集合类型 (SortedSet) 相比于集合类型多了⼀个排序属性 <strong>score（分值）</strong>，所以对于有序集合ZSet 来说，每个存储元素相当于有<strong>两个值</strong>组成的，⼀个是有序结合的<strong>元素值</strong>，⼀个是<strong>分值</strong>。有序集合的存储<strong>元素值也是不能重复</strong>的，但<strong>分值是可以重复</strong>的。</p>
+<p>有序集合类型的底层数据结构可以是<strong>压缩列表</strong>（ZipList)或者<strong>跳表</strong>（SkipList ）</p>
+<ul>
+<li>当有序集合对象的<strong>所有元素成员的长度都小于64字节</strong>，并且<strong>保存的元素数量小于128个</strong>时，使用<strong>压缩列表</strong></li>
+<li>如果<strong>不满足上述条件中的任意一个</strong>，都会使用<strong>跳表</strong>（这里的跳表是结合字典的）
+<img src="http://img.orekilee.top//imgbed/redis/redis65.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<img src="http://img.orekilee.top//imgbed/redis/redis66.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+>
+<strong>这里不是直接使用跳表，而是搭配字典一起使用</strong>
+之所以这样设置是因为考虑到如果直接使用跳跃表，如果需要查找成员的分值时只能通过遍历来进行查找，而这样的效率是O(logN)
+而字典虽然建立映射后可以O(1)的查找到分值，但是哈希只能通过key值进行查找，并不支持范围查询。
+所以将两者进行结合，使用字典建立起元素与分值的映射，<strong>使用字典来进行成员分数的查找</strong>，而<strong>使用跳跃表来进行范围型操作</strong>，这样就很好的解决了这个问题。</li>
+</ul>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">zset</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">zskiplist</span> <span class="o">*</span><span class="n">zsl</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">dict</span> <span class="o">*</span><span class="n">dict</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">zset</span><span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/redis/redis67.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<p><img src="http://img.orekilee.top//imgbed/redis/redis68.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h4 id="基本用法-4">基本用法</h4>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">zadd</span><span class="w"> </span><span class="n">zset1</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="n">v1</span><span class="w"> </span><span class="mi">8</span><span class="w"> </span><span class="n">v2</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="n">v3</span><span class="w"> </span><span class="mi">6</span><span class="w"> </span><span class="n">v4</span><span class="w">	</span><span class="o">#</span><span class="err">插入时以分值</span><span class="o">-</span><span class="err">值的形式插入</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="nb">integer</span><span class="p">)</span><span class="w"> </span><span class="mi">4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">127</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">:</span><span class="mi">6379</span><span class="o">&gt;</span><span class="w"> </span><span class="n">zrange</span><span class="w"> </span><span class="n">zset1</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="w">	</span><span class="o">#</span><span class="err">查找结果按照升序排序</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="s2">&#34;v3&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="s2">&#34;v1&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="s2">&#34;v4&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="s2">&#34;v2&#34;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p><img src="http://img.orekilee.top//imgbed/redis/redis69.png"
+	
+	
+	
+	loading="lazy"
+	
+		alt="在这里插入图片描述"
+	
+	
+></p>
+<h4 id="使用场景-4">使用场景</h4>
+<ul>
+<li>学生成绩排名；</li>
+<li>粉丝列表，根据关注的先后时间排序。</li>
+</ul>
+<h2 id="特殊数据类型">特殊数据类型</h2>
+<h3 id="geospatial地理空间">Geospatial(地理空间)</h3>
+<p>在使用一些小程序的时候，里面通常都会通过定位使用者的位置，来显示附近的人、外卖距离、剩余路径等功能，在Redis3.2中也引入了推算地理信息的数据结构，即<!-- raw HTML omitted --><strong>Geospatial</strong><!-- raw HTML omitted --></p>
+<h4 id="介绍">介绍</h4>
+<p>把某个具体的位置信息（经度，纬度，名称）添加到指定的key中，数据将会用一个<!-- raw HTML omitted --><strong>sorted set</strong><!-- raw HTML omitted -->存储，以便稍后能使用 GEORADIUS和 GEORADIUSBYMEMBER命令来根据半径来查询位置信息。</p>
+<p>这个命令(指GEOADD)的参数使用标准的x,y形式，所以经度（longitude）必须放在纬度（latitude）之前，对于可被索引的坐标位置是有一定限制条件的：非常靠近极点的位置是不能被索引的， 在EPSG:900913 / EPSG:3785 / OSGEO:41001指定如下：</p>
+<ul>
+<li>有效的经度是-180度到180度</li>
+<li>有效的纬度是-85.05112878度到85.05112878度</li>
+</ul>
+<p>上面是官方文档的描述，其实Geo并没有我们想象中的复杂，它的本质就是一个<!-- raw HTML omitted --><strong>Zset</strong><!-- raw HTML omitted -->，通过将坐标以<!-- raw HTML omitted --><strong>Geohash</strong><!-- raw HTML omitted -->的方式进行处理，将经度纬度错位后形成一个52位整数，所以我们<!-- raw HTML omitted --><strong>同样能够使用Zset提供的接口来操作Geo</strong><!-- raw HTML omitted -->。</p>
+<h4 id="用法">用法</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GEOADD key 经度 纬度 地点名称</td>
+<td>将指定的地理空间位置（经度、纬度、名称）添加到指定的key中</td>
+</tr>
+<tr>
+<td>GEODIST key 地点1 地点2</td>
+<td>返回两个给定位置之间的距离</td>
+</tr>
+<tr>
+<td>GEOPOS key 地点</td>
+<td>从key里返回所有给定位置元素的位置（经度和纬度）</td>
+</tr>
+<tr>
+<td>GEOHASH  key 地点</td>
+<td>返回一个或多个位置元素的 Geohash 表示</td>
+</tr>
+<tr>
+<td>GEORADIUS  key 经度 纬度 半径</td>
+<td>以给定的经纬度为中心， 找出某一半径内的元素</td>
+</tr>
+<tr>
+<td>GEORADIUSBYMEMBER  key 地点 半径</td>
+<td>找出位于指定范围内的元素，中心点是由给定的位置元素决定</td>
+</tr>
+<tr>
+<td>Zset的接口同样适用于Geo，因此需要删除、查询全部时就可以使用Zset的接口。</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p>下面示范一下这些命令的使用方式</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 为了方便示范，下面加入一些城市的地理信息——GEOADD </span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEOADD CHINA 108.94683  34.29296  <span class="s2">&#34;xian&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEOADD CHINA 116.405285 39.904989 <span class="s2">&#34;beijing&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEOADD CHINA 121.472644 31.231706 <span class="s2">&#34;shanghai&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEOADD CHINA 113.280637 23.125178 <span class="s2">&#34;guangzhou&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEOADD CHINA 114.085947 22.547    <span class="s2">&#34;shenzhen&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEOADD CHINA 110.33119  20.031971 <span class="s2">&#34;hainan&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 获取北京和上海的距离——GEODIST </span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEODIST CHINA beijing shanghai km
+</span></span><span class="line"><span class="cl"><span class="s2">&#34;1067.5980&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 获取西安的坐标——GEOPOS </span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEOPOS CHINA xian
+</span></span><span class="line"><span class="cl">1<span class="o">)</span> 1<span class="o">)</span> <span class="s2">&#34;108.94683212041854858&#34;</span>
+</span></span><span class="line"><span class="cl">   2<span class="o">)</span> <span class="s2">&#34;34.29296115814533863&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 以经度120 纬度35位置为中心，获取半径1000千米内的城市——GEORADIUS </span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEORADIUS CHINA <span class="m">120</span> <span class="m">35</span> <span class="m">1000</span> km
+</span></span><span class="line"><span class="cl">1<span class="o">)</span> <span class="s2">&#34;beijing&#34;</span>
+</span></span><span class="line"><span class="cl">2<span class="o">)</span> <span class="s2">&#34;shanghai&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 获取在广州半径500千米内的城市——GEORADIUSBYMEMBER  </span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEORADIUSBYMEMBER CHINA guangzhou <span class="m">500</span> km
+</span></span><span class="line"><span class="cl">1<span class="o">)</span> <span class="s2">&#34;shenzhen&#34;</span>
+</span></span><span class="line"><span class="cl">2<span class="o">)</span> <span class="s2">&#34;guangzhou&#34;</span>
+</span></span><span class="line"><span class="cl">3<span class="o">)</span> <span class="s2">&#34;hainan&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 将广州和深圳的坐标转换为11为的GEO哈希值——GEOHASH</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GEOHASH CHINA guangzhou shenzhen
+</span></span><span class="line"><span class="cl">1<span class="o">)</span> <span class="s2">&#34;ws0e9cb3yj0&#34;</span>
+</span></span><span class="line"><span class="cl">2<span class="o">)</span> <span class="s2">&#34;ws10k0dcg10&#34;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="hyperloglog基数统计">Hyperloglog(基数统计)</h3>
+<p>在我们为网站统计访问量、日活量时，由于我们统计的是用户数量而非访问次数，因此即使一个用户多次访问也只会统计一次，这种<!-- raw HTML omitted --><strong>不重复的数据</strong><!-- raw HTML omitted -->通常被称为<!-- raw HTML omitted --><strong>基数</strong><!-- raw HTML omitted -->。</p>
+<p>在传统的做法中，我们通常会采用set来保存用户的ID来进行计数，因为其本身存在着去重的功能，但是由于我们所需要的是对用户进行计数，如果通过将所有用户的ID保存的方法来完成，当用户量大的时候就会对内存产生巨大的压力，并且效率也大大降低。</p>
+<p>为了解决这个问题，Redis在2.8.9版本添加了<!-- raw HTML omitted --><strong>HyperLogLog</strong><!-- raw HTML omitted -->结构。</p>
+<h4 id="介绍-1">介绍</h4>
+<p>Redis HyperLogLog是用来做<!-- raw HTML omitted --><strong>基数统计</strong><!-- raw HTML omitted -->的算法，HyperLogLog的优点是，<!-- raw HTML omitted --><strong>在输入元素的数量或者体积非常非常大时，计算基数所需的空间总是固定的、并且是很小的</strong>。<!-- raw HTML omitted --></p>
+<p>在Redis 里面，每个HyperLogLog键只需要花费<!-- raw HTML omitted --><strong>12KB</strong><!-- raw HTML omitted -->内存，就可以计算接近<!-- raw HTML omitted --><strong>2^64</strong><!-- raw HTML omitted -->个不同元素的基数。这和计算基数时，元素越多耗费内存就越多的集合形成鲜明对比。</p>
+<p>但是，<!-- raw HTML omitted --><strong>由于HyperLogLog使用的是概率算法，通过存储元素的hash值的第一个1的位置，来计算元素数量</strong><!-- raw HTML omitted -->，所以HyperLogLog <!-- raw HTML omitted --><strong>不会存储元素本身</strong><!-- raw HTML omitted -->，在数据量大的时候也可能会<!-- raw HTML omitted --><strong>存在一定的误差</strong><!-- raw HTML omitted -->。但是在基数统计这一方面，它的效果是其他结构无法比拟的。</p>
+<h4 id="用法-1">用法</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PFADD key value</td>
+<td>添加指定的值到Hyperloglog中</td>
+</tr>
+<tr>
+<td>PFCONUT key</td>
+<td>返回给定Hyperloglog的基数估算值</td>
+</tr>
+<tr>
+<td>PFMERGE destkey sourcekey</td>
+<td>将目标Hyperloglog合并到源Hyperloglog中</td>
+</tr>
+</tbody>
+</table></div>
+<p>使用示范</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">127.0.0.1:6379&gt; PFADD NUMS1 <span class="m">1</span> 2	<span class="m">3</span> 4	<span class="c1">#向NUMS1插入1-4</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; PFADD NUMS1 1		<span class="c1">#数据已存在，不再插入</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">0</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; PFCOUNT NUMS1		<span class="c1">#查看当前基数数量</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">4</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; PFADD NUMS2 <span class="m">3</span> <span class="m">4</span> <span class="m">5</span> 6	<span class="c1">#向NUMS2插入3-6</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; PFMERGE NUMS1 NUMS2	<span class="c1">#将NUMS2合并到NUMS1中</span>
+</span></span><span class="line"><span class="cl">OK
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; PFCOUNT NUMS1		<span class="c1">#此时NUMS1中记录了1-6,六个元素</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> 6									
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="bitmap位图">Bitmap(位图)</h3>
+<h4 id="介绍-2">介绍</h4>
+<p>位图其实就是哈希的变形，他通过哈希映射来处理数据，<!-- raw HTML omitted --><strong>位图本身并不存储数据，而是存储标记</strong><!-- raw HTML omitted -->。通过<!-- raw HTML omitted --><strong>一个比特位，即0/1来标记一个数据的两种状态</strong><!-- raw HTML omitted --></p>
+<p><!-- raw HTML omitted --><strong>位图通常情况下用在数据量庞大，且数据不重复的情景下标记某个数据的两种状态。</strong><!-- raw HTML omitted --> 我们可以使用位图来记录当前用户的登陆情况、或者实现打卡、签到等功能。</p>
+<h4 id="用法-2">用法</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GETBIT key offset value(0/1)</td>
+<td>设置Bitmap中偏移量为offset的位置的值</td>
+</tr>
+<tr>
+<td>SETBIT key offset value</td>
+<td>返回Bitmap中偏移量为offset的位置的值</td>
+</tr>
+<tr>
+<td>BITCOUNT key</td>
+<td>计算位图中有多少个1</td>
+</tr>
+</tbody>
+</table></div>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">127.0.0.1:6379&gt; SETBIT TEST <span class="m">1</span> 1	<span class="c1">#将位图中第1，3，5位设置为1</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">0</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; SETBIT TEST <span class="m">3</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">0</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; SETBIT TEST <span class="m">5</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">0</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GETBIT TEST <span class="m">1</span> 	<span class="c1">#查看位图中1，2，3位的值</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GETBIT TEST <span class="m">2</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">0</span>
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; GETBIT TEST <span class="m">3</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">127.0.0.1:6379&gt; BITCOUNT TET	<span class="c1">#统计位图中1的数量，由于我们只设置了1，3，5位，因此为3</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>integer<span class="o">)</span> <span class="m">3</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/redis/">Redis</a>
+        
+            <a href="/tags/kv%E5%AD%98%E5%82%A8/">KV存储</a>
+        
+            <a href="/tags/%E7%BC%93%E5%AD%98/">缓存</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 May 26, 2022 15:25 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/redis-%E5%A4%9A%E6%9C%BA%E6%9C%8D%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 多机服务</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E4%BA%8B%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 事务</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E7%BC%93%E5%AD%98/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 缓存</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E6%8C%81%E4%B9%85%E5%8C%96%E7%AD%96%E7%95%A5/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 持久化策略</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/redis-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Redis 数据结构</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#基础数据类型">基础数据类型</a>
+      <ol>
+        <li><a href="#string">String</a>
+          <ol>
+            <li><a href="#基本用法">基本用法</a></li>
+            <li><a href="#使用场景">使用场景</a></li>
+          </ol>
+        </li>
+        <li><a href="#hash">Hash</a>
+          <ol>
+            <li><a href="#基本用法-1">基本用法</a></li>
+            <li><a href="#使用场景-1">使用场景</a></li>
+          </ol>
+        </li>
+        <li><a href="#list">List</a>
+          <ol>
+            <li><a href="#基本用法-2">基本用法</a></li>
+            <li><a href="#使用场景-2">使用场景</a></li>
+          </ol>
+        </li>
+        <li><a href="#set">Set</a>
+          <ol>
+            <li><a href="#基本用法-3">基本用法</a></li>
+            <li><a href="#使用场景-3">使用场景</a></li>
+          </ol>
+        </li>
+        <li><a href="#zset">Zset</a>
+          <ol>
+            <li><a href="#基本用法-4">基本用法</a></li>
+            <li><a href="#使用场景-4">使用场景</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#特殊数据类型">特殊数据类型</a>
+      <ol>
+        <li><a href="#geospatial地理空间">Geospatial(地理空间)</a>
+          <ol>
+            <li><a href="#介绍">介绍</a></li>
+            <li><a href="#用法">用法</a></li>
+          </ol>
+        </li>
+        <li><a href="#hyperloglog基数统计">Hyperloglog(基数统计)</a>
+          <ol>
+            <li><a href="#介绍-1">介绍</a></li>
+            <li><a href="#用法-1">用法</a></li>
+          </ol>
+        </li>
+        <li><a href="#bitmap位图">Bitmap(位图)</a>
+          <ol>
+            <li><a href="#介绍-2">介绍</a></li>
+            <li><a href="#用法-2">用法</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
