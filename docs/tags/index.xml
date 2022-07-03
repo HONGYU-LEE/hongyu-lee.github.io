@@ -6,7 +6,47 @@
         <description>Recent content in Tags on 凌桓&#39;s BLOG</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en-us</language>
-        <lastBuildDate>Thu, 26 May 2022 15:07:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Sun, 03 Jul 2022 18:55:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>C&#43;&#43;</title>
+        <link>https://blog.orekilee.top/tags/c&#43;&#43;/</link>
+        <pubDate>Sun, 03 Jul 2022 18:55:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/c&#43;&#43;/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>GTest</title>
+        <link>https://blog.orekilee.top/tags/gtest/</link>
+        <pubDate>Sun, 03 Jul 2022 18:55:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/gtest/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>测试</title>
+        <link>https://blog.orekilee.top/tags/%E6%B5%8B%E8%AF%95/</link>
+        <pubDate>Sun, 03 Jul 2022 18:55:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/%E6%B5%8B%E8%AF%95/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>CMake</title>
+        <link>https://blog.orekilee.top/tags/cmake/</link>
+        <pubDate>Sat, 02 Jul 2022 18:53:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/cmake/</guid>
+        <description></description>
+        </item>
+        <item>
+        <title>Bazel</title>
+        <link>https://blog.orekilee.top/tags/bazel/</link>
+        <pubDate>Fri, 01 Jul 2022 18:54:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/tags/bazel/</guid>
+        <description></description>
+        </item>
+        <item>
         <title>KV存储</title>
         <link>https://blog.orekilee.top/tags/kv%E5%AD%98%E5%82%A8/</link>
         <pubDate>Thu, 26 May 2022 15:07:13 +0800</pubDate>

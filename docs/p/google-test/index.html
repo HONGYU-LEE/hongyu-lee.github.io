@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='什么是 GoogleTest ？ 简介 GoogleTest（简称 GTest） 是 Google 开源的一个跨平台的（Liunx、Mac OS X、Windows等）的 C&#43;&#43; 单元测试框架，可以帮助程序员测试 C&#43;&#43; 程序的结果预期。不仅如此，它还提供了丰富的断言、致命和非致命判断、参数化、”死亡测试”等等。
+GoogleTest 官网：https://google.github.io/googletest/ ​ github 仓库：https://github.com/google/googletest
+单元测试 单元测试（unit testing），是指对软件中的最小可测试单元进行检查和验证。至于单元的大小或范围，并没有一个明确的标准，单元可以是一个函数、方法、类、功能模块或者子系统。 单元测试通常和白盒测试联系到一起，如果单从概念上来讲两者是有区别的，不过我们通常所说的单元测试和白盒测试都认为是和代码有关系的，所以在某些语境下也通常认为这两者是同一个东西。还有一种理解方式，单元测试和白盒测试就是对开发人员所编写的代码进行测试。
+优势  测试是独立的和可重复的。GoogleTest 使每个测试用例运行在不同的对象上，从而使测试之间相互独立。当测试失败时，GoogleTest 允许单独运行它以进行快速调试。 测试有良好的组织，可以反映被测试代码的结构。 GoogleTest 将相关测试划分到一个测试组内，组内的测试能共享数据，使测试易于维护。 测试是可移植的和可重复使用的。 与平台无关的代码，其测试代码也应该和平台无关，GoogleTest 能在不同的操作系统下工作，并且支持不同的编译器。 当测试用例执行失败时，提供尽可能多的有效信息，以便定位问题。 GoogleTest 不会在第一次测试失败时停止。相反，它只会停止当前测试并继续下一个测试。还可以设置报告非致命故障的测试，然后继续当前测试。因此，您可以在单个运行-编辑-编译周期中检测和修复多个错误。 测试框架应该将测试编写者从琐事中解放出来，让他们专注于测试内容。 GoogleTest 自动跟踪所有定义的测试，不需要用户为了运行它们而进行枚举。 测试高效、快速。GoogleTest 能在测试用例之间复用测试资源，只需支付一次设置/拆分成本，并且不会使测试相互依赖，这样的机制使单元测试更加高效。  环境搭建 安装 GoogleTest Bazel 首先创建一个工作区目录：
+1  $ mkdir my_workspace &amp;amp;&amp;amp; cd my_workspace   接着在工作区的根目录中创建一个 WORKSPACE 文件，并在其中引入外部依赖 GoogleTest，此时 Bazel 会自动去 Github 上拉取文件：
+1 2 3 4 5 6 7  load(&amp;#34;@bazel_tools//tools/build_defs/repo:http.'><title>Google Test</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/google-test/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Google Test'>
+<meta property='og:description' content='什么是 GoogleTest ？ 简介 GoogleTest（简称 GTest） 是 Google 开源的一个跨平台的（Liunx、Mac OS X、Windows等）的 C&#43;&#43; 单元测试框架，可以帮助程序员测试 C&#43;&#43; 程序的结果预期。不仅如此，它还提供了丰富的断言、致命和非致命判断、参数化、”死亡测试”等等。
+GoogleTest 官网：https://google.github.io/googletest/ ​ github 仓库：https://github.com/google/googletest
+单元测试 单元测试（unit testing），是指对软件中的最小可测试单元进行检查和验证。至于单元的大小或范围，并没有一个明确的标准，单元可以是一个函数、方法、类、功能模块或者子系统。 单元测试通常和白盒测试联系到一起，如果单从概念上来讲两者是有区别的，不过我们通常所说的单元测试和白盒测试都认为是和代码有关系的，所以在某些语境下也通常认为这两者是同一个东西。还有一种理解方式，单元测试和白盒测试就是对开发人员所编写的代码进行测试。
+优势  测试是独立的和可重复的。GoogleTest 使每个测试用例运行在不同的对象上，从而使测试之间相互独立。当测试失败时，GoogleTest 允许单独运行它以进行快速调试。 测试有良好的组织，可以反映被测试代码的结构。 GoogleTest 将相关测试划分到一个测试组内，组内的测试能共享数据，使测试易于维护。 测试是可移植的和可重复使用的。 与平台无关的代码，其测试代码也应该和平台无关，GoogleTest 能在不同的操作系统下工作，并且支持不同的编译器。 当测试用例执行失败时，提供尽可能多的有效信息，以便定位问题。 GoogleTest 不会在第一次测试失败时停止。相反，它只会停止当前测试并继续下一个测试。还可以设置报告非致命故障的测试，然后继续当前测试。因此，您可以在单个运行-编辑-编译周期中检测和修复多个错误。 测试框架应该将测试编写者从琐事中解放出来，让他们专注于测试内容。 GoogleTest 自动跟踪所有定义的测试，不需要用户为了运行它们而进行枚举。 测试高效、快速。GoogleTest 能在测试用例之间复用测试资源，只需支付一次设置/拆分成本，并且不会使测试相互依赖，这样的机制使单元测试更加高效。  环境搭建 安装 GoogleTest Bazel 首先创建一个工作区目录：
+1  $ mkdir my_workspace &amp;amp;&amp;amp; cd my_workspace   接着在工作区的根目录中创建一个 WORKSPACE 文件，并在其中引入外部依赖 GoogleTest，此时 Bazel 会自动去 Github 上拉取文件：
+1 2 3 4 5 6 7  load(&amp;#34;@bazel_tools//tools/build_defs/repo:http.'>
+<meta property='og:url' content='https://blog.orekilee.top/p/google-test/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='测试' /><meta property='article:tag' content='GTest' /><meta property='article:published_time' content='2022-07-03T18:55:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-03T21:19:16&#43;08:00'/>
+<meta name="twitter:title" content="Google Test">
+<meta name="twitter:description" content="什么是 GoogleTest ？ 简介 GoogleTest（简称 GTest） 是 Google 开源的一个跨平台的（Liunx、Mac OS X、Windows等）的 C&#43;&#43; 单元测试框架，可以帮助程序员测试 C&#43;&#43; 程序的结果预期。不仅如此，它还提供了丰富的断言、致命和非致命判断、参数化、”死亡测试”等等。
+GoogleTest 官网：https://google.github.io/googletest/ ​ github 仓库：https://github.com/google/googletest
+单元测试 单元测试（unit testing），是指对软件中的最小可测试单元进行检查和验证。至于单元的大小或范围，并没有一个明确的标准，单元可以是一个函数、方法、类、功能模块或者子系统。 单元测试通常和白盒测试联系到一起，如果单从概念上来讲两者是有区别的，不过我们通常所说的单元测试和白盒测试都认为是和代码有关系的，所以在某些语境下也通常认为这两者是同一个东西。还有一种理解方式，单元测试和白盒测试就是对开发人员所编写的代码进行测试。
+优势  测试是独立的和可重复的。GoogleTest 使每个测试用例运行在不同的对象上，从而使测试之间相互独立。当测试失败时，GoogleTest 允许单独运行它以进行快速调试。 测试有良好的组织，可以反映被测试代码的结构。 GoogleTest 将相关测试划分到一个测试组内，组内的测试能共享数据，使测试易于维护。 测试是可移植的和可重复使用的。 与平台无关的代码，其测试代码也应该和平台无关，GoogleTest 能在不同的操作系统下工作，并且支持不同的编译器。 当测试用例执行失败时，提供尽可能多的有效信息，以便定位问题。 GoogleTest 不会在第一次测试失败时停止。相反，它只会停止当前测试并继续下一个测试。还可以设置报告非致命故障的测试，然后继续当前测试。因此，您可以在单个运行-编辑-编译周期中检测和修复多个错误。 测试框架应该将测试编写者从琐事中解放出来，让他们专注于测试内容。 GoogleTest 自动跟踪所有定义的测试，不需要用户为了运行它们而进行枚举。 测试高效、快速。GoogleTest 能在测试用例之间复用测试资源，只需支付一次设置/拆分成本，并且不会使测试相互依赖，这样的机制使单元测试更加高效。  环境搭建 安装 GoogleTest Bazel 首先创建一个工作区目录：
+1  $ mkdir my_workspace &amp;amp;&amp;amp; cd my_workspace   接着在工作区的根目录中创建一个 WORKSPACE 文件，并在其中引入外部依赖 GoogleTest，此时 Bazel 会自动去 Github 上拉取文件：
+1 2 3 4 5 6 7  load(&amp;#34;@bazel_tools//tools/build_defs/repo:http.">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E5%B7%A5%E5%85%B7/" style="background-color: #2a9d8f; color: #fff;">
+                工具
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/google-test/">Google Test</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 03, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="什么是-googletest-">什么是 GoogleTest ？</h1>
+<h2 id="简介">简介</h2>
+<p><img src="http://img.orekilee.top//imgbed/gtest/gtest1.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>GoogleTest（简称 GTest） 是 Google 开源的一个跨平台的（Liunx、Mac OS X、Windows等）的 C++ 单元测试框架，可以帮助程序员测试 C++ 程序的结果预期。不仅如此，它还提供了丰富的断言、致命和非致命判断、参数化、”死亡测试”等等。</p>
+<p>GoogleTest 官网：https://google.github.io/googletest/
+​ github 仓库：https://github.com/google/googletest</p>
+<h2 id="单元测试">单元测试</h2>
+<p>单元测试（unit testing），是指对软件中的最小可测试单元进行检查和验证。至于单元的大小或范围，并没有一个明确的标准，单元可以是一个函数、方法、类、功能模块或者子系统。
+单元测试通常和白盒测试联系到一起，如果单从概念上来讲两者是有区别的，不过我们通常所说的单元测试和白盒测试都认为是和代码有关系的，所以在某些语境下也通常认为这两者是同一个东西。还有一种理解方式，单元测试和白盒测试就是对开发人员所编写的代码进行测试。</p>
+<h2 id="优势">优势</h2>
+<ul>
+<li><strong>测试是独立的和可重复的</strong>。GoogleTest 使每个测试用例运行在不同的对象上，从而使测试之间相互独立。当测试失败时，GoogleTest 允许单独运行它以进行快速调试。</li>
+<li><strong>测试有良好的组织，可以反映被测试代码的结构。</strong> GoogleTest 将相关测试划分到一个测试组内，组内的测试能共享数据，使测试易于维护。</li>
+<li><strong>测试是可移植的和可重复使用的。</strong> 与平台无关的代码，其测试代码也应该和平台无关，GoogleTest 能在不同的操作系统下工作，并且支持不同的编译器。</li>
+<li><strong>当测试用例执行失败时，提供尽可能多的有效信息，以便定位问题。</strong> GoogleTest 不会在第一次测试失败时停止。相反，它只会停止当前测试并继续下一个测试。还可以设置报告非致命故障的测试，然后继续当前测试。因此，您可以在单个运行-编辑-编译周期中检测和修复多个错误。</li>
+<li><strong>测试框架应该将测试编写者从琐事中解放出来，让他们专注于测试内容。</strong> GoogleTest 自动跟踪所有定义的测试，不需要用户为了运行它们而进行枚举。</li>
+<li><strong>测试高效、快速</strong>。GoogleTest 能在测试用例之间复用测试资源，只需支付一次设置/拆分成本，并且不会使测试相互依赖，这样的机制使单元测试更加高效。</li>
+</ul>
+<h2 id="环境搭建">环境搭建</h2>
+<h3 id="安装-googletest">安装 GoogleTest</h3>
+<h4 id="bazel">Bazel</h4>
+<p>首先创建一个工作区目录：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ mkdir my_workspace <span class="o">&amp;&amp;</span> <span class="nb">cd</span> my_workspace
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>接着在工作区的根目录中创建一个 WORKSPACE 文件，并在其中引入外部依赖 GoogleTest，此时 Bazel 会自动去 Github 上拉取文件：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">load<span class="o">(</span><span class="s2">&#34;@bazel_tools//tools/build_defs/repo:http.bzl&#34;</span>, <span class="s2">&#34;http_archive&#34;</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">http_archive<span class="o">(</span>
+</span></span><span class="line"><span class="cl">  <span class="nv">name</span> <span class="o">=</span> <span class="s2">&#34;com_google_googletest&#34;</span>,
+</span></span><span class="line"><span class="cl">  <span class="nv">urls</span> <span class="o">=</span> <span class="o">[</span><span class="s2">&#34;https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip&#34;</span><span class="o">]</span>,
+</span></span><span class="line"><span class="cl">  <span class="nv">strip_prefix</span> <span class="o">=</span> <span class="s2">&#34;googletest-609281088cfefc76f9d0ce82e1ff6c30cc3591e5&#34;</span>,
+</span></span><span class="line"><span class="cl"><span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>接着选取一个目录作为包目录，在该目录下进行代码的编写，例如一个 hello_test.cc 文件：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;gtest/gtest.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// Demonstrate some basic assertions.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">TEST</span><span class="p">(</span><span class="n">HelloTest</span><span class="p">,</span> <span class="n">BasicAssertions</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// Expect two strings not to be equal.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">EXPECT_STRNE</span><span class="p">(</span><span class="s">&#34;hello&#34;</span><span class="p">,</span> <span class="s">&#34;world&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// Expect equality.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">7</span> <span class="o">*</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">42</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>在同目录下的 BUILD 文件中说明目标编译的规则：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">cc_test<span class="o">(</span>
+</span></span><span class="line"><span class="cl">  <span class="nv">name</span> <span class="o">=</span> <span class="s2">&#34;hello_test&#34;</span>,
+</span></span><span class="line"><span class="cl">  <span class="nv">size</span> <span class="o">=</span> <span class="s2">&#34;small&#34;</span>,
+</span></span><span class="line"><span class="cl">  <span class="nv">srcs</span> <span class="o">=</span> <span class="o">[</span><span class="s2">&#34;hello_test.cc&#34;</span><span class="o">]</span>,
+</span></span><span class="line"><span class="cl">  <span class="nv">deps</span> <span class="o">=</span> <span class="o">[</span><span class="s2">&#34;@com_google_googletest//:gtest_main&#34;</span><span class="o">]</span>,
+</span></span><span class="line"><span class="cl"><span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时执行以下命令即可构建并运行测试程序：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">bazel <span class="nb">test</span> --test_output<span class="o">=</span>all //:hello_test 
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h4 id="cmake">Cmake</h4>
+<p>首先创建一个目录：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ mkdir my_project <span class="o">&amp;&amp;</span> <span class="nb">cd</span> my_project
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>接着创建 CMakeLists.txt 文件，并声明对 GoogleTest 的依赖，此时 Cmake 会自动去下载对应的库：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cmake" data-lang="cmake"><span class="line"><span class="cl"><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span> <span class="s">3.14</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="nb">project</span><span class="p">(</span><span class="s">my_project</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="c"># GoogleTest requires at least C++11
+</span></span></span><span class="line"><span class="cl"><span class="c"></span><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_CXX_STANDARD</span> <span class="s">11</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="nb">include</span><span class="p">(</span><span class="s">FetchContent</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="nb">FetchContent_Declare</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">googletest</span>
+</span></span><span class="line"><span class="cl">  <span class="s">URL</span> <span class="s">https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="c"># For Windows: Prevent overriding the parent project&#39;s compiler/linker settings
+</span></span></span><span class="line"><span class="cl"><span class="c"></span><span class="nb">set</span><span class="p">(</span><span class="s">gtest_force_shared_crt</span> <span class="s">ON</span> <span class="s">CACHE</span> <span class="s">BOOL</span> <span class="s2">&#34;&#34;</span> <span class="s">FORCE</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="nb">FetchContent_MakeAvailable</span><span class="p">(</span><span class="s">googletest</span><span class="p">)</span><span class="err">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时我们就可以在代码中使用 GoogleTest，我们创建一个 hello_test.cc 文件：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;gtest/gtest.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// Demonstrate some basic assertions.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">TEST</span><span class="p">(</span><span class="n">HelloTest</span><span class="p">,</span> <span class="n">BasicAssertions</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// Expect two strings not to be equal.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">EXPECT_STRNE</span><span class="p">(</span><span class="s">&#34;hello&#34;</span><span class="p">,</span> <span class="s">&#34;world&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// Expect equality.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">7</span> <span class="o">*</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">42</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>然后在 CMakeLists.txt 的末尾加上 hello_test.cc 的构建规则：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cmake" data-lang="cmake"><span class="line"><span class="cl"><span class="nb">enable_testing</span><span class="p">()</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="nb">add_executable</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">hello_test</span>
+</span></span><span class="line"><span class="cl">  <span class="s">hello_test.cc</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="nb">target_link_libraries</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">hello_test</span>
+</span></span><span class="line"><span class="cl">  <span class="s">gtest_main</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="nb">include</span><span class="p">(</span><span class="s">GoogleTest</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="nb">gtest_discover_tests</span><span class="p">(</span><span class="s">hello_test</span><span class="p">)</span><span class="err">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>运行下面的命令构建并允许测试程序：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">cmake -S . -B build
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">cmake --build build
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> build <span class="o">&amp;&amp;</span> ctest
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="安装示例项目">安装示例项目</h3>
+<p>从 GoogleTest 的 GitHub 中下载官方提供的示例项目：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git clone https://github.com/google/googletest.git
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>示例项目位于 <code>googletest/googletest/samples/</code> 目录，示例内容可参考官网的说明：<a class="link" href="https://google.github.io/googletest/samples.html"  target="_blank" rel="noopener"
+    >samples</a></p>
+<h1 id="googletest-实战">GoogleTest 实战</h1>
+<h2 id="断言">断言</h2>
+<h3 id="断言的概念">断言的概念</h3>
+<p>GoogleTest 中，是通过断言（Assertion）来判断代码实现的功能是否符合预期。断言的结果分为成功（success）、非致命错误（non-fatal failture）和致命错误（fatal failture）。</p>
+<ul>
+<li><strong>成功</strong>：断言成功，程序的行为符合预期，程序允许继续向下运行。可以在代码中调用 <code>SUCCEED()</code> 来表示这个结果。</li>
+<li><strong>非致命错误</strong>：断言失败，但是程序没有直接中止，而是继续向下运行。可以在代码中调用 <code>FAIL()</code> 来表示这个结果。</li>
+<li><strong>致命错误</strong>：中止当前函数或者程序崩溃。可以在代码中调用 <code>ADD_FAILURE()</code> 来表示这个结果。</li>
+</ul>
+<p>GoogleTest 的断言是类似于函数调用的宏。通过对其行为进行断言来测试一个类或函数。当断言失败时，GoogleTest 会打印断言的源文件和行号位置以及失败消息。还可以提供自定义失败消息，该消息将附加到 GoogleTest 的消息中。</p>
+<h3 id="expect-与-assert">EXPECT 与 ASSERT</h3>
+<p>宏的格式有两种：</p>
+<ul>
+<li><code>EXPECT_*</code>：在失败时会产生非致命故障，不会中止当前功能。</li>
+<li><code>ASSERT_*</code>：在失败时会产生致命错误，并中止当前函数，同一用例后面的语句将不再执行。</li>
+</ul>
+<blockquote>
+<p>通常 <code>EXPECT_*</code> 是首选，因为它们允许在测试中报告多个。但是如果在某条件不成立，程序就无法运行时，就应该使用 <code>ASSERT_*</code> 。</p>
+<p>另一方面，因为 <code>ASSERT_*</code> 是直接从当前函数返回的，可能会导致一些内存、文件资源没有释放，因此存在内存泄漏的问题。</p>
+</blockquote>
+<p>GoogleTest 提供了一组断言，用于以各种方式验证代码的行为。包括检查布尔条件、基于关系运算符比较值、验证字符串值、浮点值等等。甚至还有一些断言可以通过提供自定义谓词来验证更复杂的状态。有关 GoogleTest 提供的断言的完整列表，可以参考官方文档：<a class="link" href="https://google.github.io/googletest/reference/assertions.html"  target="_blank" rel="noopener"
+    >Assertions</a>。</p>
+<h3 id="自定义失败信息">自定义失败信息</h3>
+<p>如果想要提供自定义的失败信息，只需要使用流操作符 &laquo;  将这些信息流到断言宏中，例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">ASSERT_EQ</span><span class="p">(</span><span class="n">x</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span> <span class="n">y</span><span class="p">.</span><span class="n">size</span><span class="p">())</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Vectors x and y are of unequal length&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">x</span><span class="p">.</span><span class="n">size</span><span class="p">();</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Vectors x and y differ at index &#34;</span> <span class="o">&lt;&lt;</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>任何可以流向 std::ostream 的东西都可以流向断言宏，特别是 C 语言的字符串（char*）和 std::string 对象。如果一个宽字符串（wchar_t*，Windows 上 UNICODE 模式下的 TCHAR*，或 std::wstring）被流向一个断言，它将在打印时被转换成 UTF-8。</p>
+<h2 id="功能测试">功能测试</h2>
+<h3 id="test">TEST</h3>
+<p>如果想要创建测试，可以使用宏函数 <code>TEST</code>，它具有以下特点：</p>
+<ul>
+<li><code>TEST</code> 是一个没有返回值的宏函数。</li>
+<li>我们可以在该函数中使用断言来检测代码是否有效，测试的结果由断言决定。如果测试中的任何断言失败（致命或非致命），或者如果测试崩溃，则整个测试失败。否则，它会成功。</li>
+</ul>
+<p>函数定义如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">TEST</span><span class="p">(</span><span class="n">TestSuiteName</span><span class="p">,</span> <span class="n">TestName</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">...</span> <span class="n">test</span> <span class="n">body</span> <span class="p">...</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>TestSuiteName 对应测试用例集名称，TestName 是归属的测试用例名称。这两个名称都必须是有效的 C++ 标识符，并且它们不应包含任何下划线。测试的全名由其包含的测试用例集及其测试名称组成。来自不同测试用例集的测试可以具有相同的名称。</p>
+<p>这里以官方提供的 Sample1 中的阶乘函数为例：</p>
+<p>sample1.cc 中的阶乘函数定义如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">Factorial</span><span class="p">(</span><span class="kt">int</span> <span class="n">n</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="n">n</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">result</span> <span class="o">*=</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>sample1_unittest.cc 中即为测试代码，这里为了能够更好的组织测试用例，将数据根据正负数划分为三个测试用例集，每一个用例集中都是相同类型的测试用例。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// 测试负数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">TEST</span><span class="p">(</span><span class="n">FactorialTest</span><span class="p">,</span> <span class="n">Negative</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="o">-</span><span class="mi">5</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_GT</span><span class="p">(</span><span class="n">Factorial</span><span class="p">(</span><span class="o">-</span><span class="mi">10</span><span class="p">),</span> <span class="mi">0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 测试0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">TEST</span><span class="p">(</span><span class="n">FactorialTest</span><span class="p">,</span> <span class="n">Zero</span><span class="p">)</span> <span class="p">{</span> <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="mi">0</span><span class="p">));</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 测试正数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">TEST</span><span class="p">(</span><span class="n">FactorialTest</span><span class="p">,</span> <span class="n">Positive</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="mi">2</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="mi">3</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">40320</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="mi">8</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>当我们执行测试时，输出如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="o">[==========]</span> Running <span class="m">6</span> tests from <span class="m">2</span> <span class="nb">test</span> cases.
+</span></span><span class="line"><span class="cl"><span class="o">[</span>----------<span class="o">]</span> Global <span class="nb">test</span> environment set-up.
+</span></span><span class="line"><span class="cl"><span class="o">[</span>----------<span class="o">]</span> <span class="m">3</span> tests from FactorialTest
+</span></span><span class="line"><span class="cl"><span class="o">[</span> RUN      <span class="o">]</span> FactorialTest.Negative
+</span></span><span class="line"><span class="cl"><span class="o">[</span>       OK <span class="o">]</span> FactorialTest.Negative <span class="o">(</span><span class="m">0</span> ms<span class="o">)</span>
+</span></span><span class="line"><span class="cl"><span class="o">[</span> RUN      <span class="o">]</span> FactorialTest.Zero
+</span></span><span class="line"><span class="cl"><span class="o">[</span>       OK <span class="o">]</span> FactorialTest.Zero <span class="o">(</span><span class="m">0</span> ms<span class="o">)</span>
+</span></span><span class="line"><span class="cl"><span class="o">[</span> RUN      <span class="o">]</span> FactorialTest.Positive
+</span></span><span class="line"><span class="cl"><span class="o">[</span>       OK <span class="o">]</span> FactorialTest.Positive <span class="o">(</span><span class="m">0</span> ms<span class="o">)</span>
+</span></span><span class="line"><span class="cl"><span class="o">[</span>----------<span class="o">]</span> <span class="m">3</span> tests from FactorialTest <span class="o">(</span><span class="m">2</span> ms total<span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>这就表示我们的代码通过了所有的测试用例。</p>
+<h3 id="test_f">TEST_F</h3>
+<p>如果发现自己编写了两个或多个对相似数据进行操作的测试，可以使用 test fixture 来为多个测试重用这些相同的配置。</p>
+<blockquote>
+<p>fixture，其语义是固定的设施，而 test fixture 在 GoogleTest 中的作用就是为每个 TEST 都执行一些同样的操作。</p>
+</blockquote>
+<p>其对应的宏函数是 <code>TEST_F</code>，函数定义如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">TEST_F</span><span class="p">(</span><span class="n">TestFixtureName</span><span class="p">,</span> <span class="n">TestName</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">...</span> <span class="n">test</span> <span class="n">body</span> <span class="p">...</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>TestFixtureName 对应一个 test fixture 类的名称。因此我们需要自己去定义一个这样的类，并让它继承 <code>testing::Test</code> 类，然后根据我们的需要实现下面这两个虚函数：</p>
+<ul>
+<li><code>virtual void SetUp()</code>：类似于构造函数，在 <code>TEST_F</code> 之前运行；</li>
+<li><code>virtual void TearDown()</code>：类似于析构函数，在 <code>TEST_F</code> 之后运行。</li>
+</ul>
+<p>此外 <code>testing::Test</code> 还提供了两个 static 函数：</p>
+<ul>
+<li><code>static void SetUpTestSuite()</code>：在第一个 <code>TEST</code> 之前运行</li>
+<li><code>static void TearDownTestSuite()</code>：在最后一个 <code>TEST</code> 之后运行</li>
+</ul>
+<p>除了这两种，还有一种全局事件，即继承<code>testing::Environment</code>，并实现下面两个虚函数：</p>
+<ul>
+<li><code>virtual void SetUp()</code>：在所有用例之前运行；</li>
+<li><code>virtual void TearDown()</code>：在所有用例之后运行。</li>
+</ul>
+<p>这里以官方提供的 Sample3 中实现的 Queue 为例，其实现如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">  1
+</span><span class="lnt">  2
+</span><span class="lnt">  3
+</span><span class="lnt">  4
+</span><span class="lnt">  5
+</span><span class="lnt">  6
+</span><span class="lnt">  7
+</span><span class="lnt">  8
+</span><span class="lnt">  9
+</span><span class="lnt"> 10
+</span><span class="lnt"> 11
+</span><span class="lnt"> 12
+</span><span class="lnt"> 13
+</span><span class="lnt"> 14
+</span><span class="lnt"> 15
+</span><span class="lnt"> 16
+</span><span class="lnt"> 17
+</span><span class="lnt"> 18
+</span><span class="lnt"> 19
+</span><span class="lnt"> 20
+</span><span class="lnt"> 21
+</span><span class="lnt"> 22
+</span><span class="lnt"> 23
+</span><span class="lnt"> 24
+</span><span class="lnt"> 25
+</span><span class="lnt"> 26
+</span><span class="lnt"> 27
+</span><span class="lnt"> 28
+</span><span class="lnt"> 29
+</span><span class="lnt"> 30
+</span><span class="lnt"> 31
+</span><span class="lnt"> 32
+</span><span class="lnt"> 33
+</span><span class="lnt"> 34
+</span><span class="lnt"> 35
+</span><span class="lnt"> 36
+</span><span class="lnt"> 37
+</span><span class="lnt"> 38
+</span><span class="lnt"> 39
+</span><span class="lnt"> 40
+</span><span class="lnt"> 41
+</span><span class="lnt"> 42
+</span><span class="lnt"> 43
+</span><span class="lnt"> 44
+</span><span class="lnt"> 45
+</span><span class="lnt"> 46
+</span><span class="lnt"> 47
+</span><span class="lnt"> 48
+</span><span class="lnt"> 49
+</span><span class="lnt"> 50
+</span><span class="lnt"> 51
+</span><span class="lnt"> 52
+</span><span class="lnt"> 53
+</span><span class="lnt"> 54
+</span><span class="lnt"> 55
+</span><span class="lnt"> 56
+</span><span class="lnt"> 57
+</span><span class="lnt"> 58
+</span><span class="lnt"> 59
+</span><span class="lnt"> 60
+</span><span class="lnt"> 61
+</span><span class="lnt"> 62
+</span><span class="lnt"> 63
+</span><span class="lnt"> 64
+</span><span class="lnt"> 65
+</span><span class="lnt"> 66
+</span><span class="lnt"> 67
+</span><span class="lnt"> 68
+</span><span class="lnt"> 69
+</span><span class="lnt"> 70
+</span><span class="lnt"> 71
+</span><span class="lnt"> 72
+</span><span class="lnt"> 73
+</span><span class="lnt"> 74
+</span><span class="lnt"> 75
+</span><span class="lnt"> 76
+</span><span class="lnt"> 77
+</span><span class="lnt"> 78
+</span><span class="lnt"> 79
+</span><span class="lnt"> 80
+</span><span class="lnt"> 81
+</span><span class="lnt"> 82
+</span><span class="lnt"> 83
+</span><span class="lnt"> 84
+</span><span class="lnt"> 85
+</span><span class="lnt"> 86
+</span><span class="lnt"> 87
+</span><span class="lnt"> 88
+</span><span class="lnt"> 89
+</span><span class="lnt"> 90
+</span><span class="lnt"> 91
+</span><span class="lnt"> 92
+</span><span class="lnt"> 93
+</span><span class="lnt"> 94
+</span><span class="lnt"> 95
+</span><span class="lnt"> 96
+</span><span class="lnt"> 97
+</span><span class="lnt"> 98
+</span><span class="lnt"> 99
+</span><span class="lnt">100
+</span><span class="lnt">101
+</span><span class="lnt">102
+</span><span class="lnt">103
+</span><span class="lnt">104
+</span><span class="lnt">105
+</span><span class="lnt">106
+</span><span class="lnt">107
+</span><span class="lnt">108
+</span><span class="lnt">109
+</span><span class="lnt">110
+</span><span class="lnt">111
+</span><span class="lnt">112
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#ifndef GOOGLETEST_SAMPLES_SAMPLE3_INL_H_
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define GOOGLETEST_SAMPLES_SAMPLE3_INL_H_
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stddef.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">E</span><span class="o">&gt;</span>  <span class="c1">// E is the element type
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">class</span> <span class="nc">Queue</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">E</span><span class="o">&gt;</span>  <span class="c1">// E is the element type
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">class</span> <span class="nc">QueueNode</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">friend</span> <span class="k">class</span> <span class="nc">Queue</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"> <span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="n">E</span><span class="o">&amp;</span> <span class="n">element</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">element_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">QueueNode</span><span class="o">*</span> <span class="nf">next</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="n">next_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="n">QueueNode</span><span class="o">*</span> <span class="nf">next</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">next_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"> <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="k">explicit</span> <span class="n">QueueNode</span><span class="p">(</span><span class="k">const</span> <span class="n">E</span><span class="o">&amp;</span> <span class="n">an_element</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">      <span class="o">:</span> <span class="n">element_</span><span class="p">(</span><span class="n">an_element</span><span class="p">),</span> <span class="n">next_</span><span class="p">(</span><span class="k">nullptr</span><span class="p">)</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="n">QueueNode</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">QueueNode</span><span class="o">&amp;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">QueueNode</span><span class="p">(</span><span class="k">const</span> <span class="n">QueueNode</span><span class="o">&amp;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">E</span> <span class="n">element_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">QueueNode</span><span class="o">*</span> <span class="n">next_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">E</span><span class="o">&gt;</span>  <span class="c1">// E is the element type.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">class</span> <span class="nc">Queue</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"> <span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Queue</span><span class="p">()</span> <span class="o">:</span> <span class="n">head_</span><span class="p">(</span><span class="k">nullptr</span><span class="p">),</span> <span class="n">last_</span><span class="p">(</span><span class="k">nullptr</span><span class="p">),</span> <span class="n">size_</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="o">~</span><span class="n">Queue</span><span class="p">()</span> <span class="p">{</span> <span class="n">Clear</span><span class="p">();</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">Clear</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">size_</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="c1">// 1. Deletes every node.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>      <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">node</span> <span class="o">=</span> <span class="n">head_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">next</span> <span class="o">=</span> <span class="n">node</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">      <span class="k">for</span> <span class="p">(;;)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">delete</span> <span class="n">node</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">node</span> <span class="o">=</span> <span class="n">next</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="p">(</span><span class="n">node</span> <span class="o">==</span> <span class="k">nullptr</span><span class="p">)</span> <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">next</span> <span class="o">=</span> <span class="n">node</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="n">head_</span> <span class="o">=</span> <span class="n">last_</span> <span class="o">=</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">size_</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">size_t</span> <span class="nf">Size</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">size_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">Head</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="n">head_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">Head</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">head_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">Last</span><span class="p">()</span> <span class="p">{</span> <span class="k">return</span> <span class="n">last_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">Last</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span> <span class="k">return</span> <span class="n">last_</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="nf">Enqueue</span><span class="p">(</span><span class="k">const</span> <span class="n">E</span><span class="o">&amp;</span> <span class="n">element</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">new_node</span> <span class="o">=</span> <span class="k">new</span> <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;</span><span class="p">(</span><span class="n">element</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">size_</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">head_</span> <span class="o">=</span> <span class="n">last_</span> <span class="o">=</span> <span class="n">new_node</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">size_</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">last_</span><span class="o">-&gt;</span><span class="n">next_</span> <span class="o">=</span> <span class="n">new_node</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">last_</span> <span class="o">=</span> <span class="n">new_node</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">      <span class="n">size_</span><span class="o">++</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">E</span><span class="o">*</span> <span class="nf">Dequeue</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">size_</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="k">const</span> <span class="n">old_head</span> <span class="o">=</span> <span class="n">head_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">head_</span> <span class="o">=</span> <span class="n">head_</span><span class="o">-&gt;</span><span class="n">next_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">size_</span><span class="o">--</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">size_</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">last_</span> <span class="o">=</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">E</span><span class="o">*</span> <span class="n">element</span> <span class="o">=</span> <span class="k">new</span> <span class="n">E</span><span class="p">(</span><span class="n">old_head</span><span class="o">-&gt;</span><span class="n">element</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">    <span class="k">delete</span> <span class="n">old_head</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">element</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">F</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Queue</span><span class="o">*</span> <span class="n">Map</span><span class="p">(</span><span class="n">F</span> <span class="n">function</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Queue</span><span class="o">*</span> <span class="n">new_queue</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Queue</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">(</span><span class="k">const</span> <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">node</span> <span class="o">=</span> <span class="n">head_</span><span class="p">;</span> <span class="n">node</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">         <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">-&gt;</span><span class="n">next_</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">new_queue</span><span class="o">-&gt;</span><span class="n">Enqueue</span><span class="p">(</span><span class="n">function</span><span class="p">(</span><span class="n">node</span><span class="o">-&gt;</span><span class="n">element</span><span class="p">()));</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">new_queue</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"> <span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">  <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">head_</span><span class="p">;</span>  <span class="c1">// The first node of the queue.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">QueueNode</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;*</span> <span class="n">last_</span><span class="p">;</span>  <span class="c1">// The last node of the queue.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="n">size_t</span> <span class="n">size_</span><span class="p">;</span>         <span class="c1">// The number of elements in the queue.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="n">Queue</span><span class="p">(</span><span class="k">const</span> <span class="n">Queue</span><span class="o">&amp;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="k">const</span> <span class="n">Queue</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Queue</span><span class="o">&amp;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="cp">#endif  </span><span class="c1">// GOOGLETEST_SAMPLES_SAMPLE3_INL_H_
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>接着看看测试用例是如何编写的，首先声明了一个 test fixture 类，在这个类中实现了一些测试时用到的辅助函数，以及使用 <code>SetUp</code> 预置了一些测试数据。（除了有特殊需求，则不需要实现 <code>TearDown</code>，因为析构函数已经帮我们释放了资源）</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">QueueTestSmpl3</span> <span class="o">:</span> <span class="k">public</span> <span class="n">testing</span><span class="o">::</span><span class="n">Test</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"> <span class="k">protected</span><span class="o">:</span> 
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">  <span class="kt">void</span> <span class="n">SetUp</span><span class="p">()</span> <span class="k">override</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">q1_</span><span class="p">.</span><span class="n">Enqueue</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">q2_</span><span class="p">.</span><span class="n">Enqueue</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">q2_</span><span class="p">.</span><span class="n">Enqueue</span><span class="p">(</span><span class="mi">3</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">// 一个辅助函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">static</span> <span class="kt">int</span> <span class="nf">Double</span><span class="p">(</span><span class="kt">int</span> <span class="n">n</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">n</span><span class="p">;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">// 测试 Queue::Map() 时用到的辅助函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="kt">void</span> <span class="nf">MapTester</span><span class="p">(</span><span class="k">const</span> <span class="n">Queue</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;*</span> <span class="n">q</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="n">Queue</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;*</span> <span class="k">const</span> <span class="n">new_q</span> <span class="o">=</span> <span class="n">q</span><span class="o">-&gt;</span><span class="n">Map</span><span class="p">(</span><span class="n">Double</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">ASSERT_EQ</span><span class="p">(</span><span class="n">q</span><span class="o">-&gt;</span><span class="n">Size</span><span class="p">(),</span> <span class="n">new_q</span><span class="o">-&gt;</span><span class="n">Size</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">(</span><span class="k">const</span> <span class="n">QueueNode</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;*</span><span class="n">n1</span> <span class="o">=</span> <span class="n">q</span><span class="o">-&gt;</span><span class="n">Head</span><span class="p">(),</span> <span class="o">*</span><span class="n">n2</span> <span class="o">=</span> <span class="n">new_q</span><span class="o">-&gt;</span><span class="n">Head</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">         <span class="n">n1</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">;</span> <span class="n">n1</span> <span class="o">=</span> <span class="n">n1</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">(),</span> <span class="n">n2</span> <span class="o">=</span> <span class="n">n2</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">n1</span><span class="o">-&gt;</span><span class="n">element</span><span class="p">(),</span> <span class="n">n2</span><span class="o">-&gt;</span><span class="n">element</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">delete</span> <span class="n">new_q</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">Queue</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">q0_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Queue</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">q1_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="n">Queue</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">q2_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>接着看看它的 <code>TEST_F</code> ：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// 测试默认构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">TEST_F</span><span class="p">(</span><span class="n">QueueTestSmpl3</span><span class="p">,</span> <span class="n">DefaultConstructor</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">0u</span><span class="p">,</span> <span class="n">q0_</span><span class="p">.</span><span class="n">Size</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 测试出队
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">TEST_F</span><span class="p">(</span><span class="n">QueueTestSmpl3</span><span class="p">,</span> <span class="n">Dequeue</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kt">int</span><span class="o">*</span> <span class="n">n</span> <span class="o">=</span> <span class="n">q0_</span><span class="p">.</span><span class="n">Dequeue</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_TRUE</span><span class="p">(</span><span class="n">n</span> <span class="o">==</span> <span class="k">nullptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">n</span> <span class="o">=</span> <span class="n">q1_</span><span class="p">.</span><span class="n">Dequeue</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="n">ASSERT_TRUE</span><span class="p">(</span><span class="n">n</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">*</span><span class="n">n</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">0u</span><span class="p">,</span> <span class="n">q1_</span><span class="p">.</span><span class="n">Size</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">  <span class="k">delete</span> <span class="n">n</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="n">n</span> <span class="o">=</span> <span class="n">q2_</span><span class="p">.</span><span class="n">Dequeue</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="n">ASSERT_TRUE</span><span class="p">(</span><span class="n">n</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="o">*</span><span class="n">n</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">1u</span><span class="p">,</span> <span class="n">q2_</span><span class="p">.</span><span class="n">Size</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">  <span class="k">delete</span> <span class="n">n</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 测试Map函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">TEST_F</span><span class="p">(</span><span class="n">QueueTestSmpl3</span><span class="p">,</span> <span class="n">Map</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">MapTester</span><span class="p">(</span><span class="o">&amp;</span><span class="n">q0_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">MapTester</span><span class="p">(</span><span class="o">&amp;</span><span class="n">q1_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">MapTester</span><span class="p">(</span><span class="o">&amp;</span><span class="n">q2_</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>  <span class="c1">// namespace
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>这里以 DefaultConstructor 为例，来分析一下它的执行流程：</p>
+<ol>
+<li>QueueTestSmpl3 调用构造函数，构造对象。</li>
+<li>QueueTestSmpl3 对象调用 <code>SetUp</code> 函数初始化测试配置。</li>
+<li>DefaultConstructor 开始执行并结束测试。</li>
+<li>QueueTestSmpl3 对象调用隐式生成的 <code>TearDown</code> 进行清理。</li>
+<li>QueueTestSmpl3 调用析构函数，析构对象。</li>
+</ol>
+<h3 id="运行测试">运行测试</h3>
+<h4 id="调用测试">调用测试</h4>
+<p>与其他 C++ 框架不同，<code>TEST</code> 和 <code>TEST_F</code> 会隐式向 GoogleTest 注册这些测试函数，因此我们不需要为了运行这些它们而进行枚举。</p>
+<p>定义完测试后，你可以用 <code>RUN_ALL_TESTS</code> 来运行它们，此时会运行所有的测试，如果全部成功则返回 0，反之则返回 1。其执行流程如下：</p>
+<ol>
+<li>保存所有 GoogleTest 标志的状态。</li>
+<li>为第一个测试创建一个 test fixture 对象。</li>
+<li>通过 <code>SetUp</code> 初始化 test fixture 对象。</li>
+<li>在 test fixture 对象上进行测试。</li>
+<li>通过 <code>TearDown</code> 清理 test fixture。</li>
+<li>删除 test fixture。</li>
+<li>恢复所有 GoogleTest 标志的状态。</li>
+<li>对下一个测试重复上述步骤，直到所有测试都运行完毕。</li>
+</ol>
+<p>==如果发生致命故障，则将跳过后续步骤。==</p>
+<h4 id="编写-main-函数">编写 main 函数</h4>
+<p>用户不需要编写自己的 <code>main</code>  函数，编译器会自动将它链接到 <code>gtest_main</code>。如果用户有特殊需求，需要编写一个 <code>main</code> 函数，则需要在返回时调用 <code>RUN_ALL_TESTS()</code> 来运行所有测试，例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">printf</span><span class="p">(</span><span class="s">&#34;Running main() from %s</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="n">__FILE__</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="n">testing</span><span class="o">::</span><span class="n">InitGoogleTest</span><span class="p">(</span><span class="o">&amp;</span><span class="n">argc</span><span class="p">,</span> <span class="n">argv</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="n">RUN_ALL_TESTS</span><span class="p">();</span> 
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><blockquote>
+<p><code>testing::InitGoogleTest</code> 函数会解析 GoogleTest 标志的命令行，并删除所有识别的标志。这允许用户通过各种标志控制测试程序的行为。==您必须在调用 <code>RUN_ALL_TESTS</code> 之前调用此函数 ，否则标志将无法正确初始化==。</p>
+</blockquote>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/c&#43;&#43;/">C&#43;&#43;</a>
+        
+            <a href="/tags/%E6%B5%8B%E8%AF%95/">测试</a>
+        
+            <a href="/tags/gtest/">GTest</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 03, 2022 21:19 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/cmake/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">CMake</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/bazel/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Bazel</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#简介">简介</a></li>
+    <li><a href="#单元测试">单元测试</a></li>
+    <li><a href="#优势">优势</a></li>
+    <li><a href="#环境搭建">环境搭建</a>
+      <ol>
+        <li><a href="#安装-googletest">安装 GoogleTest</a>
+          <ol>
+            <li><a href="#bazel">Bazel</a></li>
+            <li><a href="#cmake">Cmake</a></li>
+          </ol>
+        </li>
+        <li><a href="#安装示例项目">安装示例项目</a></li>
+      </ol>
+    </li>
+  </ol>
+
+  <ol>
+    <li><a href="#断言">断言</a>
+      <ol>
+        <li><a href="#断言的概念">断言的概念</a></li>
+        <li><a href="#expect-与-assert">EXPECT 与 ASSERT</a></li>
+        <li><a href="#自定义失败信息">自定义失败信息</a></li>
+      </ol>
+    </li>
+    <li><a href="#功能测试">功能测试</a>
+      <ol>
+        <li><a href="#test">TEST</a></li>
+        <li><a href="#test_f">TEST_F</a></li>
+        <li><a href="#运行测试">运行测试</a>
+          <ol>
+            <li><a href="#调用测试">调用测试</a></li>
+            <li><a href="#编写-main-函数">编写 main 函数</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
