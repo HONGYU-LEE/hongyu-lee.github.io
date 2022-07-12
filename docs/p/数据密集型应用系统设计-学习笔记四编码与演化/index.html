@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='编码与演化 数据编码格式 程序通常使用（ 至少）两种不同的数据表示形式：
+  在内存中，数据保存在对象、结构体、列表、数组、哈希表和树等结构中。 这些数据结构针对 CPU 高效访问和操作进行了优化（通常使用指针）。
+  将数据写入文件或通过网络发送时，必须将其编码为某种自包含的字节序列（例如 JSON 文档）。 由于指针对其他进程没有意义，所以这个字节序列表示看起来与内存中使用的数据结构大不一样。
+  因此，在这两种表示之间需要进行类型的转化。从内存中的表示到字节序列的转化称为编码（或序列化），相反的过程称为解码（或解析，反序列化） 。
+语言特定的格式 许多编程语言都内建了将内存对象编码为字节序列的支持。例如，Java 有 java.io.Serializable ，Ruby 有Marshal，Python 有 pickle 等等。许多第三方库也存在，例如 Java 的 Kryo。
+这些编码库非常方便，可以用很少的额外代码实现内存对象的保存与恢复。但是它们也有一些深层次的问题：
+ 这类编码通常与特定的编程语言深度绑定，其他语言很难读取这种数据。 为了在相同的对象类型中恢复数据，解码过程需要能够实例化任意的类。这经常导致一些安全问题：如果攻击者可以让应用程序解码任意的字节序列，那么它们可以实例化任意的类，这通常意味着，它们可以做些可怕的 情，比如远程执行任意代码。 在这些库中，数据版本控制通常是事后才考虑的。 因为它们旨在快速简便地对数据进行编码，所以往往忽略了前向后向兼容性带来的麻烦问题。 效率（编码或解码所花费的CPU时间，以及编码结构的大小）往往也是事后才考虑的。 例如，Java 的内置序列化由于其糟糕的性能和臃肿的编码而臭名昭着  因此，除非临时使用，采用语言内置编码通常是一个坏主意。
+JSON、XML与二进制变体 当我们谈到可以被多种编程语言读写的标准编码时，JSON 和 XML 是最显眼的角逐者。它们广为人知，广受支持，也广受憎恶。 XML 经常收到批评：过于冗长与且过份复杂。 JSON 的流行则主要源于 Web 浏览器的内置支持，以及相对于 XML 的简单性。 CSV 是另一种流行的与语言无关的格式，尽管其功能相对较弱。
+JSON，XML 和 CSV 属于文本格式，因此具有较高的可读性。除了表面的语法问题之外，它们也存在一些微妙的问题：
+ 数值编码多很多存在歧义的地方。XML 和 CSV 不能区分数字和字符串（除非引用一个外部模式）。 JSON 虽然区分字符串与数值，但不区分整数和浮点数，而且不能指定精度。 JSON 和 XML 对 Unicode 字符串有很好的支持，但是它们不支持二进制数据。 二进制字符串是很有用的功能，所以人们通过使用 Base64 将二进制数据编码为文本来绕过此限制。其特有的模式标识着这个值应当被解释为 Base64 编码。这种方案虽然管用，但会增加 33% 的数据大小。 XML 和 JSON 都有可选的模式支持。 这些模式语言相当强大，所以学习和实现起来都相当复杂。 XML 模式的使用相当普遍，但许多基于 JSON 的工具才不会去折腾模式。由于对数据的正确解读取决于模式中的信息，因此不使用 XML/JSON 模式的应用程序可能需要对相应的编码/解码逻辑进行硬编码。 CSV 没有任何模式，因此每行和每列的含义完全由应用程序自行定义。 如果应用程序变更添加了新的行或列，那么这种变更必须通过手工处理。 CSV 也是一个相当模糊的格式。尽管其转义规则已经被正式指定，但并不是所有的解析器都能够正确的实现它们。  Thrift与Protocol Buffers Apache Thrift 和 Protocol Buffers 是基于相同原理的二进制编码库。 Protocol Buffers 最初是在 Google 开发的，Thrift最初是在 Facebook 开发的，并且它们都是在 2007~2008 年开源的。'><title>数据密集型应用系统设计 学习笔记（四）：编码与演化</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%9B%9B%E7%BC%96%E7%A0%81%E4%B8%8E%E6%BC%94%E5%8C%96/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='数据密集型应用系统设计 学习笔记（四）：编码与演化'>
+<meta property='og:description' content='编码与演化 数据编码格式 程序通常使用（ 至少）两种不同的数据表示形式：
+  在内存中，数据保存在对象、结构体、列表、数组、哈希表和树等结构中。 这些数据结构针对 CPU 高效访问和操作进行了优化（通常使用指针）。
+  将数据写入文件或通过网络发送时，必须将其编码为某种自包含的字节序列（例如 JSON 文档）。 由于指针对其他进程没有意义，所以这个字节序列表示看起来与内存中使用的数据结构大不一样。
+  因此，在这两种表示之间需要进行类型的转化。从内存中的表示到字节序列的转化称为编码（或序列化），相反的过程称为解码（或解析，反序列化） 。
+语言特定的格式 许多编程语言都内建了将内存对象编码为字节序列的支持。例如，Java 有 java.io.Serializable ，Ruby 有Marshal，Python 有 pickle 等等。许多第三方库也存在，例如 Java 的 Kryo。
+这些编码库非常方便，可以用很少的额外代码实现内存对象的保存与恢复。但是它们也有一些深层次的问题：
+ 这类编码通常与特定的编程语言深度绑定，其他语言很难读取这种数据。 为了在相同的对象类型中恢复数据，解码过程需要能够实例化任意的类。这经常导致一些安全问题：如果攻击者可以让应用程序解码任意的字节序列，那么它们可以实例化任意的类，这通常意味着，它们可以做些可怕的 情，比如远程执行任意代码。 在这些库中，数据版本控制通常是事后才考虑的。 因为它们旨在快速简便地对数据进行编码，所以往往忽略了前向后向兼容性带来的麻烦问题。 效率（编码或解码所花费的CPU时间，以及编码结构的大小）往往也是事后才考虑的。 例如，Java 的内置序列化由于其糟糕的性能和臃肿的编码而臭名昭着  因此，除非临时使用，采用语言内置编码通常是一个坏主意。
+JSON、XML与二进制变体 当我们谈到可以被多种编程语言读写的标准编码时，JSON 和 XML 是最显眼的角逐者。它们广为人知，广受支持，也广受憎恶。 XML 经常收到批评：过于冗长与且过份复杂。 JSON 的流行则主要源于 Web 浏览器的内置支持，以及相对于 XML 的简单性。 CSV 是另一种流行的与语言无关的格式，尽管其功能相对较弱。
+JSON，XML 和 CSV 属于文本格式，因此具有较高的可读性。除了表面的语法问题之外，它们也存在一些微妙的问题：
+ 数值编码多很多存在歧义的地方。XML 和 CSV 不能区分数字和字符串（除非引用一个外部模式）。 JSON 虽然区分字符串与数值，但不区分整数和浮点数，而且不能指定精度。 JSON 和 XML 对 Unicode 字符串有很好的支持，但是它们不支持二进制数据。 二进制字符串是很有用的功能，所以人们通过使用 Base64 将二进制数据编码为文本来绕过此限制。其特有的模式标识着这个值应当被解释为 Base64 编码。这种方案虽然管用，但会增加 33% 的数据大小。 XML 和 JSON 都有可选的模式支持。 这些模式语言相当强大，所以学习和实现起来都相当复杂。 XML 模式的使用相当普遍，但许多基于 JSON 的工具才不会去折腾模式。由于对数据的正确解读取决于模式中的信息，因此不使用 XML/JSON 模式的应用程序可能需要对相应的编码/解码逻辑进行硬编码。 CSV 没有任何模式，因此每行和每列的含义完全由应用程序自行定义。 如果应用程序变更添加了新的行或列，那么这种变更必须通过手工处理。 CSV 也是一个相当模糊的格式。尽管其转义规则已经被正式指定，但并不是所有的解析器都能够正确的实现它们。  Thrift与Protocol Buffers Apache Thrift 和 Protocol Buffers 是基于相同原理的二进制编码库。 Protocol Buffers 最初是在 Google 开发的，Thrift最初是在 Facebook 开发的，并且它们都是在 2007~2008 年开源的。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%9B%9B%E7%BC%96%E7%A0%81%E4%B8%8E%E6%BC%94%E5%8C%96/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='数据密集型应用系统设计' /><meta property='article:published_time' content='2022-07-10T03:11:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T20:14:36&#43;08:00'/>
+<meta name="twitter:title" content="数据密集型应用系统设计 学习笔记（四）：编码与演化">
+<meta name="twitter:description" content="编码与演化 数据编码格式 程序通常使用（ 至少）两种不同的数据表示形式：
+  在内存中，数据保存在对象、结构体、列表、数组、哈希表和树等结构中。 这些数据结构针对 CPU 高效访问和操作进行了优化（通常使用指针）。
+  将数据写入文件或通过网络发送时，必须将其编码为某种自包含的字节序列（例如 JSON 文档）。 由于指针对其他进程没有意义，所以这个字节序列表示看起来与内存中使用的数据结构大不一样。
+  因此，在这两种表示之间需要进行类型的转化。从内存中的表示到字节序列的转化称为编码（或序列化），相反的过程称为解码（或解析，反序列化） 。
+语言特定的格式 许多编程语言都内建了将内存对象编码为字节序列的支持。例如，Java 有 java.io.Serializable ，Ruby 有Marshal，Python 有 pickle 等等。许多第三方库也存在，例如 Java 的 Kryo。
+这些编码库非常方便，可以用很少的额外代码实现内存对象的保存与恢复。但是它们也有一些深层次的问题：
+ 这类编码通常与特定的编程语言深度绑定，其他语言很难读取这种数据。 为了在相同的对象类型中恢复数据，解码过程需要能够实例化任意的类。这经常导致一些安全问题：如果攻击者可以让应用程序解码任意的字节序列，那么它们可以实例化任意的类，这通常意味着，它们可以做些可怕的 情，比如远程执行任意代码。 在这些库中，数据版本控制通常是事后才考虑的。 因为它们旨在快速简便地对数据进行编码，所以往往忽略了前向后向兼容性带来的麻烦问题。 效率（编码或解码所花费的CPU时间，以及编码结构的大小）往往也是事后才考虑的。 例如，Java 的内置序列化由于其糟糕的性能和臃肿的编码而臭名昭着  因此，除非临时使用，采用语言内置编码通常是一个坏主意。
+JSON、XML与二进制变体 当我们谈到可以被多种编程语言读写的标准编码时，JSON 和 XML 是最显眼的角逐者。它们广为人知，广受支持，也广受憎恶。 XML 经常收到批评：过于冗长与且过份复杂。 JSON 的流行则主要源于 Web 浏览器的内置支持，以及相对于 XML 的简单性。 CSV 是另一种流行的与语言无关的格式，尽管其功能相对较弱。
+JSON，XML 和 CSV 属于文本格式，因此具有较高的可读性。除了表面的语法问题之外，它们也存在一些微妙的问题：
+ 数值编码多很多存在歧义的地方。XML 和 CSV 不能区分数字和字符串（除非引用一个外部模式）。 JSON 虽然区分字符串与数值，但不区分整数和浮点数，而且不能指定精度。 JSON 和 XML 对 Unicode 字符串有很好的支持，但是它们不支持二进制数据。 二进制字符串是很有用的功能，所以人们通过使用 Base64 将二进制数据编码为文本来绕过此限制。其特有的模式标识着这个值应当被解释为 Base64 编码。这种方案虽然管用，但会增加 33% 的数据大小。 XML 和 JSON 都有可选的模式支持。 这些模式语言相当强大，所以学习和实现起来都相当复杂。 XML 模式的使用相当普遍，但许多基于 JSON 的工具才不会去折腾模式。由于对数据的正确解读取决于模式中的信息，因此不使用 XML/JSON 模式的应用程序可能需要对相应的编码/解码逻辑进行硬编码。 CSV 没有任何模式，因此每行和每列的含义完全由应用程序自行定义。 如果应用程序变更添加了新的行或列，那么这种变更必须通过手工处理。 CSV 也是一个相当模糊的格式。尽管其转义规则已经被正式指定，但并不是所有的解析器都能够正确的实现它们。  Thrift与Protocol Buffers Apache Thrift 和 Protocol Buffers 是基于相同原理的二进制编码库。 Protocol Buffers 最初是在 Google 开发的，Thrift最初是在 Facebook 开发的，并且它们都是在 2007~2008 年开源的。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/" style="background-color: #2a9d8f; color: #fff;">
+                数据密集型应用系统设计
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%9B%9B%E7%BC%96%E7%A0%81%E4%B8%8E%E6%BC%94%E5%8C%96/">数据密集型应用系统设计 学习笔记（四）：编码与演化</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 10, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="编码与演化">编码与演化</h1>
+<h2 id="数据编码格式">数据编码格式</h2>
+<p>程序通常使用（ 至少）两种不同的数据表示形式：</p>
+<ol>
+<li>
+<p><strong>在内存中，数据保存在对象、结构体、列表、数组、哈希表和树等结构中。</strong> 这些数据结构针对 CPU 高效访问和操作进行了优化（通常使用指针）。</p>
+</li>
+<li>
+<p><strong>将数据写入文件或通过网络发送时，必须将其编码为某种自包含的字节序列（例如 JSON 文档）。</strong> 由于指针对其他进程没有意义，所以这个字节序列表示看起来与内存中使用的数据结构大不一样。</p>
+</li>
+</ol>
+<p>因此，在这两种表示之间需要进行类型的转化。从内存中的表示到字节序列的转化称为<strong>编码（或序列化）</strong>，相反的过程称为<strong>解码（或解析，反序列化）</strong> 。</p>
+<h3 id="语言特定的格式">语言特定的格式</h3>
+<p>许多编程语言都内建了将内存对象编码为字节序列的支持。例如，Java 有 <code>java.io.Serializable</code> ，Ruby 有<code>Marshal</code>，Python 有 <code>pickle</code> 等等。许多第三方库也存在，例如 Java 的 Kryo。</p>
+<p>这些编码库非常方便，可以用很少的额外代码实现内存对象的保存与恢复。但是它们也有一些深层次的问题：</p>
+<ul>
+<li><strong>这类编码通常与特定的编程语言深度绑定，其他语言很难读取这种数据。</strong></li>
+<li><strong>为了在相同的对象类型中恢复数据，解码过程需要能够实例化任意的类。这经常导致一些安全问题</strong>：如果攻击者可以让应用程序解码任意的字节序列，那么它们可以实例化任意的类，这通常意味着，它们可以做些可怕的 情，比如远程执行任意代码。</li>
+<li><strong>在这些库中，数据版本控制通常是事后才考虑的。</strong> 因为它们旨在快速简便地对数据进行编码，所以往往忽略了前向后向兼容性带来的麻烦问题。</li>
+<li><strong>效率（编码或解码所花费的CPU时间，以及编码结构的大小）往往也是事后才考虑的</strong>。 例如，Java 的内置序列化由于其糟糕的性能和臃肿的编码而臭名昭着</li>
+</ul>
+<p>因此，除非临时使用，采用语言内置编码通常是一个坏主意。</p>
+<h3 id="jsonxml与二进制变体">JSON、XML与二进制变体</h3>
+<p>当我们谈到可以被多种编程语言读写的标准编码时，JSON 和 XML 是最显眼的角逐者。它们广为人知，广受支持，也广受憎恶。 XML 经常收到批评：过于冗长与且过份复杂。 JSON 的流行则主要源于 Web 浏览器的内置支持，以及相对于 XML 的简单性。 CSV 是另一种流行的与语言无关的格式，尽管其功能相对较弱。</p>
+<p>JSON，XML 和 CSV 属于文本格式，因此具有较高的可读性。除了表面的语法问题之外，它们也存在一些微妙的问题：</p>
+<ul>
+<li><strong>数值编码多很多存在歧义的地方</strong>。XML 和 CSV 不能区分数字和字符串（除非引用一个外部模式）。 JSON 虽然区分字符串与数值，但不区分整数和浮点数，而且不能指定精度。</li>
+<li><strong>JSON 和 XML 对 Unicode 字符串有很好的支持，但是它们不支持二进制数据。</strong> 二进制字符串是很有用的功能，所以人们通过使用 Base64 将二进制数据编码为文本来绕过此限制。其特有的模式标识着这个值应当被解释为 Base64 编码。这种方案虽然管用，但会增加 33% 的数据大小。</li>
+<li><strong>XML 和 JSON 都有可选的模式支持。</strong> 这些模式语言相当强大，所以学习和实现起来都相当复杂。 XML 模式的使用相当普遍，但许多基于 JSON 的工具才不会去折腾模式。由于对数据的正确解读取决于模式中的信息，因此不使用 XML/JSON 模式的应用程序可能需要对相应的编码/解码逻辑进行硬编码。</li>
+<li><strong>CSV 没有任何模式，因此每行和每列的含义完全由应用程序自行定义。</strong> 如果应用程序变更添加了新的行或列，那么这种变更必须通过手工处理。 CSV 也是一个相当模糊的格式。尽管其转义规则已经被正式指定，但并不是所有的解析器都能够正确的实现它们。</li>
+</ul>
+<h3 id="thrift与protocol-buffers">Thrift与Protocol Buffers</h3>
+<p>Apache Thrift 和 Protocol Buffers 是基于相同原理的二进制编码库。 Protocol Buffers 最初是在 Google 开发的，Thrift最初是在 Facebook 开发的，并且它们都是在 2007~2008 年开源的。</p>
+<p>Thrift 和 Protocol Buffers 都需要一个模式来编码任何数据，因此需要通过接口定义语言 IDL 描述模式。如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">// Thrift
+</span></span><span class="line"><span class="cl">struct Person {
+</span></span><span class="line"><span class="cl">    1: required string       userName,
+</span></span><span class="line"><span class="cl">    2: optional i64          favoriteNumber,
+</span></span><span class="line"><span class="cl">    3: optional list&lt;string&gt; interests
+</span></span><span class="line"><span class="cl">}
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">// Protocol Buffers
+</span></span><span class="line"><span class="cl">message Person {
+</span></span><span class="line"><span class="cl">    required string user_name       = 1;
+</span></span><span class="line"><span class="cl">    optional int64  favorite_number = 2;
+</span></span><span class="line"><span class="cl">    repeated string interests       = 3;
+</span></span><span class="line"><span class="cl">}
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="avro">Avro</h3>
+<p>Apache Avro 是另一种二进制编码格式，与 Protocol Buffers 和 Thrift 有着有趣的不同。由于 Thrift 不适合 Hadoop 的用例，因此它作为 Hadoop 的一个子项目在 2009 年开始启动。</p>
+<p>Avro 也使用模式来指定正在编码的数据的结构。 它有两种模式语言：一种（Avro IDL）用于人工编辑，一种（基于JSON）更易于机器读取。</p>
+<p>我们用 Avro IDL 编写的示例模式可能如下所示：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">record Person {
+</span></span><span class="line"><span class="cl">    string                userName;
+</span></span><span class="line"><span class="cl">    union { null, long }  favoriteNumber = null;
+</span></span><span class="line"><span class="cl">    array&lt;string&gt;         interests;
+</span></span><span class="line"><span class="cl">}
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>该模式的等价 JSON 表示如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;record&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;Person&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;fields&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span><span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;userName&#34;</span><span class="p">,</span> <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;string&#34;</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span><span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;favoriteNumber&#34;</span><span class="p">,</span> <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;null&#34;</span><span class="p">,</span> <span class="s2">&#34;long&#34;</span><span class="p">],</span> <span class="nt">&#34;default&#34;</span><span class="p">:</span> <span class="kc">null</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span><span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;interests&#34;</span><span class="p">,</span> <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="p">{</span><span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;array&#34;</span><span class="p">,</span> <span class="nt">&#34;items&#34;</span><span class="p">:</span> <span class="s2">&#34;string&#34;</span><span class="p">}}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h2 id="数据流模式">数据流模式</h2>
+<p>进程间数据流动的常见方式有以下几种：</p>
+<ul>
+<li><strong>通过数据库</strong></li>
+<li><strong>通过服务调用（RPC、REST）</strong></li>
+<li><strong>通过异步消息传递</strong></li>
+</ul>
+<h3 id="基于数据库的数据流">基于数据库的数据流</h3>
+<p>在数据库中，写入数据库的进程对数据进行编码，而读取数据库的进程对数据进行解码。可能只有一个进程访问数据库，在这种情况下， Reader 只是同一个进程的较新版本，此时，<strong>可以认为向数据库中存储内容，就是给未来的自己发送消息。</strong></p>
+<h3 id="基于服务的数据流">基于服务的数据流</h3>
+<p>对于需要通过网络进行通信的进程，有许多不同的通信方式。最常见的是有两个角色：客户端和服务器。服务器通过网络公开 PI ，客户端可以连接到服务器以向该 API 发出请求。 服务器公开的 API 称为服务。</p>
+<p>Web 以这种方式工作：<strong>客户向 Web 服务器发出请求，通过 GET 请求下载 HTML，CSS，JavaScript，图像等，并通过 POST 请求提交数据到服务器。</strong> API 包含一组标准的协议和数据格式（HTTP，URL，SSL/TLS，HTML 等）。</p>
+<p><strong>将大型应用程序按照功能区域分解为较小的服务，这样当一个服务需要来自另一个服务的某些功能或数据时，就会向另一个服务发出请求。<strong>这种构建应用程序的方式传统上被称为</strong>面向服务的体系结构（service-oriented architecture，SOA）</strong>，最近被改进和更名为<strong>微服务架构</strong>。<strong>面向服务/微服务架构的一个关键设计目标是通过使服务独立部署和演化来使应用程序更易于更改和维护。</strong></p>
+<h4 id="web-服务restsoap">Web 服务（REST、SOAP）</h4>
+<p><strong>当服务使用 HTTP 作为底层通信协议时，可称之为 Web 服务</strong>。这可能是一个小错误，因为 Web 服务不仅在 Web上使用，而且在几个不同的环境中使用。例如：</p>
+<ol>
+<li><strong>运行在用户设备上的客户端应用程序通过 HTTP 向服务发出请求。</strong> 这些请求通常通过公共互联网进行。</li>
+<li><strong>一种服务向同一组织拥有的另一项服务提出请求</strong>，这些服务通常位于同一数据中心内，作为面向服务/微型架构的一部分。</li>
+<li><strong>一种服务通过互联网向不同组织所拥有的服务提出请求</strong>。这用于不同组织后端系统之间的数据交换。此类别包括由在线服务提供的公共 API，或用于共享访问用户数据的 OAuth。</li>
+</ol>
+<p><strong>有两种流行的 Web 服务方法：REST 和 SOAP：</strong></p>
+<ul>
+<li><strong>REST</strong>：REST 不是一种协议，而是一个基于 HTTP 原则的设计理念。它强调简单的数据格式，使用 URL 来标识资源，并使用 HTTP 功能进行缓存控制 、身份验证和内容类型协商。根据 REST 原则所设计的 API 称为 RESTful。</li>
+<li><strong>SOAP</strong>：SOAP 是一种基于 XML 的协议，用于发出网络 API 请求。虽然它最常用于 HTTP ，但其目的是独立于HTTP ，并避免使用大多数 HTTP功能。相反，它带有庞大 而复杂的多种相关标准（Web 服务框架， Web Service Framework ，称为WS-*）和新增的各种功能。</li>
+</ul>
+<h4 id="rpc">RPC</h4>
+<p><strong>RPC（Remote Procedure Call ）即远程过程调用，其试图向远程网络服务发出请求，看起来与在同一进程中调用编程语言中的函数或方法相同（这种抽象称为位置透明）。</strong> RPC 主要侧重于同一组织内多项服务之间的请求，通常发生在同一个数据中心内。</p>
+<p>其与本地函数调用存在以下差异：</p>
+<ul>
+<li>
+<p><strong>本地函数调用是可预测的，并且成功或失败仅取决于受你控制的参数。而网络请求是不可预知的</strong>。由于网络问题，请求或响应可能会丢失，或者远程计算机可能很慢或不可用，这些问题完全不在你的控制范围之内。网络问题是常见的，所以你必须预测他们，例如通过重试失败的请求。</p>
+</li>
+<li>
+<p><strong>本地函数调用要么返回结果，要么抛出异常，或者永远不返回（因为进入无限循环或进程崩溃）。网络请求有另一个可能的结果</strong>。由于超时，它可能会返回没有结果。在这种情况下，如果你没有得到来自远程服务的响应，你无法知道请求是否通过。</p>
+</li>
+<li>
+<p><strong>如果重试失败的网络请求，可能会发生请求实际上已经完成，但是响应丢失。在这种情况下，重试将导致该操作被执行多次。</strong> 除非你在协议中引入去重机制（<strong>幂等</strong>）。本地函数调用没有这个问题。</p>
+</li>
+<li>
+<p><strong>每次调用本地函数时，通常需要大致相同的时间来执行。网络请求比函数调用要慢得多，而且其延迟也是非常可变的</strong>。好的时候它可能会在不到一毫秒的时间内完成，但是当网络拥塞或者远程服务超载时，可能需要几秒钟的时间完成一样的东西。</p>
+</li>
+<li>
+<p><strong>调用本地函数时，可以高效地将引用（指针）传递给本地内存中的对象。当你发出一个网络请求时，所有这些参数都需要被编码成可以通过网络发送的一系列字节。</strong> 如果参数是像数字或字符串这样的基本类型倒是没关系，但是对于较大的对象很快就会变成问题。</p>
+</li>
+<li>
+<p><strong>客户端和服务可以用不同的编程语言实现，所以 RPC 框架必须将数据类型从一种语言翻译成另一种语言</strong>。这可能会捅出大篓子，因为不是所有的语言都具有相同的类型 。</p>
+</li>
+</ul>
+<h3 id="基于消息传递的数据流">基于消息传递的数据流</h3>
+<p>它与 RPC 的相似之处在于，客户端的请求（通常称为消息）以低延迟传递到另一个进程。它与基于数据库的方式的相似之处在于，不是通过直接的网络连接发送消息，而是通过称为消息队列的中介发送的， 该中介会暂存消息。</p>
+<p>使用异步消息传递存在以下优点：</p>
+<ul>
+<li><strong>如果接收方不可用或过载，可以充当缓冲区，从而提高系统的可靠性。</strong></li>
+<li><strong>它可以自动将消息重新发送到已经崩溃的进程，从而防止消息丢失。</strong></li>
+<li><strong>避免发送方需要知道接收方的 IP 地址和端口号（这在虚拟机经常启启停停的云部署中特别有用）。</strong></li>
+<li><strong>它允许将一条消息发送给多个接收方。</strong></li>
+<li><strong>将发送方与接收方逻辑分离（发送方只是发布消息，不关心使用者）。</strong></li>
+</ul>
+<p>与 RPC 的差异在于：</p>
+<ul>
+<li><strong>消息传递通信通常是单向的</strong>：发送方通常不期望收到对其消息的回复 。进程可能发送一个响应，但这通常是在一个独立的通道上完成的。</li>
+<li><strong>这种通信模式是异步的</strong> ：发送者不会等待消息被传递，而只是发送然后忘记它。</li>
+</ul>
+<h4 id="消息队列">消息队列</h4>
+<p>详细的交付语义因实现和配置而异，但通常情况下，消息队列的使用方式如下：<strong>一个进程将消息发送到指定的队列或主题，代理确保将消息传递给那个队列或主题的一个或多个消费者或订阅者</strong>。在同一主题上可以有许多生产者和许多消费者。</p>
+<p><strong>一个主题只提供单向数据流。</strong> 但是，消费者本身可能会将消息发布到另一个主题上（因此，可以将它们链接在一起，就像我们将在中看到的那样），或者发送给原始消息的发送者使用的回复队列（允许请求/响应数据流，类似于 RPC）。</p>
+<p><strong>消息代理通常不会执行任何特定的数据模型 —— 消息只是包含一些元数据的字节序列，因此你可以使用任何编码格式。</strong> 如果编码是向后和向前兼容的，你可以灵活地对发布者和消费者的编码进行独立的修改，并以任意顺序进行部署。</p>
+<h4 id="分布式actor框架">分布式Actor框架</h4>
+<p><strong>Actor 模型是单个进程中并发的编程模型。逻辑被封装在 Actor 中，而不是直接处理线程（以及竞争条件，锁定和死锁的相关问题）。</strong> 每个 Actor 通常代表一个客户或实体，它可能有一些本地状态（不与其他任何角色共享），它通过发送和接收异步消息与其他角色通信。**不保证消息传送：在某些错误情况下，消息将丢失。**由于每个角色一次只能处理一条消息，因此不需要担心线程，每个角色可以由框架独立调度。</p>
+<p>在分布式 Actor 框架中，此编程模型用于跨多个节点伸缩应用程序。不管发送方和接收方是在同一个节点上还是在不同的节点上，都使用相同的消息传递机制。如果它们在不同的节点上，则该消息被透明地编码成字节序列，通过网络发送，并在另一侧解码。</p>
+<p><strong>分布式的 Actor 框架实质上是将消息队列和 Actor 编程模型集成到一个框架中。</strong> 但是，如果要执行基于 Actor 的应用程序的滚动升级，则仍然需要担心向前和向后兼容性问题，因为消息可能会从运行新版本的节点发送到运行旧版本的节点，反之亦然。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/">数据密集型应用系统设计</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 20:14 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E4%B8%80%E6%B5%81%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十一）：流处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E6%89%B9%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十）：批处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B9%9D%E4%B8%80%E8%87%B4%E6%80%A7%E4%B8%8E%E5%85%B1%E8%AF%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（九）：一致性与共识</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AB%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%8C%91%E6%88%98/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（八）：分布式系统的挑战</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%83%E4%BA%8B%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（七）：事务</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#数据编码格式">数据编码格式</a>
+      <ol>
+        <li><a href="#语言特定的格式">语言特定的格式</a></li>
+        <li><a href="#jsonxml与二进制变体">JSON、XML与二进制变体</a></li>
+        <li><a href="#thrift与protocol-buffers">Thrift与Protocol Buffers</a></li>
+        <li><a href="#avro">Avro</a></li>
+      </ol>
+    </li>
+    <li><a href="#数据流模式">数据流模式</a>
+      <ol>
+        <li><a href="#基于数据库的数据流">基于数据库的数据流</a></li>
+        <li><a href="#基于服务的数据流">基于服务的数据流</a>
+          <ol>
+            <li><a href="#web-服务restsoap">Web 服务（REST、SOAP）</a></li>
+            <li><a href="#rpc">RPC</a></li>
+          </ol>
+        </li>
+        <li><a href="#基于消息传递的数据流">基于消息传递的数据流</a>
+          <ol>
+            <li><a href="#消息队列">消息队列</a></li>
+            <li><a href="#分布式actor框架">分布式Actor框架</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

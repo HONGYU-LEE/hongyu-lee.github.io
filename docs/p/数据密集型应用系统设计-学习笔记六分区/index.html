@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='分区 分区通常是这样定义的，即每一条数据（或者每条记录，每行或每个文档）只属于某个特定分区。
+采用数据分区的主要目的是提高可扩展性。不同的分区可以放在一个无共享集群的不同节点上。这样一个大数据集可以分散在更多的磁盘上，查询负载也随之分布到更多的处理器上
+对单个分区进行查询时，每个节点对自己所在分区可以独立执行查询操作，因此添加更多的节点可以提高查询吞吐量。 超大而复杂的查询尽管比较困难，但也可能做到跨节点的并行处理。
+分区与复制 分区通常与复制结合使用，即每个分区在多个节点都存有副本。这意味着某条记录属于特定的分区 ，而同样的内容会保存在不同的节点上以提高系统的容错性。
+一个节点上可能存储了多个分区。 如下图，每个分区都有自己的主副本，例如被分配给某节点，而从副本则分配在其他一些节点。一个节点可能即是某些分区的主副本，同时又是其他分区的从副本。
+K-V 数据的分区 分区的主要目标是将数据和查询负载均匀分布在所有节点上，如果节点平均分担负载，那么理论上 10 个节点应该能够处理 10 倍的数据量和 10 倍于单个节点的读写吞吐量。
+而如果分区不均匀，则会出现某些分区节点比其他分区承担更多的数据量或查询负载，称之为倾斜。倾斜会导致分区效率严重下降，在极端情况下，所有的负载可能会集中在一个分区节点上，这就意味着 10 个节点中 9 个空闲，系统的瓶颈在最繁忙的那个节点上。这种负载严重不成比例的分区即成为系统热点。
+避免热点最简单的方法是将记录随机分配到所有节点上。这种方法虽然可以比较均匀地分布数据，但是有个很大的缺点，即当我们试图读取特定的数据时，没有办法知道数据保存在哪个节点上，所以不得不井行查询所有节点。
+基于Key的区间分区 一种分区方式是为每个分区分配一段连续的 Key 或者 Key 区间范围（以最小值和最大值来标识）。如果知道 Key 区间的上下限，就可以轻松确定哪个分区包含这些 Key。 如果还知道哪个分区分配在哪个节点，就可以直接向该节点发出请求。
+每个分区内可以按照 Key 排序保存，这样可以轻松支持区间查询，即将关键字作为一个拼接起来的索引项从而一次查询得到多个相关记录。
+然而，基于 Key 的区间分区的缺点是某些访问模式会导致热点。如果 Key 是时间戳，则分区对应于一个时间范围，例如每天一个分区。这会导致该分区在写入时负载过高，而其他分区始终处于空闲状态。因此当 Key 为时间戳或者其他类似的属性时，我们需要对这些 Key 进行修改已保证不会产生大量倾斜。
+基于Key的哈希值分区 对于上述数据倾斜与热点问题，许多分布式系统采用了基于 Key 的哈希值来分区。一个好的哈希函数可以处理数据倾斜并使其均匀分布。
+一旦找到合适的哈希函数，就可以为每个分区分配一个哈希范围（而不是直接作用于 Key 范围），Key 根据其哈希值的范围划分到不同的分区中。如下图所示：
+这种方法可以很好地将 Key 均匀分配到多个分区中。分区边界可以是均匀间隔， 也可以是伪随机选择（如一致性哈希）。
+然而，通过 Key 的哈希值进行分区，就丧失了良好的区间查询特性。即使 Key 原本相邻，但经过哈希之后会分散在不同的分区中，区间查询就失去了原有的有序相邻的特性。
+基于哈希的分区方法可以减轻热点，但无法做到完全避免。 如在极端情况下，所有的读/写操作都是针对同一个Key，则最终所有请求都将被路由到同一个分区。如今大多数的系统仍然无法自动消除这种高度倾斜的负载，只能通过应用层来减轻倾斜程度。
+分区与二级索引 如果涉及到二级索引，分区的逻辑又会变得更加复杂，因为二级索引通常不能唯一标识一条记录，而是用来加速特定值的查询。
+二级索引面临的主要挑战是它们不能规整的映射到分区中。目前有两种主要的方法来支持对二级索引进行分区：基于文档的分区和基于词条的分区。
+  基于文档来分区二级索引（本地索引）：二级索引存储在与关键字相同的分区 ，这意味着写入时我们只需要更新一个分区，但缺点是读取二级索引时需要在所有分区上执行分散/聚集 。'><title>数据密集型应用系统设计 学习笔记（六）：分区</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AD%E5%88%86%E5%8C%BA/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='数据密集型应用系统设计 学习笔记（六）：分区'>
+<meta property='og:description' content='分区 分区通常是这样定义的，即每一条数据（或者每条记录，每行或每个文档）只属于某个特定分区。
+采用数据分区的主要目的是提高可扩展性。不同的分区可以放在一个无共享集群的不同节点上。这样一个大数据集可以分散在更多的磁盘上，查询负载也随之分布到更多的处理器上
+对单个分区进行查询时，每个节点对自己所在分区可以独立执行查询操作，因此添加更多的节点可以提高查询吞吐量。 超大而复杂的查询尽管比较困难，但也可能做到跨节点的并行处理。
+分区与复制 分区通常与复制结合使用，即每个分区在多个节点都存有副本。这意味着某条记录属于特定的分区 ，而同样的内容会保存在不同的节点上以提高系统的容错性。
+一个节点上可能存储了多个分区。 如下图，每个分区都有自己的主副本，例如被分配给某节点，而从副本则分配在其他一些节点。一个节点可能即是某些分区的主副本，同时又是其他分区的从副本。
+K-V 数据的分区 分区的主要目标是将数据和查询负载均匀分布在所有节点上，如果节点平均分担负载，那么理论上 10 个节点应该能够处理 10 倍的数据量和 10 倍于单个节点的读写吞吐量。
+而如果分区不均匀，则会出现某些分区节点比其他分区承担更多的数据量或查询负载，称之为倾斜。倾斜会导致分区效率严重下降，在极端情况下，所有的负载可能会集中在一个分区节点上，这就意味着 10 个节点中 9 个空闲，系统的瓶颈在最繁忙的那个节点上。这种负载严重不成比例的分区即成为系统热点。
+避免热点最简单的方法是将记录随机分配到所有节点上。这种方法虽然可以比较均匀地分布数据，但是有个很大的缺点，即当我们试图读取特定的数据时，没有办法知道数据保存在哪个节点上，所以不得不井行查询所有节点。
+基于Key的区间分区 一种分区方式是为每个分区分配一段连续的 Key 或者 Key 区间范围（以最小值和最大值来标识）。如果知道 Key 区间的上下限，就可以轻松确定哪个分区包含这些 Key。 如果还知道哪个分区分配在哪个节点，就可以直接向该节点发出请求。
+每个分区内可以按照 Key 排序保存，这样可以轻松支持区间查询，即将关键字作为一个拼接起来的索引项从而一次查询得到多个相关记录。
+然而，基于 Key 的区间分区的缺点是某些访问模式会导致热点。如果 Key 是时间戳，则分区对应于一个时间范围，例如每天一个分区。这会导致该分区在写入时负载过高，而其他分区始终处于空闲状态。因此当 Key 为时间戳或者其他类似的属性时，我们需要对这些 Key 进行修改已保证不会产生大量倾斜。
+基于Key的哈希值分区 对于上述数据倾斜与热点问题，许多分布式系统采用了基于 Key 的哈希值来分区。一个好的哈希函数可以处理数据倾斜并使其均匀分布。
+一旦找到合适的哈希函数，就可以为每个分区分配一个哈希范围（而不是直接作用于 Key 范围），Key 根据其哈希值的范围划分到不同的分区中。如下图所示：
+这种方法可以很好地将 Key 均匀分配到多个分区中。分区边界可以是均匀间隔， 也可以是伪随机选择（如一致性哈希）。
+然而，通过 Key 的哈希值进行分区，就丧失了良好的区间查询特性。即使 Key 原本相邻，但经过哈希之后会分散在不同的分区中，区间查询就失去了原有的有序相邻的特性。
+基于哈希的分区方法可以减轻热点，但无法做到完全避免。 如在极端情况下，所有的读/写操作都是针对同一个Key，则最终所有请求都将被路由到同一个分区。如今大多数的系统仍然无法自动消除这种高度倾斜的负载，只能通过应用层来减轻倾斜程度。
+分区与二级索引 如果涉及到二级索引，分区的逻辑又会变得更加复杂，因为二级索引通常不能唯一标识一条记录，而是用来加速特定值的查询。
+二级索引面临的主要挑战是它们不能规整的映射到分区中。目前有两种主要的方法来支持对二级索引进行分区：基于文档的分区和基于词条的分区。
+  基于文档来分区二级索引（本地索引）：二级索引存储在与关键字相同的分区 ，这意味着写入时我们只需要更新一个分区，但缺点是读取二级索引时需要在所有分区上执行分散/聚集 。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AD%E5%88%86%E5%8C%BA/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='数据密集型应用系统设计' /><meta property='article:published_time' content='2022-07-10T05:11:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T20:16:46&#43;08:00'/>
+<meta name="twitter:title" content="数据密集型应用系统设计 学习笔记（六）：分区">
+<meta name="twitter:description" content="分区 分区通常是这样定义的，即每一条数据（或者每条记录，每行或每个文档）只属于某个特定分区。
+采用数据分区的主要目的是提高可扩展性。不同的分区可以放在一个无共享集群的不同节点上。这样一个大数据集可以分散在更多的磁盘上，查询负载也随之分布到更多的处理器上
+对单个分区进行查询时，每个节点对自己所在分区可以独立执行查询操作，因此添加更多的节点可以提高查询吞吐量。 超大而复杂的查询尽管比较困难，但也可能做到跨节点的并行处理。
+分区与复制 分区通常与复制结合使用，即每个分区在多个节点都存有副本。这意味着某条记录属于特定的分区 ，而同样的内容会保存在不同的节点上以提高系统的容错性。
+一个节点上可能存储了多个分区。 如下图，每个分区都有自己的主副本，例如被分配给某节点，而从副本则分配在其他一些节点。一个节点可能即是某些分区的主副本，同时又是其他分区的从副本。
+K-V 数据的分区 分区的主要目标是将数据和查询负载均匀分布在所有节点上，如果节点平均分担负载，那么理论上 10 个节点应该能够处理 10 倍的数据量和 10 倍于单个节点的读写吞吐量。
+而如果分区不均匀，则会出现某些分区节点比其他分区承担更多的数据量或查询负载，称之为倾斜。倾斜会导致分区效率严重下降，在极端情况下，所有的负载可能会集中在一个分区节点上，这就意味着 10 个节点中 9 个空闲，系统的瓶颈在最繁忙的那个节点上。这种负载严重不成比例的分区即成为系统热点。
+避免热点最简单的方法是将记录随机分配到所有节点上。这种方法虽然可以比较均匀地分布数据，但是有个很大的缺点，即当我们试图读取特定的数据时，没有办法知道数据保存在哪个节点上，所以不得不井行查询所有节点。
+基于Key的区间分区 一种分区方式是为每个分区分配一段连续的 Key 或者 Key 区间范围（以最小值和最大值来标识）。如果知道 Key 区间的上下限，就可以轻松确定哪个分区包含这些 Key。 如果还知道哪个分区分配在哪个节点，就可以直接向该节点发出请求。
+每个分区内可以按照 Key 排序保存，这样可以轻松支持区间查询，即将关键字作为一个拼接起来的索引项从而一次查询得到多个相关记录。
+然而，基于 Key 的区间分区的缺点是某些访问模式会导致热点。如果 Key 是时间戳，则分区对应于一个时间范围，例如每天一个分区。这会导致该分区在写入时负载过高，而其他分区始终处于空闲状态。因此当 Key 为时间戳或者其他类似的属性时，我们需要对这些 Key 进行修改已保证不会产生大量倾斜。
+基于Key的哈希值分区 对于上述数据倾斜与热点问题，许多分布式系统采用了基于 Key 的哈希值来分区。一个好的哈希函数可以处理数据倾斜并使其均匀分布。
+一旦找到合适的哈希函数，就可以为每个分区分配一个哈希范围（而不是直接作用于 Key 范围），Key 根据其哈希值的范围划分到不同的分区中。如下图所示：
+这种方法可以很好地将 Key 均匀分配到多个分区中。分区边界可以是均匀间隔， 也可以是伪随机选择（如一致性哈希）。
+然而，通过 Key 的哈希值进行分区，就丧失了良好的区间查询特性。即使 Key 原本相邻，但经过哈希之后会分散在不同的分区中，区间查询就失去了原有的有序相邻的特性。
+基于哈希的分区方法可以减轻热点，但无法做到完全避免。 如在极端情况下，所有的读/写操作都是针对同一个Key，则最终所有请求都将被路由到同一个分区。如今大多数的系统仍然无法自动消除这种高度倾斜的负载，只能通过应用层来减轻倾斜程度。
+分区与二级索引 如果涉及到二级索引，分区的逻辑又会变得更加复杂，因为二级索引通常不能唯一标识一条记录，而是用来加速特定值的查询。
+二级索引面临的主要挑战是它们不能规整的映射到分区中。目前有两种主要的方法来支持对二级索引进行分区：基于文档的分区和基于词条的分区。
+  基于文档来分区二级索引（本地索引）：二级索引存储在与关键字相同的分区 ，这意味着写入时我们只需要更新一个分区，但缺点是读取二级索引时需要在所有分区上执行分散/聚集 。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/" style="background-color: #2a9d8f; color: #fff;">
+                数据密集型应用系统设计
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AD%E5%88%86%E5%8C%BA/">数据密集型应用系统设计 学习笔记（六）：分区</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 10, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="分区">分区</h1>
+<p><strong>分区通常是这样定义的，即每一条数据（或者每条记录，每行或每个文档）只属于某个特定分区。</strong></p>
+<p>采用数据分区的主要目的是<strong>提高可扩展性</strong>。不同的分区可以放在一个无共享集群的不同节点上。这样一个大数据集可以分散在更多的磁盘上，查询负载也随之分布到更多的处理器上</p>
+<p>对单个分区进行查询时，每个节点对自己所在分区可以独立执行查询操作，因此添加更多的节点可以提高查询吞吐量。 超大而复杂的查询尽管比较困难，但也可能做到跨节点的并行处理。</p>
+<h2 id="分区与复制">分区与复制</h2>
+<p>分区通常与复制结合使用，即<strong>每个分区在多个节点都存有副本</strong>。这意味着某条记录属于特定的分区 ，而同样的内容会保存在不同的节点上以提高系统的容错性。</p>
+<p><strong>一个节点上可能存储了多个分区。</strong> 如下图，每个分区都有自己的主副本，例如被分配给某节点，而从副本则分配在其他一些节点。<strong>一个节点可能即是某些分区的主副本，同时又是其他分区的从副本。</strong></p>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia5.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h2 id="k-v-数据的分区">K-V 数据的分区</h2>
+<p>分区的主要目标是<strong>将数据和查询负载均匀分布在所有节点上</strong>，如果节点平均分担负载，那么理论上 10 个节点应该能够处理 10 倍的数据量和 10 倍于单个节点的读写吞吐量。</p>
+<p>而如果分区不均匀，则会出现某些分区节点比其他分区承担更多的数据量或查询负载，称之为<strong>倾斜</strong>。倾斜会导致分区效率严重下降，在极端情况下，所有的负载可能会集中在一个分区节点上，这就意味着 10 个节点中 9 个空闲，系统的瓶颈在最繁忙的那个节点上。这种负载严重不成比例的分区即成为系统热点。</p>
+<p>避免热点最简单的方法是<strong>将记录随机分配到所有节点上</strong>。这种方法虽然可以比较均匀地分布数据，但是有个很大的缺点，即当我们试图读取特定的数据时，没有办法知道数据保存在哪个节点上，所以不得不井行查询所有节点。</p>
+<h3 id="基于key的区间分区">基于Key的区间分区</h3>
+<p>一种分区方式是<strong>为每个分区分配一段连续的 Key 或者 Key 区间范围（以最小值和最大值来标识）</strong>。如果知道 Key 区间的上下限，就可以轻松确定哪个分区包含这些 Key。 如果还知道哪个分区分配在哪个节点，就可以直接向该节点发出请求。</p>
+<p><strong>每个分区内可以按照 Key 排序保存，这样可以轻松支持区间查询</strong>，即将关键字作为一个拼接起来的索引项从而一次查询得到多个相关记录。</p>
+<p>然而，基于 Key 的区间分区的缺点是<strong>某些访问模式会导致热点</strong>。如果 Key 是时间戳，则分区对应于一个时间范围，例如每天一个分区。这会导致该分区在写入时负载过高，而其他分区始终处于空闲状态。因此当 Key 为时间戳或者其他类似的属性时，我们需要对这些 Key 进行修改已保证不会产生大量倾斜。</p>
+<h3 id="基于key的哈希值分区">基于Key的哈希值分区</h3>
+<p>对于上述数据倾斜与热点问题，许多分布式系统采用了<strong>基于 Key 的哈希值</strong>来分区。一个好的哈希函数可以处理数据倾斜并使其均匀分布。</p>
+<p>一旦找到合适的哈希函数，就可以为每个分区分配一个哈希范围（而不是直接作用于 Key 范围），Key 根据其哈希值的范围划分到不同的分区中。如下图所示：</p>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia8.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>这种方法可以很好地将 Key 均匀分配到多个分区中。分区边界可以是均匀间隔， 也可以是伪随机选择（如<a class="link" href="https://blog.csdn.net/qq_35423154/article/details/108727532?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522164164219816781683953528%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fblog.%2522%257D&amp;request_id=164164219816781683953528&amp;biz_id=0&amp;utm_medium=distribute.pc_search_result.none-task-blog-2~blog~first_rank_ecpm_v1~rank_v31_ecpm-1-108727532.nonecase&amp;utm_term=%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C&amp;spm=1018.2226.3001.4450"  target="_blank" rel="noopener"
+    >一致性哈希</a>）。</p>
+<p>然而，通过 Key 的哈希值进行分区，就<strong>丧失了良好的区间查询特性</strong>。即使 Key 原本相邻，但经过哈希之后会分散在不同的分区中，区间查询就失去了原有的有序相邻的特性。</p>
+<p>基于哈希的分区方法可以减轻热点，但无法做到完全避免。 如在极端情况下，所有的读/写操作都是针对同一个Key，则最终所有请求都将被路由到同一个分区。如今大多数的系统仍然无法自动消除这种高度倾斜的负载，只能通过应用层来减轻倾斜程度。</p>
+<h2 id="分区与二级索引">分区与二级索引</h2>
+<p>如果涉及到二级索引，分区的逻辑又会变得更加复杂，因为<strong>二级索引通常不能唯一标识一条记录，而是用来加速特定值的查询。</strong></p>
+<p><strong>二级索引面临的主要挑战是它们不能规整的映射到分区中</strong>。目前有两种主要的方法来支持对二级索引进行分区：<strong>基于文档的分区</strong>和<strong>基于词条的分区</strong>。</p>
+<ul>
+<li>
+<p><strong>基于文档来分区二级索引（本地索引）</strong>：二级索引存储在与关键字相同的分区 ，这意味着写入时我们只需要更新一个分区，但缺点是读取二级索引时需要在所有分区上执行分散/聚集 。</p>
+</li>
+<li>
+<p><strong>基于词条来分区二级索引（全局索引）</strong>：它是基于索引的值而进行的独立分区。二级索引中的条目可能包含来自关键字的多个分区里的记录。在写入时，不得不更新二级索引的多个分区。但读取时，则可以从单个分区直接快速提取数据。</p>
+</li>
+</ul>
+<h3 id="基于文档分区的二级索引">基于文档分区的二级索引</h3>
+<p><strong>在这种索引方法中，每个分区完全独立，各自维护自己的二级索引，且只负责自己分区内的文档而不关心其他分区中的数据</strong>。每当需要写数据库时，包括添加，删除或更新文档等，<strong>只需要处理包含目标文档 ID 的那一个分区</strong>。因此文档分区索引被称为<strong>本地索引</strong>，而不是全局索引。</p>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia9.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如上图，由于数据可能分布在不同分区中，<strong>在读取时我们就需要将查询发送到所有的分区，然后合并所有返回的结果</strong>。这种查询分区数据库的方法被称为分散/聚集，其二级索引的查询代价高昂。即使采用了并行查询，也容易导致读延迟显著放大。</p>
+<h3 id="基于词条分区的二级索引">基于词条分区的二级索引</h3>
+<p><strong>我们对所有的数据构建全局索引，而不是每个分区维护自己的本地索引</strong>。而且，为避免成为瓶颈，不能将全局索引存储在一个节点上，否则就破坏了设计分区均衡的目标。所以，<strong>全局索引也必须进行分区，且可以与数据关键字采用不的分区策略。<strong>我们将这种索引方案称为</strong>词条分区</strong>，它<strong>以待查找的关键字本身作为索引</strong>。</p>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia10.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>这种全局的词条分区相比于文档分区索引的主要优点是，它的读取更为高效，即它不需要采用分散/聚集对所有的分区都执行一遍查询，相反，<strong>客户端只需要向包含词条的那个分区发出读请求</strong>。</p>
+<p>然而全局索引的不利之处在于其写入速度较慢且非常复杂，主要因为单个文档更新时，里面可能会涉及多个二级索引，而二级索引的分区又可能完全不同甚至在不同的节点上，由此势必引人显著的<strong>写放大</strong>。</p>
+<h2 id="分区再平衡">分区再平衡</h2>
+<p>随着时间的推移，数据库可能总会出现某些变化：</p>
+<ul>
+<li>
+<p>查询压力增加，因此需要更多的 CPU来处理负载。</p>
+</li>
+<li>
+<p>数据规模增加，因此需要更多的磁盘和内存来存储数据。</p>
+</li>
+<li>
+<p>节点可能出现故障，因此需要其他机器来接管失效的节点。</p>
+</li>
+</ul>
+<p>所有这些变化都要求数据和请求可以从一个节点转移到另一个节点。这样一个迁移负载的过程称为<strong>再平衡</strong>（或动态平衡）。无论对于哪种分区方案，分区再平衡通常至少要满足 ：</p>
+<ul>
+<li>
+<p>平衡之后，负载、数据存储、读写请求等应该在集群范围更均匀地分布。</p>
+</li>
+<li>
+<p>再平衡执行过程中，数据库应该可以继续正常提供读写服务。</p>
+</li>
+<li>
+<p>避免不必要的负载迁移，以加快动态再平衡，井尽量减少网络和磁盘 I/O 影响。</p>
+</li>
+</ul>
+<h3 id="动态再平衡">动态再平衡</h3>
+<h4 id="固定数量的分区">固定数量的分区</h4>
+<p><strong>创建远超实际节点数的分区数，然后为每个节点分配多个分区。</strong> 例如一个 10 节点的集群，数据库可以从一开始就逻辑划分为 1000 个分区，这样大约每个节点承担 100 个分区。如果集群中添加了新节点，该新节点可以从每个现有的节点上匀走几个分区，直到分区再次达到全局平衡。如果从集群中删除节点，则采取相反的均衡措施。具体逻辑如下图所示：</p>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia11.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>原则上，也可以将集群中的不同的硬件配置因素考虑进来，<strong>即性能更强大的节点将分配更多的分区</strong>，从而分担更多的负载。目前 Riak、Elasticsearch、Couchbase、Voldemort 都支持这种动态平衡方法。</p>
+<h4 id="动态创建分区">动态创建分区</h4>
+<p>因此，一些数据库如 HBase 和 RethinkDB 等采用了<strong>动态创建分区</strong>。<strong>当分区的数据增长超过一个可配的参数阔值时，它就拆分为两个分区，每个分区承担一半的数据。相反，如果大量数据被删除，并且分区缩小到某个阈值以下，则将其与相邻分区进行合井。</strong> 该过程类似于 B 树的分裂操作。</p>
+<p>动态分区的一个优点是<strong>分区数量可以自动适配数据总量</strong>。如果只有少量的数据，少量的分区就足够了，这样就减轻了系统的开销；如果有大量数据，每个分区的大小则被限制一个可配置的最大值。 <strong>因此分区的数量与数据集的大小成正比关系。</strong></p>
+<h4 id="按节点比例分区">按节点比例分区</h4>
+<p>在前面两种方法中，分区的数量都与数据集大小有关，而与节点数无关。而 Cassandra 和 Ketama 采用了第三种方式，<strong>使分区数与集群节点数成正比关系</strong>。换句话说，<strong>每个节点具有固定数量的分区</strong>。</p>
+<p>此外，当节点数不变时，每个分区的大小与数据集大小保持正比的增长关系。当节点数增加时，分区则会调整变得更小。较大的数据量通常需要大量的节点来存储，因此这种方法使每个分区大小保持稳定。</p>
+<p><strong>当一个新节点加入集群时，它随机选择固定数量的现有分区进行分裂，然后拿走这些分区的一半数据量，将另一半数据留在原节点。</strong></p>
+<h3 id="手动与自动再平衡">手动与自动再平衡</h3>
+<p>动态平衡的执行方式有以下几种：</p>
+<ul>
+<li><strong>手动再平衡</strong>：分区到节点的映射由管理员来显式配置。</li>
+<li><strong>全自动再平衡</strong>：由系统自动决定何时将分区从一个节点迁移到另一个节点，不需要任何管理员的介入。</li>
+<li><strong>半自动再平衡</strong>：自动生成分区分配的建议方案，但需要管理员的确认才能生效。 如 Couchbase，Riak 和 Vodemort。</li>
+</ul>
+<p>全自动式再平衡会更加方便，它在正常维护之外所增加的操作很少。但是，也有可能出现结果难以预测的情况。再平衡总体讲是个比较昂贵的操作，它需要重新路由请求并将大量数据从一个节点迁移到另一个节点。万一执行过程中间出现异常，会使网络或节点的负载过重，并影响其他请求的性能。</p>
+<p>基于以上描述综合考虑，半自动再平衡可能是个更好的选择。虽然它比全自动再平衡响应慢，但它可以有效防止意外发生。</p>
+<h2 id="请求路由">请求路由</h2>
+<p>当客户端需要发送请求时，如何知道应该连接哪个节点呢？这其实属于一类典型的<strong>服务发现</strong>问题，这个问题有以下几种不同的处理策略：</p>
+<ul>
+<li>
+<p>允许客户端连接任何一个的节点，如果某节点恰好拥有所请求的分区，则直接处理该请求；否则，将请求转发到下一个合适的节点，接收答复，并将答复返回给客户端。</p>
+</li>
+<li>
+<p>将所有客户端的请求都发送到路由层，由后者负责将请求转发到对应的分区节点上。路由层本身不处理任何请求，它仅充当一个分区感知的负载均衡器。</p>
+</li>
+<li>
+<p>客户端感知分区和节点的分配关系。此时，客户端可以直接连接到目标节点，而不需要任何中介。</p>
+</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia6.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>许多分布式数据系统依靠独立的协调服务（如 ZooKeeper ）跟踪集群范围内的元数据，如下图所示：</p>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia7.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>每个节点都向 ZooKeeper 注册自己， ZooKeeper 维护了分区到节点的最终映射关系。其他参与者（路由层或分区感知的客户端 ）可以向 ZooKeeper 订阅此信息。一旦分区发生了改变，或者添加、删除节点， ZooKeeper 就会主动通知路由层，这样使路由信息保持最新状态。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/">数据密集型应用系统设计</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 20:16 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E4%B8%80%E6%B5%81%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十一）：流处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E6%89%B9%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十）：批处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B9%9D%E4%B8%80%E8%87%B4%E6%80%A7%E4%B8%8E%E5%85%B1%E8%AF%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（九）：一致性与共识</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AB%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%8C%91%E6%88%98/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（八）：分布式系统的挑战</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%83%E4%BA%8B%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（七）：事务</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#分区与复制">分区与复制</a></li>
+    <li><a href="#k-v-数据的分区">K-V 数据的分区</a>
+      <ol>
+        <li><a href="#基于key的区间分区">基于Key的区间分区</a></li>
+        <li><a href="#基于key的哈希值分区">基于Key的哈希值分区</a></li>
+      </ol>
+    </li>
+    <li><a href="#分区与二级索引">分区与二级索引</a>
+      <ol>
+        <li><a href="#基于文档分区的二级索引">基于文档分区的二级索引</a></li>
+        <li><a href="#基于词条分区的二级索引">基于词条分区的二级索引</a></li>
+      </ol>
+    </li>
+    <li><a href="#分区再平衡">分区再平衡</a>
+      <ol>
+        <li><a href="#动态再平衡">动态再平衡</a>
+          <ol>
+            <li><a href="#固定数量的分区">固定数量的分区</a></li>
+            <li><a href="#动态创建分区">动态创建分区</a></li>
+            <li><a href="#按节点比例分区">按节点比例分区</a></li>
+          </ol>
+        </li>
+        <li><a href="#手动与自动再平衡">手动与自动再平衡</a></li>
+      </ol>
+    </li>
+    <li><a href="#请求路由">请求路由</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

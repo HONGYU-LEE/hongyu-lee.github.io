@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='并发 API 条款 35：优先基于任务编程而非基于线程  std::thread 的 API 没有提供直接获取异步运行函数的返回值的途径，如果那些函数抛出异常，则程序会终止运行。 基于线程的程序设计要求手动管理线程耗尽、资源超额、负载均衡，以及跨平台适配。 基于任务的程序设计中 std::async 会默认解决以上两个问题。  std::async 返回的 future 提供了 get 函数，从而可以获取返回值。即使函数发生了异常，get 函数也能够访问到异常。 当使用默认启动策略调用 std::async 时，系统不保证会创建一个新的线程，它允许调度器把指定函数运行在请求结果的线程中。合理的调度器在系统资源超额或者线程耗尽时就会利用这个自由度。    条款 36：如果必须使用异步，则指定 std::launch::async   std::async 的默认启动策略既允许任务以异步方式执行，也允许使用同步方式。
+  std::launch::async 启动策略意味着函数必须以异步方式运行，即在另一个线程上执行。
+  std::launch::deferred 启动策略意味着函数只会在 std::async 返回的 future 上调用 get 或者 wait 时才会同步执行（即调用方阻塞到函数运行结束为止）。如果 get 或 wait 没有调用则函数不会运行。
+  std::async在不指定启动策略时会使用默认启动策略，即采用对上述两者进行或运算的结果：
+1 2 3 4 5 6  auto fut1 = std::async(f); //使用默认启动策略运行f  //等价于上一条 auto fut2 = std::async(std::launch::async | //使用async或者deferred运行f  std::launch::deferred, f);   默认启动策略运行函数以同步或者异步的方式运行，也因此导致函数具有不确定性。'><title>Effective Modern C&#43;&#43; 读书笔记（六）：并发 API</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%85%AD%E5%B9%B6%E5%8F%91-api/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Effective Modern C&#43;&#43; 读书笔记（六）：并发 API'>
+<meta property='og:description' content='并发 API 条款 35：优先基于任务编程而非基于线程  std::thread 的 API 没有提供直接获取异步运行函数的返回值的途径，如果那些函数抛出异常，则程序会终止运行。 基于线程的程序设计要求手动管理线程耗尽、资源超额、负载均衡，以及跨平台适配。 基于任务的程序设计中 std::async 会默认解决以上两个问题。  std::async 返回的 future 提供了 get 函数，从而可以获取返回值。即使函数发生了异常，get 函数也能够访问到异常。 当使用默认启动策略调用 std::async 时，系统不保证会创建一个新的线程，它允许调度器把指定函数运行在请求结果的线程中。合理的调度器在系统资源超额或者线程耗尽时就会利用这个自由度。    条款 36：如果必须使用异步，则指定 std::launch::async   std::async 的默认启动策略既允许任务以异步方式执行，也允许使用同步方式。
+  std::launch::async 启动策略意味着函数必须以异步方式运行，即在另一个线程上执行。
+  std::launch::deferred 启动策略意味着函数只会在 std::async 返回的 future 上调用 get 或者 wait 时才会同步执行（即调用方阻塞到函数运行结束为止）。如果 get 或 wait 没有调用则函数不会运行。
+  std::async在不指定启动策略时会使用默认启动策略，即采用对上述两者进行或运算的结果：
+1 2 3 4 5 6  auto fut1 = std::async(f); //使用默认启动策略运行f  //等价于上一条 auto fut2 = std::async(std::launch::async | //使用async或者deferred运行f  std::launch::deferred, f);   默认启动策略运行函数以同步或者异步的方式运行，也因此导致函数具有不确定性。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%85%AD%E5%B9%B6%E5%8F%91-api/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='Effective Modern C&#43;&#43;' /><meta property='article:tag' content='读书笔记' /><meta property='article:published_time' content='2022-07-12T17:54:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T16:47:49&#43;08:00'/>
+<meta name="twitter:title" content="Effective Modern C&#43;&#43; 读书笔记（六）：并发 API">
+<meta name="twitter:description" content="并发 API 条款 35：优先基于任务编程而非基于线程  std::thread 的 API 没有提供直接获取异步运行函数的返回值的途径，如果那些函数抛出异常，则程序会终止运行。 基于线程的程序设计要求手动管理线程耗尽、资源超额、负载均衡，以及跨平台适配。 基于任务的程序设计中 std::async 会默认解决以上两个问题。  std::async 返回的 future 提供了 get 函数，从而可以获取返回值。即使函数发生了异常，get 函数也能够访问到异常。 当使用默认启动策略调用 std::async 时，系统不保证会创建一个新的线程，它允许调度器把指定函数运行在请求结果的线程中。合理的调度器在系统资源超额或者线程耗尽时就会利用这个自由度。    条款 36：如果必须使用异步，则指定 std::launch::async   std::async 的默认启动策略既允许任务以异步方式执行，也允许使用同步方式。
+  std::launch::async 启动策略意味着函数必须以异步方式运行，即在另一个线程上执行。
+  std::launch::deferred 启动策略意味着函数只会在 std::async 返回的 future 上调用 get 或者 wait 时才会同步执行（即调用方阻塞到函数运行结束为止）。如果 get 或 wait 没有调用则函数不会运行。
+  std::async在不指定启动策略时会使用默认启动策略，即采用对上述两者进行或运算的结果：
+1 2 3 4 5 6  auto fut1 = std::async(f); //使用默认启动策略运行f  //等价于上一条 auto fut2 = std::async(std::launch::async | //使用async或者deferred运行f  std::launch::deferred, f);   默认启动策略运行函数以同步或者异步的方式运行，也因此导致函数具有不确定性。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/c&#43;&#43;/" style="background-color: #2a9d8f; color: #fff;">
+                C&#43;&#43;
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%85%AD%E5%B9%B6%E5%8F%91-api/">Effective Modern C&#43;&#43; 读书笔记（六）：并发 API</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 12, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="并发-api">并发 API</h1>
+<h2 id="条款-35优先基于任务编程而非基于线程">条款 35：优先基于任务编程而非基于线程</h2>
+<ul>
+<li>std::thread 的 API 没有提供直接获取异步运行函数的返回值的途径，如果那些函数抛出异常，则程序会终止运行。</li>
+<li>基于线程的程序设计要求手动管理线程耗尽、资源超额、负载均衡，以及跨平台适配。</li>
+<li>基于任务的程序设计中 std::async 会默认解决以上两个问题。
+<ul>
+<li>std::async 返回的 future 提供了 get 函数，从而可以获取返回值。即使函数发生了异常，get 函数也能够访问到异常。</li>
+<li>当使用默认启动策略调用 std::async 时，系统不保证会创建一个新的线程，它允许调度器把指定函数运行在请求结果的线程中。合理的调度器在系统资源超额或者线程耗尽时就会利用这个自由度。</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-36如果必须使用异步则指定-stdlaunchasync">条款 36：如果必须使用异步，则指定 std::launch::async</h2>
+<ul>
+<li>
+<p>std::async 的默认启动策略既允许任务以异步方式执行，也允许使用同步方式。</p>
+<ul>
+<li>
+<p>std::launch::async 启动策略意味着函数必须以异步方式运行，即在另一个线程上执行。</p>
+</li>
+<li>
+<p>std::launch::deferred 启动策略意味着函数只会在 std::async 返回的 future 上调用 get 或者 wait 时才会同步执行（即调用方阻塞到函数运行结束为止）。如果 get 或 wait 没有调用则函数不会运行。</p>
+</li>
+<li>
+<p>std::async在不指定启动策略时会使用默认启动策略，即采用对上述两者进行或运算的结果：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">fut1</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">async</span><span class="p">(</span><span class="n">f</span><span class="p">);</span>                      <span class="c1">//使用默认启动策略运行f
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//等价于上一条
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="n">fut2</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">async</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">launch</span><span class="o">::</span><span class="n">async</span> <span class="o">|</span>     <span class="c1">//使用async或者deferred运行f
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                       <span class="n">std</span><span class="o">::</span><span class="n">launch</span><span class="o">::</span><span class="n">deferred</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                       <span class="n">f</span><span class="p">);</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>默认启动策略运行函数以同步或者异步的方式运行，也因此导致函数具有不确定性。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>这样的灵活性导致使用 thread_local 变量时的不确定性，隐含了任务可能永远不会被执行的意思，还会影响运用了基于超时的 wait 调用的程序逻辑。</p>
+<ul>
+<li>
+<p>由于默认启动策略的不确定性，导致在使用 thread_local 变量时，如果函数读/写该线程级局部存储（thread local storage，TLS）时无法预知到读取的是哪个线程。</p>
+</li>
+<li>
+<p>如果使用基于 wait 的循环超时机制，很可能会导致任务永远不会被执行：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">using</span> <span class="k">namespace</span> <span class="n">std</span><span class="o">::</span><span class="n">literals</span><span class="p">;</span>      <span class="c1">//为了使用C++14中的时间段后缀；参见条款34
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">f</span><span class="p">()</span>                            <span class="c1">//f休眠1秒，然后返回
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">this_thread</span><span class="o">::</span><span class="n">sleep_for</span><span class="p">(</span><span class="mi">1</span><span class="n">s</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">fut</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">async</span><span class="p">(</span><span class="n">f</span><span class="p">);</span>           <span class="c1">//异步运行f（理论上）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">while</span> <span class="p">(</span><span class="n">fut</span><span class="p">.</span><span class="n">wait_for</span><span class="p">(</span><span class="mi">100</span><span class="n">ms</span><span class="p">)</span> <span class="o">!=</span>       <span class="c1">//循环，直到f完成运行时停止...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>       <span class="n">std</span><span class="o">::</span><span class="n">future_status</span><span class="o">::</span><span class="n">ready</span><span class="p">)</span>   <span class="c1">//但是有可能永远不会发生！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>对于上面这个代码，如果采用的是 std::launch::deferred 策略，则 fut.wait_for 将总是返回 std::future_status::deferred。这永远不等于 std::future_status::ready ，循环会永远执行下去。</p>
+<p>想要解决这个问题也很简单，只需要加个判断，查看返回值是否为 std::future_status::deferred 即可：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">fut</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">async</span><span class="p">(</span><span class="n">f</span><span class="p">);</span>               <span class="c1">//同上
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">fut</span><span class="p">.</span><span class="n">wait_for</span><span class="p">(</span><span class="mi">0</span><span class="n">s</span><span class="p">)</span> <span class="o">==</span>                 <span class="c1">//如果task是deferred（被延迟）状态
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">std</span><span class="o">::</span><span class="n">future_status</span><span class="o">::</span><span class="n">deferred</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>                                   <span class="c1">//在fut上调用wait或get来异步调用f
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span> <span class="k">else</span> <span class="p">{</span>                                <span class="c1">//task没有deferred（被延迟）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">while</span> <span class="p">(</span><span class="n">fut</span><span class="p">.</span><span class="n">wait_for</span><span class="p">(</span><span class="mi">100</span><span class="n">ms</span><span class="p">)</span> <span class="o">!=</span>       <span class="c1">//不可能无限循环（假设f完成）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>           <span class="n">std</span><span class="o">::</span><span class="n">future_status</span><span class="o">::</span><span class="n">ready</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="err">…</span>                               <span class="c1">//task没deferred（被延迟），也没ready（已准备）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                        <span class="c1">//做并行工作直到已准备
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>                                   <span class="c1">//fut是ready（已准备）状态
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>如果必须使用异步，则指定 std::launch::async。</p>
+<ul>
+<li>如果下面条件满足不了，则你可能要想确保任务以异步执行，此时就需要指定 std::launch::async：
+<ol>
+<li>任务不需要与调用 get 或 wait 的线程并发执行。</li>
+<li>读/写哪个线程的 thread_local 变量并无影响。</li>
+<li>可以保证会在 std::async 返回的 future 之上调用 get 或 wait，或者可以接受任务永不执行。</li>
+<li>使用 wait_for 或者 wait_until 的代码会考虑任务被延迟的可能。</li>
+</ol>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-37使-stdthread-类型对象在所有路径皆-unjoinable">条款 37：使 std::thread 类型对象在所有路径皆 unjoinable</h2>
+<ul>
+<li>
+<p>在所有路径上保证 std::thread 类型对象最终是 unjoinable。</p>
+<ul>
+<li>unjoinable 的 std::thread 对象包括：
+<ul>
+<li><strong>默认构造的 std::thread</strong>。此类 std::thread 没有可以执行的函数，因此也没有对应的底层执行线程。</li>
+<li><strong>已经被移动走的 std::thread</strong>。一个 std::thread 所对应的底层执行线程被对应到另一个 std::thread 上。</li>
+<li><strong>已经被 join 的 std::thread</strong>。在 join 之后，std::thread 不再对应已结束运行的底层执行线程。</li>
+<li><strong>已经被 detach 的 std::thread</strong>。detach 断开了 std::thread 和它的底层执行线程的连接。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p>在析构时调用 join 可能导致难以调试的性能异常。</p>
+<ul>
+<li>std::thread 的析构函数会等待底层异步执行线程完成。</li>
+</ul>
+</li>
+<li>
+<p>在析构时调用 detach 可能导致难以调试的未定义行为。</p>
+<ul>
+<li>std::thread 的析构函数会分离 std::thread 类型对象与底层执行线程之间的连接，而该底层执行线程会继续执行。</li>
+</ul>
+</li>
+<li>
+<p>声明类的数据成员时，最后再声明 std::thread 类型对象。</p>
+<ul>
+<li>通常一个数据成员的初始化会依赖另一个成员，而 std::thread 对象会在初始化结束后立即执行函数，因此最好将其在最后再声明，这样就能保证一旦构造结束，在前面的所有数据成员都会初始化完毕，可以供 std::thread 数据成员绑定的异步运行的线程安全使用。</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-38关注不同线程句柄的析构行为">条款 38：关注不同线程句柄的析构行为</h2>
+<ul>
+<li>
+<p>future 的正常析构行为就是销毁 future 本身的数据。</p>
+<ul>
+<li>future 的正常析构行为仅会析构 future 对象，并对共享状态里的引用计数（由引用它的 future 和被调用者的 std::promise 共同控制的）进行一次自减。它不会对任何东西实施 join 或 detach。</li>
+</ul>
+</li>
+<li>
+<p>最后一个经由 std::async 创建的共享状态的 future 析构函数会在任务结束前阻塞。</p>
+<ul>
+<li>本质上，这种 future 的析构函数对执行异步任务的线程执行了隐式的 join。</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-39对于一次性事件的通信使用无返回值的-future">条款 39：对于一次性事件的通信使用无返回值的 future</h2>
+<ul>
+<li>
+<p>对于简单的时间通信，基于条件变量的设计需要一个多余的互斥锁，这不仅会给相互关联的检测和反应任务带来约束，还需要反应任务来验证事件是否已发生。</p>
+<ul>
+<li>
+<p>基于条件变量的设计如下面的示例：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">condition_variable</span> <span class="n">cv</span><span class="p">;</span>         <span class="c1">//事件的条件变量
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span> <span class="n">m</span><span class="p">;</span>                       <span class="c1">//配合cv使用的mutex
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//检测任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                   <span class="c1">//检测事件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">cv</span><span class="p">.</span><span class="n">notify_one</span><span class="p">();</span>                    <span class="c1">//通知反应任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//反应任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//反应的准备工作
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>                                       <span class="c1">//开启关键部分
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">unique_lock</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="o">&gt;</span> <span class="n">lk</span><span class="p">(</span><span class="n">m</span><span class="p">);</span> <span class="c1">//锁住互斥锁
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="n">cv</span><span class="p">.</span><span class="n">wait</span><span class="p">(</span><span class="n">lk</span><span class="p">);</span>                        <span class="c1">//等待通知，但是这是错的！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>                                   <span class="c1">//对事件进行反应（m已经上锁）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>                                       <span class="c1">//关闭关键部分；通过lk的析构函数解锁m
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//继续反应动作（m现在未上锁）
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>由于条件变量需要确保线程安全，因此需要使用互斥锁。而在检测和反应任务这一场景下，检测线程和反应线程之间并不存在数据竞争，这就导致锁不仅带来了性能损耗，还会阻止两个线程同时运行。</p>
+<p>除了互斥锁，条件变量本身也存在问题，即使检测线程没有发出信号，反应线程也有可能会被虚假唤醒。或者在反应线程条用 wait 之间，检测线程发出了信号，这也会导致信号的丢失。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>使用标志位的设计可以避免上述问题，但这一设计基于轮询而非阻塞。</p>
+<ul>
+<li>
+<p>除了条件变量，我们也可以使用原子的布尔类型作为标记，当标记为 true 时则代表事件发生：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span> <span class="n">flag</span><span class="p">(</span><span class="nb">false</span><span class="p">);</span>          <span class="c1">//共享的flag；std::atomic见条款40
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//检测任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//检测某个事件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">flag</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>                            <span class="c1">//告诉反应线程
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//反应任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//准备作出反应
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">while</span> <span class="p">(</span><span class="o">!</span><span class="n">flag</span><span class="p">);</span>                          <span class="c1">//等待事件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//对事件作出反应
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>这种方法不需要互斥锁，也没有虚假唤醒的问题，但是其基于轮询而非阻塞，这就导致其大量占用了 cpu 资源。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>条件变量和标志位可以一起使用，但这样的通信机制设计结果并不让人愉快。</p>
+<ul>
+<li>
+<p>我们也可以将上述两种方案结合起来，用标志位标记事件，用条件变量阻塞线程：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">condition_variable</span> <span class="n">cv</span><span class="p">;</span>             <span class="c1">//跟之前一样
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span> <span class="n">m</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">bool</span> <span class="nf">flag</span><span class="p">(</span><span class="nb">false</span><span class="p">);</span>                       <span class="c1">//不是std::atomic
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//检测任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//检测某个事件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="o">&gt;</span> <span class="n">g</span><span class="p">(</span><span class="n">m</span><span class="p">);</span>   <span class="c1">//通过g的构造函数锁住m
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">flag</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>                        <span class="c1">//通知反应任务（第1部分）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>                                       <span class="c1">//通过g的析构函数解锁m
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">cv</span><span class="p">.</span><span class="n">notify_one</span><span class="p">();</span>                        <span class="c1">//通知反应任务（第2部分）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//反应任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//准备作出反应
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>                                       <span class="c1">//跟之前一样
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">std</span><span class="o">::</span><span class="n">unique_lock</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="o">&gt;</span> <span class="n">lk</span><span class="p">(</span><span class="n">m</span><span class="p">);</span> <span class="c1">//跟之前一样
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">cv</span><span class="p">.</span><span class="n">wait</span><span class="p">(</span><span class="n">lk</span><span class="p">,</span> <span class="p">[]</span> <span class="p">{</span> <span class="k">return</span> <span class="n">flag</span><span class="p">;</span> <span class="p">});</span>   <span class="c1">//使用lambda来避免虚假唤醒
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="err">…</span>                                   <span class="c1">//对事件作出反应（m被锁定）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="err">…</span>                                       <span class="c1">//继续反应动作（m现在解锁）
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>这种方法既避免了方法一的事件丢失和虚假唤醒，又弥补了方法二基于轮询的缺点。但是仍然有不好的地方，即就算反应任务被唤醒，他也要检测标志位的值后才决定是否做出反应，这就导致大量无意义的线程阻塞与唤醒，浪费了大量 CPU 时间的同时带来了上下文切换的损耗。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>使用 std::promise 和 future 的方案就能够回避这些问题，但是这样就需要为了共享状态而使用堆内存，且需要考虑堆内存的分配和销毁开销，且同时有只能使用一次通信的限制。</p>
+<ul>
+<li>
+<p>除了上面提到的方案，还有一个方法能够避免使用条件变量、互斥锁和标记位。即让反应任务在检测任务设置的 future 上 wait 等待通知，例如下面的代码：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">promise</span><span class="o">&lt;</span><span class="kt">void</span><span class="o">&gt;</span> <span class="n">p</span><span class="p">;</span>                   <span class="c1">//通信信道的promise
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//检测任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//检测某个事件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">p</span><span class="p">.</span><span class="n">set_value</span><span class="p">();</span>                          <span class="c1">//通知反应任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//反应任务
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//准备作出反应
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">p</span><span class="p">.</span><span class="n">get_future</span><span class="p">().</span><span class="n">wait</span><span class="p">();</span>                  <span class="c1">//等待对应于p的那个future
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>                                       <span class="c1">//对事件作出反应                         //继续反应动作（m现在解锁）
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>这个方案不需要互斥锁与条件变量，也不存在虚假唤醒，同时还保证了事件基于阻塞，且在等待时不会浪费系统资源。但是它仍然有许多缺点：</p>
+<ol>
+<li>std::promise 和 future 之间有个共享状态，且共享状态是动态分配的，因此就会导致产生在堆上进行内存分配与释放的成本。</li>
+<li>std::promise 类型对象只能设置一次，不能用于重复通信。</li>
+</ol>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-40当需要并发时使用-stdatomic特殊内存才使用-volatile">条款 40：当需要并发时使用 std::atomic，特殊内存才使用 volatile</h2>
+<ul>
+<li>
+<p>std::atomic 用于无锁、多线程读写变量的场景。它是用来编写并发程序的工具。</p>
+</li>
+<li>
+<p>volatile 用于读写操作不可以被优化的特殊内存，它可以避免编译器优化内存带来的一些问题。</p>
+<ul>
+<li>
+<p>volatile 的作用就是告诉编译器当前处理的内存是特殊内存，不要对这块内存做任何特殊优化。如果没有声明 volatile，则编译器会消除一些代码中的重复赋值或者中间结果，例如下面这个代码：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="p">;</span>                             <span class="c1">//读x
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="p">;</span>                                  <span class="c1">//再次读x
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">x</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>                                 <span class="c1">//写x
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">x</span> <span class="o">=</span> <span class="mi">20</span><span class="p">;</span>                                 <span class="c1">//再次写x
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//编译器优化后
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="p">;</span>                             <span class="c1">//读x
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">x</span> <span class="o">=</span> <span class="mi">20</span><span class="p">;</span>                                 <span class="c1">//写x
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/c&#43;&#43;/">C&#43;&#43;</a>
+        
+            <a href="/tags/effective-modern-c&#43;&#43;/">Effective Modern C&#43;&#43;</a>
+        
+            <a href="/tags/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/">读书笔记</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 16:47 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%B8%83%E5%BE%AE%E8%B0%83/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（七）：微调</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%BA%94lambda-%E8%A1%A8%E8%BE%BE%E5%BC%8F/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（五）：lambda 表达式</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%9B%9B%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E7%A7%BB%E5%8A%A8%E8%AF%AD%E4%B9%89%E5%92%8C%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（四）：右值引用、移动语义和完美转发</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%B8%89%E6%99%BA%E8%83%BD%E6%8C%87%E9%92%88/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（三）：智能指针</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%BA%8C%E7%8E%B0%E4%BB%A3-c-/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（二）：现代 C&#43;&#43;</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#条款-35优先基于任务编程而非基于线程">条款 35：优先基于任务编程而非基于线程</a></li>
+    <li><a href="#条款-36如果必须使用异步则指定-stdlaunchasync">条款 36：如果必须使用异步，则指定 std::launch::async</a></li>
+    <li><a href="#条款-37使-stdthread-类型对象在所有路径皆-unjoinable">条款 37：使 std::thread 类型对象在所有路径皆 unjoinable</a></li>
+    <li><a href="#条款-38关注不同线程句柄的析构行为">条款 38：关注不同线程句柄的析构行为</a></li>
+    <li><a href="#条款-39对于一次性事件的通信使用无返回值的-future">条款 39：对于一次性事件的通信使用无返回值的 future</a></li>
+    <li><a href="#条款-40当需要并发时使用-stdatomic特殊内存才使用-volatile">条款 40：当需要并发时使用 std::atomic，特殊内存才使用 volatile</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

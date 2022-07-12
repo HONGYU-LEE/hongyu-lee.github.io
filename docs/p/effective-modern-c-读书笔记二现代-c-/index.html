@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='现代 C&#43;&#43; 条款 7：在创建对象时区分 () 与   大括号初始化可以引用的语境最广泛，还可以阻止隐式的窄化类型转换，以及对 C&#43;&#43; 中令人头疼的解析语法具有免疫。
+  大括号初始化又被称为统一初始化，因为其适用于 C&#43;&#43; 中所有的初始化场景：
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16  //大括号初始化让你可以表达以前表达不出的东西，如指定一个容器中的元素 std::vector&amp;lt;int&amp;gt; v{ 1, 3, 5 }; //v初始内容为1,3,5  //大括号初始化也能被用于为非静态数据成员指定默认初始值，C&#43;&#43;11允许&amp;#34;=&amp;#34;初始化也拥有这种能力： class Widget{ … private: int x{ 0 }; //没问题，x初始值为0  int y = 0; //也可以  int z(0); //错误！ } //不可拷贝的对象可以使用大括号初始化或者小括号初始化，但是不能使用=初始化： std::atomic&amp;lt;int&amp;gt; ai1{ 0 }; //没问题 std::atomic&amp;lt;int&amp;gt; ai2(0); //没问题 std::atomic&amp;lt;int&amp;gt; ai3 = 0; //错误！     大括号初始化禁止内置类型间隐式的窄化类型转换，而小括号为了兼容老旧代码则放宽了这一限制：'><title>Effective Modern C&#43;&#43; 读书笔记（二）：现代 C&#43;&#43;</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%BA%8C%E7%8E%B0%E4%BB%A3-c-/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Effective Modern C&#43;&#43; 读书笔记（二）：现代 C&#43;&#43;'>
+<meta property='og:description' content='现代 C&#43;&#43; 条款 7：在创建对象时区分 () 与   大括号初始化可以引用的语境最广泛，还可以阻止隐式的窄化类型转换，以及对 C&#43;&#43; 中令人头疼的解析语法具有免疫。
+  大括号初始化又被称为统一初始化，因为其适用于 C&#43;&#43; 中所有的初始化场景：
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16  //大括号初始化让你可以表达以前表达不出的东西，如指定一个容器中的元素 std::vector&amp;lt;int&amp;gt; v{ 1, 3, 5 }; //v初始内容为1,3,5  //大括号初始化也能被用于为非静态数据成员指定默认初始值，C&#43;&#43;11允许&amp;#34;=&amp;#34;初始化也拥有这种能力： class Widget{ … private: int x{ 0 }; //没问题，x初始值为0  int y = 0; //也可以  int z(0); //错误！ } //不可拷贝的对象可以使用大括号初始化或者小括号初始化，但是不能使用=初始化： std::atomic&amp;lt;int&amp;gt; ai1{ 0 }; //没问题 std::atomic&amp;lt;int&amp;gt; ai2(0); //没问题 std::atomic&amp;lt;int&amp;gt; ai3 = 0; //错误！     大括号初始化禁止内置类型间隐式的窄化类型转换，而小括号为了兼容老旧代码则放宽了这一限制：'>
+<meta property='og:url' content='https://blog.orekilee.top/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%BA%8C%E7%8E%B0%E4%BB%A3-c-/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='Effective Modern C&#43;&#43;' /><meta property='article:tag' content='读书笔记' /><meta property='article:published_time' content='2022-07-12T13:54:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T16:40:11&#43;08:00'/>
+<meta name="twitter:title" content="Effective Modern C&#43;&#43; 读书笔记（二）：现代 C&#43;&#43;">
+<meta name="twitter:description" content="现代 C&#43;&#43; 条款 7：在创建对象时区分 () 与   大括号初始化可以引用的语境最广泛，还可以阻止隐式的窄化类型转换，以及对 C&#43;&#43; 中令人头疼的解析语法具有免疫。
+  大括号初始化又被称为统一初始化，因为其适用于 C&#43;&#43; 中所有的初始化场景：
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16  //大括号初始化让你可以表达以前表达不出的东西，如指定一个容器中的元素 std::vector&amp;lt;int&amp;gt; v{ 1, 3, 5 }; //v初始内容为1,3,5  //大括号初始化也能被用于为非静态数据成员指定默认初始值，C&#43;&#43;11允许&amp;#34;=&amp;#34;初始化也拥有这种能力： class Widget{ … private: int x{ 0 }; //没问题，x初始值为0  int y = 0; //也可以  int z(0); //错误！ } //不可拷贝的对象可以使用大括号初始化或者小括号初始化，但是不能使用=初始化： std::atomic&amp;lt;int&amp;gt; ai1{ 0 }; //没问题 std::atomic&amp;lt;int&amp;gt; ai2(0); //没问题 std::atomic&amp;lt;int&amp;gt; ai3 = 0; //错误！     大括号初始化禁止内置类型间隐式的窄化类型转换，而小括号为了兼容老旧代码则放宽了这一限制：">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/c&#43;&#43;/" style="background-color: #2a9d8f; color: #fff;">
+                C&#43;&#43;
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%BA%8C%E7%8E%B0%E4%BB%A3-c-/">Effective Modern C&#43;&#43; 读书笔记（二）：现代 C&#43;&#43;</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 12, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="现代-c">现代 C++</h1>
+<h2 id="条款-7在创建对象时区分--与">条款 7：在创建对象时区分 () 与</h2>
+<ul>
+<li>
+<p>大括号初始化可以引用的语境最广泛，还可以阻止隐式的窄化类型转换，以及对 C++ 中令人头疼的解析语法具有免疫。</p>
+<ul>
+<li>
+<p>大括号初始化又被称为统一初始化，因为其适用于 C++ 中所有的初始化场景：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">//大括号初始化让你可以表达以前表达不出的东西，如指定一个容器中的元素
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">{</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">5</span> <span class="p">};</span>  <span class="c1">//v初始内容为1,3,5
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//大括号初始化也能被用于为非静态数据成员指定默认初始值，C++11允许&#34;=&#34;初始化也拥有这种能力：
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">class</span> <span class="nc">Widget</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">{</span> <span class="mi">0</span> <span class="p">};</span>                 <span class="c1">//没问题，x初始值为0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>                  <span class="c1">//也可以
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="nf">z</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>                   <span class="c1">//错误！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//不可拷贝的对象可以使用大括号初始化或者小括号初始化，但是不能使用=初始化：
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">ai1</span><span class="p">{</span> <span class="mi">0</span> <span class="p">};</span>      <span class="c1">//没问题
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">ai2</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>        <span class="c1">//没问题
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">ai3</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>       <span class="c1">//错误！
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<p>大括号初始化禁止内置类型间隐式的窄化类型转换，而小括号为了兼容老旧代码则放宽了这一限制：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">double</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">sum1</span><span class="p">{</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">+</span> <span class="n">z</span> <span class="p">};</span>          <span class="c1">//错误！double的和可能不能表示为int
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span> <span class="nf">sum2</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">+</span><span class="n">z</span><span class="p">);</span>             <span class="c1">//可以（表达式的值被截为int）
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<p>C++ 规定任何能被解析为声明的都要被解析为声明，因此有时候想要使用默认构造函数或者全缺省构造函数创建对象时，就会被视为一个函数声明，而大括号初始化则会对此免疫：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Widget</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Widget</span><span class="p">(</span><span class="kt">int</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">0</span><span class="p">){</span>
+</span></span><span class="line"><span class="cl">        <span class="n">x_</span> <span class="o">=</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x_</span><span class="p">;</span>               
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Widget</span> <span class="nf">w1</span><span class="p">(</span><span class="mi">10</span><span class="p">);</span>                  <span class="c1">//使用实参10调用Widget的一个构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">Widget</span> <span class="nf">w2</span><span class="p">();</span>                    <span class="c1">//最令人头疼的解析！声明一个函数w2，返回Widget
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">Widget</span> <span class="n">w3</span><span class="p">{};</span>                    <span class="c1">//调用没有参数的构造函数构造对象
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>在构造函数重载决议期间，大括号初始化会尽可能的与带有 std::initializer_list 类型的形参相匹配，即使其他重载版本有着更加匹配的形参。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Widget</span> <span class="p">{</span> 
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>  
+</span></span><span class="line"><span class="cl">    <span class="n">Widget</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span><span class="p">,</span> <span class="kt">bool</span> <span class="n">b</span><span class="p">);</span>      
+</span></span><span class="line"><span class="cl">    <span class="n">Widget</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span><span class="p">,</span> <span class="kt">double</span> <span class="n">d</span><span class="p">);</span>   
+</span></span><span class="line"><span class="cl">    <span class="n">Widget</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">initializer_list</span><span class="o">&lt;</span><span class="kt">long</span> <span class="kt">double</span><span class="o">&gt;</span> <span class="n">il</span><span class="p">);</span>      
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span> 
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Widget</span> <span class="nf">w1</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="nb">true</span><span class="p">);</span>    <span class="c1">//使用小括号初始化，同之前一样调用第一个构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Widget</span> <span class="n">w2</span><span class="p">{</span><span class="mi">10</span><span class="p">,</span> <span class="nb">true</span><span class="p">};</span>    <span class="c1">//使用花括号初始化，但是现在
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                        <span class="c1">//调用std::initializer_list版本构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                        <span class="c1">//(10 和 true 转化为long double)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Widget</span> <span class="nf">w3</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">);</span>     <span class="c1">//使用小括号初始化，同之前一样调用第二个构造函数 
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Widget</span> <span class="n">w4</span><span class="p">{</span><span class="mi">10</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">};</span>     <span class="c1">//使用花括号初始化，但是现在
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                        <span class="c1">//调用std::initializer_list版本构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                        <span class="c1">//(10 和 5.0 转化为long double)
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>() 和 {} 在有些情况下结果可能大相径庭。</p>
+<ul>
+<li>
+<p>大括号在初始化时会调用 std::initializer_list 构造函数，而小括号则调用非 std::initializer_list 构造函数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">v1</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">);</span>    <span class="c1">//使用非std::initializer_list构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                <span class="c1">//创建一个包含10个元素的std::vector，
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                <span class="c1">//所有的元素的值都是20
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">v2</span><span class="p">{</span><span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">};</span>    <span class="c1">//使用std::initializer_list构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                <span class="c1">//创建包含两个元素的std::vector，
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                <span class="c1">//元素的值为10和20
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>在模板类创建对象时，选择使用小括号和大括号是一个棘手的问题。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="p">,</span>            <span class="c1">//要创建的对象类型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>         <span class="k">typename</span><span class="p">...</span> <span class="n">Ts</span><span class="o">&gt;</span>        <span class="c1">//要使用的实参的类型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">void</span> <span class="n">doSomeWork</span><span class="p">(</span><span class="n">Ts</span><span class="o">&amp;&amp;</span><span class="p">...</span> <span class="n">params</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">create</span> <span class="n">local</span> <span class="n">T</span> <span class="n">object</span> <span class="n">from</span> <span class="n">params</span><span class="p">...</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> 
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">T</span> <span class="nf">localObjectA</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">Ts</span><span class="o">&gt;</span><span class="p">(</span><span class="n">params</span><span class="p">)...);</span>             <span class="c1">//使用小括号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">T</span> <span class="n">localObjectB</span><span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">Ts</span><span class="o">&gt;</span><span class="p">(</span><span class="n">params</span><span class="p">)...};</span>             <span class="c1">//使用大括号
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//假设以下面这样的参数进行调用，此时就会如上一条一样，如果使用小括号则调用非std::initializer_list构造函数，而使用大括号则调用std::initializer_list构造函数，出现两种结果。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">;</span> 
+</span></span><span class="line"><span class="cl"><span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="n">doSomeWork</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;&gt;</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">);</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>这也是 std::make_unique 与 std::make_shared 面临的问题，它们的解决方法是是使用小括号，并将这个决定记录在文档中，作为接口的一部分。</p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-8优先选用-nullptr而非-0-或-null">条款 8：优先选用 nullptr，而非 0 或 NULL</h2>
+<ul>
+<li>
+<p>相对于 0 或者 NULL，优先选用 nullptr。</p>
+<ul>
+<li>在 C++ 中，0 是一个 int 而不是指针，同样 NULL 也只是一个整数类型（根据编译器的实现不同，可能会为 int 或 long）。它们都是整数类型而不是指针类型，如果采用 C++ 98 的写法使用它们作为空指针，可能会出现未定义的行为。</li>
+</ul>
+</li>
+<li>
+<p>避免在整型和指针类型之间重载。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="kt">int</span><span class="p">);</span>        <span class="c1">//三个f的重载函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="kt">bool</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">f</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>               <span class="c1">//调用f(int)而不是f(void*)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">f</span><span class="p">(</span><span class="nb">NULL</span><span class="p">);</span>            <span class="c1">//可能不会被编译，一般来说调用f(int)，
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                    <span class="c1">//绝对不会调用f(void*)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">f</span><span class="p">(</span><span class="k">nullptr</span><span class="p">);</span>         <span class="c1">//调用重载函数f的f(void*)版本
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-9优先选用-using-而非-typedef">条款 9：优先选用 using 而非 typedef</h2>
+<ul>
+<li>
+<p>typedef 不支持模板化，但别名声明支持。</p>
+<ul>
+<li>
+<p>假设我们需要定义一个链表，并且这个链表使用了我们自定义的内存分配器：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">//别名模板
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>                            <span class="c1">//MyAllocList&lt;T&gt;是
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">using</span> <span class="n">MyAllocListA</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">list</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span> <span class="n">MyAlloc</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="p">;</span>   <span class="c1">//std::list&lt;T, MyAlloc&lt;T&gt;&gt;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                                <span class="c1">//的同义词
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//如果使用typedef，则只能在一个模板类中用typedef来为该类型起别名
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>                            <span class="c1">//MyAllocList&lt;T&gt;是
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">struct</span> <span class="nc">MyAllocListB</span> <span class="p">{</span>                            <span class="c1">//std::list&lt;T, MyAlloc&lt;T&gt;&gt;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">typedef</span> <span class="n">std</span><span class="o">::</span><span class="n">list</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span> <span class="n">MyAlloc</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span> <span class="n">type</span><span class="p">;</span>      <span class="c1">//的同义词  
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>别名模板可以免写  [::类型名]  后缀，并且不会像 typedef 在模板中使用时还需要增加 typename 前缀。</p>
+<ul>
+<li>
+<p>由于 typedef 是模板类中的某个类型的别名，因此还需要在作用域后面加上 [::类型名] 后缀 ：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">MyAllocListA</span><span class="o">&lt;</span><span class="n">Widget</span><span class="o">&gt;</span> <span class="n">lw</span><span class="p">;</span>   	   
+</span></span><span class="line"><span class="cl"><span class="n">MyAllocListB</span><span class="o">&lt;</span><span class="n">Widget</span><span class="o">&gt;::</span><span class="n">type</span> <span class="n">lw</span><span class="p">;</span> <span class="c1">//typedef需要加上::type           
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<p>C++ 中规定，在使用依赖类型时必须要加上 typename 前缀，而 MyAllocListB&lt;T&gt;::type 依赖于模板参数 T，因此它是一个依赖类型。而别名模板 MyAllocListA&lt;T&gt; 是一个类型的名称，因此它是一个非依赖类型。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">//typedef需要加上typename来告诉编译器这是一个类型的别名
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Widget</span> <span class="p">{</span>                              <span class="c1">//Widget&lt;T&gt;含有一个
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">private</span><span class="o">:</span>                                    <span class="c1">//MyAllocLIst&lt;T&gt;对象
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">typename</span> <span class="n">MyAllocList</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;::</span><span class="n">type</span> <span class="n">list</span><span class="p">;</span>     <span class="c1">//作为数据成员
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span> 
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//而using声明的别名模板则不需要
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span> 
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Widget</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">MyAllocList</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">list</span><span class="p">;</span>                        <span class="c1">//没有“typename”
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>为什么要有这个规定呢？因为对于编译器来说，它无法判断 MyAllocListB&lt;T&gt;::type 究竟代表的是一个类型的名字，还是一个变量的名字，又或是别的一些东西。</p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-10优先选用限定作用域的枚举而非未限定作用域的枚举">条款 10：优先选用限定作用域的枚举而非未限定作用域的枚举</h2>
+<ul>
+<li>
+<p>C++ 98 风格的枚举类型被称为未限定作用域的枚举。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">enum</span> <span class="nc">Color</span> <span class="p">{</span> <span class="n">black</span><span class="p">,</span> <span class="n">white</span><span class="p">,</span> <span class="n">red</span> <span class="p">};</span>       <span class="c1">//C++98 未限域枚举
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">enum</span> <span class="k">class</span> <span class="nc">Color</span> <span class="p">{</span> <span class="n">black</span><span class="p">,</span> <span class="n">white</span><span class="p">,</span> <span class="n">red</span> <span class="p">};</span> <span class="c1">//C++11 限域枚举类
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>限定作用域的枚举类型仅能在枚举类型中可见。它们只能通过强制转换才可以转换到别的类型。</p>
+<ul>
+<li>
+<p>未限域枚举会将枚举名泄露，从而导致命名污染，而限域枚举类仅能在枚举类型中可见。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">//未限域枚举会导致枚举名泄露
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">enum</span> <span class="nc">Color</span> <span class="p">{</span> <span class="n">black</span><span class="p">,</span> <span class="n">white</span><span class="p">,</span> <span class="n">red</span> <span class="p">};</span>   <span class="c1">//black, white, red在
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                    <span class="c1">//Color所在的作用域
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="n">white</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>                 <span class="c1">//错误! white早已在这个作用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                    <span class="c1">//域中声明
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//限域枚举类仅能在枚举类型中可见
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">enum</span> <span class="k">class</span> <span class="nc">Color</span> <span class="p">{</span> <span class="n">black</span><span class="p">,</span> <span class="n">white</span><span class="p">,</span> <span class="n">red</span> <span class="p">};</span> <span class="c1">//black, white, red
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                        <span class="c1">//限制在Color域内
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="n">white</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>                     <span class="c1">//没问题，域内没有其他“white”
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Color</span> <span class="n">c</span> <span class="o">=</span> <span class="n">white</span><span class="p">;</span>                        <span class="c1">//错误，域中没有枚举名叫white
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Color</span> <span class="n">c</span> <span class="o">=</span> <span class="n">Color</span><span class="o">::</span><span class="n">white</span><span class="p">;</span>                 <span class="c1">//没问题
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="n">c</span> <span class="o">=</span> <span class="n">Color</span><span class="o">::</span><span class="n">white</span><span class="p">;</span>                  <span class="c1">//也没问题（也符合Item5的建议）
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<p>未限域枚举可能会隐式转换为整数类型或者浮点数类型，而限域枚举类则不会。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">enum</span> <span class="nc">Color</span> <span class="p">{</span> <span class="n">black</span><span class="p">,</span> <span class="n">white</span><span class="p">,</span> <span class="n">red</span> <span class="p">};</span>       <span class="c1">//未限域枚举  
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">size_t</span><span class="o">&gt;</span>             
+</span></span><span class="line"><span class="cl">  <span class="n">primeFactors</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">size_t</span> <span class="n">x</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Color</span> <span class="n">c</span> <span class="o">=</span> <span class="n">red</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="err">…</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//未限域枚举在比较时会隐式类型转换
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">if</span> <span class="p">(</span><span class="n">c</span> <span class="o">&lt;</span> <span class="mf">14.5</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">factors</span> <span class="o">=</span>                   
+</span></span><span class="line"><span class="cl">      <span class="n">primeFactors</span><span class="p">(</span><span class="n">c</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">enum</span> <span class="k">class</span> <span class="nc">Color</span> <span class="p">{</span> <span class="n">black</span><span class="p">,</span> <span class="n">white</span><span class="p">,</span> <span class="n">red</span> <span class="p">};</span> <span class="c1">//限域枚举类
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Color</span> <span class="n">c</span> <span class="o">=</span> <span class="n">Color</span><span class="o">::</span><span class="n">red</span><span class="p">;</span>                   
+</span></span><span class="line"><span class="cl"><span class="p">...</span>                                   
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//只能通过强制类型转换
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">if</span> <span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">14.5</span><span class="p">)</span> <span class="p">{</span>                                       
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">factors</span> <span class="o">=</span>                                
+</span></span><span class="line"><span class="cl">      <span class="n">primeFactors</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">size_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">c</span><span class="p">));</span>    
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>两种枚举类型都支持执行底层的存储类型。限定作用域的枚举类型默认是 int，而不限范围的枚举类型则没有默认底层类型。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">//默认情况下，限域枚举的底层类型是int：
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">enum</span> <span class="k">class</span> <span class="nc">Status</span><span class="p">;</span>                  <span class="c1">//底层类型是int
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//如果默认的int不适用，你可以重写它：
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">enum</span> <span class="k">class</span> <span class="nc">Status</span><span class="o">:</span> <span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="p">;</span>   <span class="c1">//Status的底层类型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                    <span class="c1">//是std::uint32_t
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                    <span class="c1">//（需要包含 &lt;cstdint&gt;）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//为了高效使用内存，编译器通常在确保能包含所有枚举值的前提下为enum选择一个最小的底层类型。在一些情况下，编译器将会优化速度，舍弃大小，这种情况下它可能不会选择最小的底层类型，而是选择对优化大小有帮助的类型。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//只需要表示三个值，底层类型是int
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">enum</span> <span class="nc">Color</span> <span class="p">{</span> <span class="n">black</span><span class="p">,</span> <span class="n">white</span><span class="p">,</span> <span class="n">red</span> <span class="p">};</span>   
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//这里值的范围从0到0xFFFFFFFF，编译器会选择一个能表示这个范围的的整型类型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">enum</span> <span class="nc">Status</span> <span class="p">{</span> <span class="n">good</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">              <span class="n">failed</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">              <span class="n">incomplete</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">              <span class="n">corrupt</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">              <span class="n">indeterminate</span> <span class="o">=</span> <span class="mh">0xFFFFFFFF</span>
+</span></span><span class="line"><span class="cl">            <span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>限定作用域的枚举类型总是可以前置声明，而未限定作用域的枚举只有在制定了默认底层类型的时候才可以前置声明。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">enum</span> <span class="nc">Color</span><span class="p">;</span>         <span class="c1">//错误！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">enum</span> <span class="k">class</span> <span class="nc">Color</span><span class="p">;</span>   <span class="c1">//没问题
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//当指定默认底层类型时，才可以前置声明
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">enum</span> <span class="nc">Color</span><span class="o">:</span> <span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="p">;</span>   <span class="c1">//非限域enum前向声明
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                            <span class="c1">//底层类型为
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                            <span class="c1">//std::uint8_t
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-11优先使用-delete-函数而非-private-未定义函数">条款 11：优先使用 delete 函数而非 private 未定义函数</h2>
+<ul>
+<li>
+<p>优先选择使用 delete 而非 private。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// C++98写法，此时仍然可以通过成员函数或者类的友元调用它们，由于没有函数定义，在链接时会报错
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span> <span class="o">&lt;</span><span class="k">class</span> <span class="nc">charT</span><span class="p">,</span> <span class="k">class</span> <span class="nc">traits</span> <span class="o">=</span> <span class="n">char_traits</span><span class="o">&lt;</span><span class="n">charT</span><span class="o">&gt;</span> <span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">basic_ios</span> <span class="o">:</span> <span class="k">public</span> <span class="n">ios_base</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">basic_ios</span><span class="p">(</span><span class="k">const</span> <span class="n">basic_ios</span><span class="o">&amp;</span> <span class="p">);</span>           <span class="c1">// not defined
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">basic_ios</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">basic_ios</span><span class="o">&amp;</span><span class="p">);</span> <span class="c1">// not defined
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// C++11写法，无法通过任何途径调用这些函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span> <span class="o">&lt;</span><span class="k">class</span> <span class="nc">charT</span><span class="p">,</span> <span class="k">class</span> <span class="nc">traits</span> <span class="o">=</span> <span class="n">char_traits</span><span class="o">&lt;</span><span class="n">charT</span><span class="o">&gt;</span> <span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">basic_ios</span> <span class="o">:</span> <span class="k">public</span> <span class="n">ios_base</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">basic_ios</span><span class="p">(</span><span class="k">const</span> <span class="n">basic_ios</span><span class="o">&amp;</span> <span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">basic_ios</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">basic_ios</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>任何函数都可以删除，包括非成员函数和模板实例。</p>
+<ul>
+<li>
+<p>由于 C++ 继承了 C 的隐式类型转换，所有的数值类型在传参给一个参数为 int 的函数时都能够隐式转换为 int，为了避免这样的操作带来的一些错误行为，delete 允许删除非成员函数，因此我们可以 delete 它们的重载函数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">bool</span> <span class="nf">isLucky</span><span class="p">(</span><span class="kt">int</span> <span class="n">number</span><span class="p">);</span>       <span class="c1">//原始版本
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">bool</span> <span class="nf">isLucky</span><span class="p">(</span><span class="kt">char</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>    <span class="c1">//拒绝char
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">bool</span> <span class="nf">isLucky</span><span class="p">(</span><span class="kt">bool</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>    <span class="c1">//拒绝bool
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">bool</span> <span class="nf">isLucky</span><span class="p">(</span><span class="kt">double</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>  <span class="c1">//拒绝float和double
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">isLucky</span><span class="p">(</span><span class="sc">&#39;a&#39;</span><span class="p">))</span> <span class="err">…</span>     <span class="c1">//错误！调用deleted函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">if</span> <span class="p">(</span><span class="n">isLucky</span><span class="p">(</span><span class="nb">true</span><span class="p">))</span> <span class="err">…</span>    <span class="c1">//错误！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">if</span> <span class="p">(</span><span class="n">isLucky</span><span class="p">(</span><span class="mf">3.5f</span><span class="p">))</span> <span class="err">…</span>    <span class="c1">//错误！
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<p>delete 同样也能删除某个特化的模板类，甚至是类内部的模板函数的特化版本，这都是 private 无法做到的：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">processPointer</span><span class="p">(</span><span class="n">T</span><span class="o">*</span> <span class="n">ptr</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//删除void*和char*的特化版本
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span><span class="o">&lt;&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">processPointer</span><span class="o">&lt;</span><span class="kt">void</span><span class="o">&gt;</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">processPointer</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span><span class="p">(</span><span class="kt">char</span><span class="o">*</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//删除类内部的模板函数的某个特化版本
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">class</span> <span class="nc">Widget</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl">    <span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="n">processPointer</span><span class="p">(</span><span class="n">T</span><span class="o">*</span> <span class="n">ptr</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span> <span class="err">…</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;&gt;</span>                                          <span class="c1">//还是public，
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">void</span> <span class="n">Widget</span><span class="o">::</span><span class="n">processPointer</span><span class="o">&lt;</span><span class="kt">void</span><span class="o">&gt;</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>  <span class="c1">//但是已经被删除了
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-12为重写函数添加-override">条款 12：为重写函数添加 override</h2>
+<ul>
+<li>
+<p>为需要重写的函数加上 override。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Base</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="n">mf1</span><span class="p">()</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Derived</span><span class="o">:</span> <span class="k">public</span> <span class="n">Base</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="n">mf1</span><span class="p">()</span> <span class="k">const</span> <span class="k">override</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span> 
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>override 用于确保派生类虚函数是否构成重写，当不构成重写时会编译错误。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>成员函数引用饰词可以让我们区别对待左值和右值对象（针对 *this）。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Widget</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">using</span> <span class="n">DataType</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl">    <span class="n">DataType</span><span class="o">&amp;</span> <span class="n">data</span><span class="p">()</span> <span class="o">&amp;</span>              <span class="c1">//对于左值Widgets,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">{</span> <span class="k">return</span> <span class="n">values</span><span class="p">;</span> <span class="p">}</span>              <span class="c1">//返回左值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="n">DataType</span> <span class="nf">data</span><span class="p">()</span> <span class="o">&amp;&amp;</span>              <span class="c1">//对于右值Widgets,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">{</span> <span class="k">return</span> <span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">values</span><span class="p">);</span> <span class="p">}</span>   <span class="c1">//返回右值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="err">…</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">DataType</span> <span class="n">values</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">vals1</span> <span class="o">=</span> <span class="n">w</span><span class="p">.</span><span class="n">data</span><span class="p">();</span>              <span class="c1">//调用左值重载版本的Widget::data，
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                    <span class="c1">//拷贝构造vals1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="n">vals2</span> <span class="o">=</span> <span class="n">makeWidget</span><span class="p">().</span><span class="n">data</span><span class="p">();</span>   <span class="c1">//调用右值重载版本的Widget::data, 
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                    <span class="c1">//移动构造vals2
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-13优先选用-const_iterator-而非-iterator">条款 13：优先选用 const_iterator 而非 iterator</h2>
+<ul>
+<li>
+<p>优先选用 const_iterator 而非 iterator（对于不需要修改的操作，尽可能收缩权限，避免出现意外）。</p>
+</li>
+<li>
+<p>若要实现通用的代码，优先选用非成员函数版本的 <code>begin</code>、<code>end</code> 和 <code>rbegin</code> 等，而不是成员函数版本。</p>
+<ul>
+<li>
+<p>比起成员函数版本，非成员函数版本更加的通用，因为其能够支持原生数组，以及一些以自由函数提供接口的第三方库，例如下面这个通用版本的 findAndInsert：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">C</span><span class="p">,</span> <span class="k">typename</span> <span class="n">V</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">findAndInsert</span><span class="p">(</span><span class="n">C</span><span class="o">&amp;</span> <span class="n">container</span><span class="p">,</span>            <span class="c1">//在容器中查找第一次
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                   <span class="k">const</span> <span class="n">V</span><span class="o">&amp;</span> <span class="n">targetVal</span><span class="p">,</span>      <span class="c1">//出现targetVal的位置，
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                   <span class="k">const</span> <span class="n">V</span><span class="o">&amp;</span> <span class="n">insertVal</span><span class="p">)</span>      <span class="c1">//然后在那插入insertVal
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">using</span> <span class="n">std</span><span class="o">::</span><span class="n">cbegin</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">using</span> <span class="n">std</span><span class="o">::</span><span class="n">cend</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">it</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">find</span><span class="p">(</span><span class="n">cbegin</span><span class="p">(</span><span class="n">container</span><span class="p">),</span>  <span class="c1">//非成员函数cbegin
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                        <span class="n">cend</span><span class="p">(</span><span class="n">container</span><span class="p">),</span>    <span class="c1">//非成员函数cend
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                        <span class="n">targetVal</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">container</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">it</span><span class="p">,</span> <span class="n">insertVal</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-14如果函数不抛出异常就使用-noexcept">条款 14：如果函数不抛出异常，就使用 noexcept</h2>
+<ul>
+<li>
+<p>noexcept 是函数接口的一部分，这意味着调用方可能对它有依赖。</p>
+</li>
+<li>
+<p>带有 noexcept 的函数更容易优化。</p>
+<ul>
+<li>
+<p>在运行期时，如果一个异常跳出函数的作用域，则说明函数的异常说明被违反。在 C++ 98 的异常说明中，调用栈会展开至函数的调用者，并在执行一系列动作后将程序终止。而 C++ 11 异常说明的运行时行为又有所不同，调用栈只是可能在程序终止前展开。</p>
+</li>
+<li>
+<p>展开调用栈和可能展开调用栈两者对于代码生成有很大的影响。在带有 noexcept 声明的函数中，优化器不需要在异常传出函数的前提下，保证运行时栈处于可展开的状态；也不需要在异常离开函数时保证 noexcept 函数中的对象按照构造的逆序析构。而那些以 throw() 异常声明的函数则享受不到这样的优化灵活性，和那些没有加上异常声明的函数一样。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">RetType</span> <span class="nf">function</span><span class="p">(</span><span class="n">params</span><span class="p">)</span> <span class="k">noexcept</span><span class="p">;</span>  <span class="c1">//C++11写法 极尽所能优化 
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">RetType</span> <span class="nf">function</span><span class="p">(</span><span class="n">params</span><span class="p">)</span> <span class="k">throw</span><span class="p">();</span>   <span class="c1">//C++98写法 较少优化
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">RetType</span> <span class="nf">function</span><span class="p">(</span><span class="n">params</span><span class="p">);</span>           <span class="c1">//较少优化
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>noexcept 对于移动操作、swap、资源释放函数和析构函数非常有用。</p>
+</li>
+<li>
+<p>大多数函数都是异常中立的，不具备 noexcept。</p>
+<ul>
+<li>这类函数自身并不抛出异常，但是它们所调用的函数则可能会抛出异常。为了处理这种情况，异常中立的函数会允许那些抛出的异常就由它传至调用栈中更深的一层，直到遇到异常处理的程序。</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-15尽可能使用-constexpr">条款 15：尽可能使用 constexpr</h2>
+<ul>
+<li>
+<p>constexpr 对象都具备 const 属性，并由编译期已知的值完成初始化。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">sz</span><span class="p">;</span>                             <span class="c1">//non-constexpr变量
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="k">constexpr</span> <span class="k">auto</span> <span class="n">arraySize1</span> <span class="o">=</span> <span class="n">sz</span><span class="p">;</span>     <span class="c1">//错误！sz的值在编译期不可知
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="n">sz</span><span class="o">&gt;</span> <span class="n">data1</span><span class="p">;</span>          <span class="c1">//错误！一样的问题
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">constexpr</span> <span class="k">auto</span> <span class="n">arraySize2</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>     <span class="c1">//没问题，10是编译期可知常量
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="n">arraySize2</span><span class="o">&gt;</span> <span class="n">data2</span><span class="p">;</span>  <span class="c1">//没问题, arraySize2是constexpr
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<p>注意：const 不提供 constexpr 所能保证之事，因为 const 对象不需要在编译期初始化它的值。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">sz</span><span class="p">;</span>                            <span class="c1">//和之前一样
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="k">const</span> <span class="k">auto</span> <span class="n">arraySize</span> <span class="o">=</span> <span class="n">sz</span><span class="p">;</span>         <span class="c1">//没问题，arraySize是sz的const复制
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="n">arraySize</span><span class="o">&gt;</span> <span class="n">data</span><span class="p">;</span>   <span class="c1">//错误，arraySize值在编译期不可知
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>简而言之，所有 constexpr 对象都是 const，但不是所有 const 对象都是 constexpr。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>constexpr 函数在调用时如果传入的实参也是编译期已知的，则会产出编译期结果。</p>
+<ul>
+<li>
+<p>当 constexpr 函数接受的参数为编译期已知的，则会在编译期间计算出结果。而如果参数是编译期未知的，则它的运作与普通函数一样，在运行期去执行计算。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">constexpr</span> <span class="kt">int</span> <span class="nf">pow</span><span class="p">(</span><span class="kt">int</span> <span class="n">base</span><span class="p">,</span> <span class="kt">int</span> <span class="n">exp</span><span class="p">)</span> <span class="k">noexcept</span>         <span class="c1">//constexpr函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">//C++11写法，constexpr 函数的代码不超过一行语句
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// return (exp == 0 ? 1 : base * pow(base, exp - 1));   
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">//C++14放宽了限制
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">auto</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">exp</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span> <span class="n">result</span> <span class="o">*=</span> <span class="n">base</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//传入编译器实参，生成编译器结果
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">constexpr</span> <span class="k">auto</span> <span class="n">numConds</span> <span class="o">=</span> <span class="mi">5</span><span class="p">;</span>               
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span> <span class="n">pow</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">numConds</span><span class="p">)</span><span class="o">&gt;</span> <span class="n">results</span><span class="p">;</span>  
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//传入运行时参数，则在运行时进行计算
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="n">base</span> <span class="o">=</span> <span class="n">readFromDB</span><span class="p">(</span><span class="s">&#34;base&#34;</span><span class="p">);</span>     <span class="c1">//运行时获取这些值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="n">exp</span> <span class="o">=</span> <span class="n">readFromDB</span><span class="p">(</span><span class="s">&#34;exponent&#34;</span><span class="p">);</span> 
+</span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">baseToExp</span> <span class="o">=</span> <span class="n">pow</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">exp</span><span class="p">);</span>    <span class="c1">//运行时调用pow函数
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>比起非 constexpr 的对象和函数，constexpr 可以用在作用域更广的语境（编译期、运行期）中。</p>
+</li>
+</ul>
+<h2 id="条款-16保证-const-成员函数的线程安全">条款 16：保证 const 成员函数的线程安全</h2>
+<ul>
+<li>
+<p>保证 const 成员函数的线程安全性，除非可以确定他们不会用在并发语境中。</p>
+<ul>
+<li>const 本身代表了只读的语义，但也有一些例外情况，例如存在 mutable 变量时，这些变量能够突破 const 的限制，此时在并发环境下就会出现数据竞争的情况。</li>
+</ul>
+</li>
+<li>
+<p>std::atmoic 类型的变量会比使用 std::mutex 性能更佳，但前者仅适用于单个变量或者内存区域的操作。</p>
+</li>
+</ul>
+<h2 id="条款-17特殊成员函数的生成机制">条款 17：特殊成员函数的生成机制</h2>
+<ul>
+<li>特殊成员函数指的是 C++ 中会自动生成的成员函数，如：默认构造函数、析构函数、拷贝操作、移动操作。</li>
+<li>移动操作只有在类中未包含用户显式声明的拷贝操作、移动操作和析构函数时才会生成。</li>
+<li>拷贝构造函数和拷贝赋值运算符仅会在用户没有显式声明它们的时候才会自动生成，且如果该类声明了它们的移动版本，则拷贝版本会被 delete。在新版本的 C++ 中，显式声明析构函数后，自动生成拷贝操作是被废弃的行为。</li>
+<li>成员函数模板在任何情况下都不会抑制特殊成员函数的生成。</li>
+</ul>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/c&#43;&#43;/">C&#43;&#43;</a>
+        
+            <a href="/tags/effective-modern-c&#43;&#43;/">Effective Modern C&#43;&#43;</a>
+        
+            <a href="/tags/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/">读书笔记</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 16:40 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%B8%83%E5%BE%AE%E8%B0%83/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（七）：微调</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%85%AD%E5%B9%B6%E5%8F%91-api/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（六）：并发 API</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%BA%94lambda-%E8%A1%A8%E8%BE%BE%E5%BC%8F/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（五）：lambda 表达式</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%9B%9B%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E7%A7%BB%E5%8A%A8%E8%AF%AD%E4%B9%89%E5%92%8C%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（四）：右值引用、移动语义和完美转发</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%B8%89%E6%99%BA%E8%83%BD%E6%8C%87%E9%92%88/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（三）：智能指针</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#条款-7在创建对象时区分--与">条款 7：在创建对象时区分 () 与</a></li>
+    <li><a href="#条款-8优先选用-nullptr而非-0-或-null">条款 8：优先选用 nullptr，而非 0 或 NULL</a></li>
+    <li><a href="#条款-9优先选用-using-而非-typedef">条款 9：优先选用 using 而非 typedef</a></li>
+    <li><a href="#条款-10优先选用限定作用域的枚举而非未限定作用域的枚举">条款 10：优先选用限定作用域的枚举而非未限定作用域的枚举</a></li>
+    <li><a href="#条款-11优先使用-delete-函数而非-private-未定义函数">条款 11：优先使用 delete 函数而非 private 未定义函数</a></li>
+    <li><a href="#条款-12为重写函数添加-override">条款 12：为重写函数添加 override</a></li>
+    <li><a href="#条款-13优先选用-const_iterator-而非-iterator">条款 13：优先选用 const_iterator 而非 iterator</a></li>
+    <li><a href="#条款-14如果函数不抛出异常就使用-noexcept">条款 14：如果函数不抛出异常，就使用 noexcept</a></li>
+    <li><a href="#条款-15尽可能使用-constexpr">条款 15：尽可能使用 constexpr</a></li>
+    <li><a href="#条款-16保证-const-成员函数的线程安全">条款 16：保证 const 成员函数的线程安全</a></li>
+    <li><a href="#条款-17特殊成员函数的生成机制">条款 17：特殊成员函数的生成机制</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='数据模型与查询语言 关系模型与文档模型 现在最著名的数据模型可能是 SQL ，它基于 Edgar Codd 在 1970 年提出的关系模型： 数据被组织成关系（在 SQL 中称为表），其中每个关系都是元组的无序集合（SQL 中称为行）。
+关系模型的目标就是将实现细节隐藏在更简洁的接口后面。
+NoSQL的诞生 NoSQL最常见的解释是 Non-Relationa，而如今又使用 Not Only SQL 来对其进行解释。NoSQL 其实并不代表具体的某些技术，它仅仅是一个概念，泛指非关系型的数据库，区别于关系数据库，它们不保证关系数据的ACID特性。
+采用 NoSQL 数据库有这样几个驱动因素 ，包括：
+ 比关系数据库更好的扩展性需求，包括支持超大数据集或超高写入吞吐量。 普遍偏爱免费和开源软件而不是商业数据库产品。 关系模型不能很好地支持一些特定的查询操作。 对关系模式一些限制性感到沮丧，渴望更具动态和表达力数据模型。  对象-关系不匹配 如今大多数应用开发都采用面向对象的编程语言，由于兼容性问题，普遍对 SQL 数据模型存在抱怨：如果数据存储在关系表中，那么应用层代码中的对象与表、行和列的数据库模型之间需要一个笨拙的转换层。这种模型之间的脱离被称为阻抗失谐。
+像 ActiveRecord 和 Hibernate 这样的对象关系映射（ORM，Object-Relational Mapping） 框架减少了此转换 层的样板代码 ，但是他们并不能完全隐藏两个模型之间的差异。
+例如我们使用关系模型来描述一个简历：
+对于简历这种用户与经历这种一对多的关系，我们可以用多种方法表示：
+ 传统的 SQL 模型，将职位、教育和联系信息放在单独的表中并使用外键引用 users 表。 SQL 标准增加了对结构化数据类型和 XML 数据的支持。这允许将多值数据存储在单行，井支持在这些文档中查询和索引。 将信息编码为 JSON、XML 文档，将其存储在数据库的文本列中，并由应用程序解释其结构和内容。  对于像简历这样的数据结构，它主要是一个自包含的文档，因此用 JSON 表示更加合适。代码如下：
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35  { &amp;#34;user_id&amp;#34;: 251, &amp;#34;first_name&amp;#34;: &amp;#34;Bill&amp;#34;, &amp;#34;last_name&amp;#34;: &amp;#34;Gates&amp;#34;, &amp;#34;summary&amp;#34;: &amp;#34;Co-chair of the Bill &amp;amp; Melinda Gates.'><title>数据密集型应用系统设计 学习笔记（二）：数据模型与查询语言</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%BA%8C%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B%E4%B8%8E%E6%9F%A5%E8%AF%A2%E8%AF%AD%E8%A8%80/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='数据密集型应用系统设计 学习笔记（二）：数据模型与查询语言'>
+<meta property='og:description' content='数据模型与查询语言 关系模型与文档模型 现在最著名的数据模型可能是 SQL ，它基于 Edgar Codd 在 1970 年提出的关系模型： 数据被组织成关系（在 SQL 中称为表），其中每个关系都是元组的无序集合（SQL 中称为行）。
+关系模型的目标就是将实现细节隐藏在更简洁的接口后面。
+NoSQL的诞生 NoSQL最常见的解释是 Non-Relationa，而如今又使用 Not Only SQL 来对其进行解释。NoSQL 其实并不代表具体的某些技术，它仅仅是一个概念，泛指非关系型的数据库，区别于关系数据库，它们不保证关系数据的ACID特性。
+采用 NoSQL 数据库有这样几个驱动因素 ，包括：
+ 比关系数据库更好的扩展性需求，包括支持超大数据集或超高写入吞吐量。 普遍偏爱免费和开源软件而不是商业数据库产品。 关系模型不能很好地支持一些特定的查询操作。 对关系模式一些限制性感到沮丧，渴望更具动态和表达力数据模型。  对象-关系不匹配 如今大多数应用开发都采用面向对象的编程语言，由于兼容性问题，普遍对 SQL 数据模型存在抱怨：如果数据存储在关系表中，那么应用层代码中的对象与表、行和列的数据库模型之间需要一个笨拙的转换层。这种模型之间的脱离被称为阻抗失谐。
+像 ActiveRecord 和 Hibernate 这样的对象关系映射（ORM，Object-Relational Mapping） 框架减少了此转换 层的样板代码 ，但是他们并不能完全隐藏两个模型之间的差异。
+例如我们使用关系模型来描述一个简历：
+对于简历这种用户与经历这种一对多的关系，我们可以用多种方法表示：
+ 传统的 SQL 模型，将职位、教育和联系信息放在单独的表中并使用外键引用 users 表。 SQL 标准增加了对结构化数据类型和 XML 数据的支持。这允许将多值数据存储在单行，井支持在这些文档中查询和索引。 将信息编码为 JSON、XML 文档，将其存储在数据库的文本列中，并由应用程序解释其结构和内容。  对于像简历这样的数据结构，它主要是一个自包含的文档，因此用 JSON 表示更加合适。代码如下：
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35  { &amp;#34;user_id&amp;#34;: 251, &amp;#34;first_name&amp;#34;: &amp;#34;Bill&amp;#34;, &amp;#34;last_name&amp;#34;: &amp;#34;Gates&amp;#34;, &amp;#34;summary&amp;#34;: &amp;#34;Co-chair of the Bill &amp;amp; Melinda Gates.'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%BA%8C%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B%E4%B8%8E%E6%9F%A5%E8%AF%A2%E8%AF%AD%E8%A8%80/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='数据密集型应用系统设计' /><meta property='article:published_time' content='2022-07-10T01:11:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T20:12:00&#43;08:00'/>
+<meta name="twitter:title" content="数据密集型应用系统设计 学习笔记（二）：数据模型与查询语言">
+<meta name="twitter:description" content="数据模型与查询语言 关系模型与文档模型 现在最著名的数据模型可能是 SQL ，它基于 Edgar Codd 在 1970 年提出的关系模型： 数据被组织成关系（在 SQL 中称为表），其中每个关系都是元组的无序集合（SQL 中称为行）。
+关系模型的目标就是将实现细节隐藏在更简洁的接口后面。
+NoSQL的诞生 NoSQL最常见的解释是 Non-Relationa，而如今又使用 Not Only SQL 来对其进行解释。NoSQL 其实并不代表具体的某些技术，它仅仅是一个概念，泛指非关系型的数据库，区别于关系数据库，它们不保证关系数据的ACID特性。
+采用 NoSQL 数据库有这样几个驱动因素 ，包括：
+ 比关系数据库更好的扩展性需求，包括支持超大数据集或超高写入吞吐量。 普遍偏爱免费和开源软件而不是商业数据库产品。 关系模型不能很好地支持一些特定的查询操作。 对关系模式一些限制性感到沮丧，渴望更具动态和表达力数据模型。  对象-关系不匹配 如今大多数应用开发都采用面向对象的编程语言，由于兼容性问题，普遍对 SQL 数据模型存在抱怨：如果数据存储在关系表中，那么应用层代码中的对象与表、行和列的数据库模型之间需要一个笨拙的转换层。这种模型之间的脱离被称为阻抗失谐。
+像 ActiveRecord 和 Hibernate 这样的对象关系映射（ORM，Object-Relational Mapping） 框架减少了此转换 层的样板代码 ，但是他们并不能完全隐藏两个模型之间的差异。
+例如我们使用关系模型来描述一个简历：
+对于简历这种用户与经历这种一对多的关系，我们可以用多种方法表示：
+ 传统的 SQL 模型，将职位、教育和联系信息放在单独的表中并使用外键引用 users 表。 SQL 标准增加了对结构化数据类型和 XML 数据的支持。这允许将多值数据存储在单行，井支持在这些文档中查询和索引。 将信息编码为 JSON、XML 文档，将其存储在数据库的文本列中，并由应用程序解释其结构和内容。  对于像简历这样的数据结构，它主要是一个自包含的文档，因此用 JSON 表示更加合适。代码如下：
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35  { &amp;#34;user_id&amp;#34;: 251, &amp;#34;first_name&amp;#34;: &amp;#34;Bill&amp;#34;, &amp;#34;last_name&amp;#34;: &amp;#34;Gates&amp;#34;, &amp;#34;summary&amp;#34;: &amp;#34;Co-chair of the Bill &amp;amp; Melinda Gates.">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/" style="background-color: #2a9d8f; color: #fff;">
+                数据密集型应用系统设计
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%BA%8C%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B%E4%B8%8E%E6%9F%A5%E8%AF%A2%E8%AF%AD%E8%A8%80/">数据密集型应用系统设计 学习笔记（二）：数据模型与查询语言</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 10, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="数据模型与查询语言">数据模型与查询语言</h1>
+<h2 id="关系模型与文档模型">关系模型与文档模型</h2>
+<p>现在最著名的数据模型可能是 <strong>SQL</strong> ，它基于 Edgar Codd 在 1970 年提出的关系模型： <strong>数据被组织成关系（在 SQL 中称为表），其中每个关系都是元组的无序集合（SQL 中称为行）</strong>。</p>
+<p>关系模型的目标就是<strong>将实现细节隐藏在更简洁的接口后面</strong>。</p>
+<h3 id="nosql的诞生">NoSQL的诞生</h3>
+<p>NoSQL最常见的解释是 Non-Relationa，而如今又使用  Not Only SQL 来对其进行解释。NoSQL 其实并不代表具体的某些技术，它仅仅是一个概念，泛指非关系型的数据库，区别于关系数据库，<strong>它们不保证关系数据的ACID特性</strong>。</p>
+<p>采用 NoSQL 数据库有这样几个驱动因素 ，包括：</p>
+<ul>
+<li>比关系数据库更好的扩展性需求，包括支持超大数据集或超高写入吞吐量。</li>
+<li>普遍偏爱免费和开源软件而不是商业数据库产品。</li>
+<li>关系模型不能很好地支持一些特定的查询操作。</li>
+<li>对关系模式一些限制性感到沮丧，渴望更具动态和表达力数据模型。</li>
+</ul>
+<h3 id="对象-关系不匹配">对象-关系不匹配</h3>
+<p>如今大多数应用开发都采用面向对象的编程语言，由于兼容性问题，普遍对 SQL 数据模型存在抱怨：<strong>如果数据存储在关系表中，那么应用层代码中的对象与表、行和列的数据库模型之间需要一个笨拙的转换层。<strong>这种模型之间的脱离被称为</strong>阻抗失谐</strong>。</p>
+<p>像 ActiveRecord 和 Hibernate 这样的<strong>对象关系映射（ORM，Object-Relational Mapping）</strong> 框架减少了此转换 层的样板代码 ，但是他们并不能完全隐藏两个模型之间的差异。</p>
+<p>例如我们使用关系模型来描述一个简历：</p>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia20.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>对于简历这种用户与经历这种一对多的关系，我们可以用多种方法表示：</p>
+<ul>
+<li>传统的 SQL 模型，将职位、教育和联系信息放在单独的表中并使用外键引用 users 表。</li>
+<li>SQL 标准增加了对结构化数据类型和 XML 数据的支持。这允许将多值数据存储在单行，井支持在这些文档中查询和索引。</li>
+<li>将信息编码为 JSON、XML 文档，将其存储在数据库的文本列中，并由应用程序解释其结构和内容。</li>
+</ul>
+<p>对于像简历这样的数据结构，它主要是一个自包含的文档，因此用 JSON 表示更加合适。代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;user_id&#34;</span><span class="p">:</span> <span class="mi">251</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;first_name&#34;</span><span class="p">:</span> <span class="s2">&#34;Bill&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;last_name&#34;</span><span class="p">:</span> <span class="s2">&#34;Gates&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;summary&#34;</span><span class="p">:</span> <span class="s2">&#34;Co-chair of the Bill &amp; Melinda Gates... Active blogger.&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;region_id&#34;</span><span class="p">:</span> <span class="s2">&#34;us:91&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;industry_id&#34;</span><span class="p">:</span> <span class="mi">131</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;photo_url&#34;</span><span class="p">:</span> <span class="s2">&#34;/p/7/000/253/05b/308dd6e.jpg&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;positions&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;job_title&#34;</span><span class="p">:</span> <span class="s2">&#34;Co-chair&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;organization&#34;</span><span class="p">:</span> <span class="s2">&#34;Bill &amp; Melinda Gates Foundation&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;job_title&#34;</span><span class="p">:</span> <span class="s2">&#34;Co-founder, Chairman&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;organization&#34;</span><span class="p">:</span> <span class="s2">&#34;Microsoft&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;education&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;school_name&#34;</span><span class="p">:</span> <span class="s2">&#34;Harvard University&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;start&#34;</span><span class="p">:</span> <span class="mi">1973</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;end&#34;</span><span class="p">:</span> <span class="mi">1975</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;school_name&#34;</span><span class="p">:</span> <span class="s2">&#34;Lakeside School, Seattle&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;start&#34;</span><span class="p">:</span> <span class="kc">null</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;end&#34;</span><span class="p">:</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;contact_info&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;blog&#34;</span><span class="p">:</span> <span class="s2">&#34;http://thegatesnotes.com&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;twitter&#34;</span><span class="p">:</span> <span class="s2">&#34;http://twitter.com/BillGates&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>JSON 模型减少了应用程序代码和存储层之间的阻抗失配，并且其比起关系模式的多表查询具有更好的局部性，其所有的相关信息都在一个地方，所以一次查询就足够了，因此大部分文档数据库都支持这种模型。</p>
+<h3 id="数据模型">数据模型</h3>
+<h4 id="层次模型">层次模型</h4>
+<p>层次模型与文档数据库使用的 JSON 模型有一些显著的相似之处。<strong>它将所有数据表示为嵌套在记录中的记录（树）</strong>。</p>
+<p>层次模型可以很好地支持一对多关系，但是它支持多对多关系则有些困难，而且不支持联结。开发人员必须决定是复制（反规范化）多份数据，还是手动解析记录之间的引用。</p>
+<p>为了解决层次模型的局限性，之后又提出了多种解决方案。其中最著名的是<strong>关系模型（relational model）<strong>和</strong>网络模型（network model）</strong>。</p>
+<h4 id="网络模型">网络模型</h4>
+<p>网络模型由一个称为数据系统语言会议（Conference on Data System Languages, CODASYL）的委员会进行标准化，井由多个不同的数据库厂商实施，它也被称为 CODASYL 模型。</p>
+<p>网络模型是层次模型的推广。在层次模型的树结构中，每个记录只有一个父节点；<strong>而在网络模型中， 一个记录可能有多个父结点，从而支持对多对一和多对多的关系进行建模。</strong></p>
+<p>在网络模型中，记录之间的链接不是外键，而更像是编程语言中的指针（会存储在磁盘上），访问记录的唯一方法是选择一条始于根记录的路径，并沿着相关链接依次访问。这条链接链条也因此被称为<strong>访问路径</strong>。</p>
+<p>网络模型中的查询通过遍历记录列表，并沿着访问路径在数据库中移动游标来执行。如果记录有多个父结点，应用程序代码必须跟踪所有关系。因此其最大的问题在于它们使查询和更新数据库变得异常复杂而没有灵活性。</p>
+<h4 id="关系模型">关系模型</h4>
+<p><strong>关系模型所做的则是定义了所有数据的格式：关系（表）只是元组（行）集合。</strong> 没有复杂的嵌套结构，也没有复杂的访问路径。可以读取表中的任何一行或者所有行，支持任意条件查询。可以指定某些列作为键并匹配这些列来读取特定行。可以在任何表中插入新行，而不必担心与其他表之间的外键关系。</p>
+<p>在关系数据库中，查询优化器自动决定以何种顺序执行查询，以及使用哪些索引。这些选择实际上等价于访问路径 但最大的区别在于它是由查询优化器自动生成的，而不是由应用开发人员所维护，因此不用过多地考虑它。</p>
+<h2 id="数据查询语言">数据查询语言</h2>
+<h3 id="声明式命令式查询语言">声明式/命令式查询语言</h3>
+<p>数据查询语言通常分为以下两类：<strong>命令式查询语言、声明式查询语言。</strong></p>
+<ul>
+<li><strong>命令式查询语言</strong>：<strong>其会告诉计算机以特定顺序执行某些操作。</strong> 因此我们完全可以推理整个过程，逐行遍历代码、评估相关条件、更新对应的变量，并决定是否再循环一遍。</li>
+<li><strong>声明式查询语言</strong>：<strong>只需指定所需的数据模式，结果需满足什么条件，以及如何转换数据（例如，排序、分组和聚合），而不需指明如何实现这些目标。</strong> 数据库系统的查询优化器会决定采用哪些索引和联结，以及用何种顺序来执行查询的各个语句。</li>
+</ul>
+<p>声明式查询语言很有吸引力，它比命令式 API 更加简洁和容易使用。但更重要的是，它对外隐藏了数据库引擎的很多实现细节，这样数据库系统能够在不改变查询语句的情况下提高性能。</p>
+<p><strong>声明式语言通常适合于并行执行。</strong> 现在 CPU 提升速度的方式是增加核心数，而不是实现比之前更高的时钟频率。而命令式代码由于指定了特定的执行顺序，很难在多核和多台机器上并行。声明式语言则对于并行执行更加友好，它们仅指定了结果所满足的模式，而不指定如何得到结果的具体算法。</p>
+<h3 id="mapreduce查询">MapReduce查询</h3>
+<p>MapReduce 是一种编程模型，用于在许多机器上批量处理海量数据，兴起于 Google。一些 NoSQL 存储系统（包括 MongoDB 和 CouchDB）支持有限的 MapReduce 方式在大量文档上执行只读查询。</p>
+<p>MapReduce 既不是声明式查询语言，也不是一个完全命令式的查询 API，而是介于两者之间：查询的逻辑用代码片段来表示，这些代码片段可以被处理框架重复地调用。它主要基于许多函数式编程语言中的 <code>map</code> 和 <code>reduce</code> 函数。</p>
+<blockquote>
+<p>假设你是一名海洋生物学家，每当你看到海洋中的动物时，你都会在数据库中添加一条观察记录。现在你想生成一个报告，说明你每月看到多少鲨鱼</p>
+</blockquote>
+<p>如果使用 SQL 来表示，代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">date_trunc</span><span class="p">(</span><span class="s1">&#39;month&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">observation_timestamp</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">observation_month</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">sum</span><span class="p">(</span><span class="n">num_animals</span><span class="p">)</span><span class="w">                           </span><span class="k">AS</span><span class="w"> </span><span class="n">total_animals</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">FROM</span><span class="w"> </span><span class="n">observations</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="n">family</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;Sharks&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">observation_month</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>而如果使用 MongoDB 的 MapReduce 功能，则可以按如下来表述：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">db.observations.mapReduce(
+</span></span><span class="line"><span class="cl">	function map() {
+</span></span><span class="line"><span class="cl">        var year = this.observationTimestamp.getFullYear();
+</span></span><span class="line"><span class="cl">        var month = this.observationTimestamp.getMonth() + 1;
+</span></span><span class="line"><span class="cl">        emit(year + &#34;-&#34; + month, this.numAnimals);
+</span></span><span class="line"><span class="cl">    },
+</span></span><span class="line"><span class="cl">    function reduce(key, values) {
+</span></span><span class="line"><span class="cl">        return Array.sum(values);
+</span></span><span class="line"><span class="cl">    },
+</span></span><span class="line"><span class="cl">    {
+</span></span><span class="line"><span class="cl">        query: {
+</span></span><span class="line"><span class="cl">          family: &#34;Sharks&#34;
+</span></span><span class="line"><span class="cl">        },
+</span></span><span class="line"><span class="cl">        out: &#34;monthlySharkReport&#34;
+</span></span><span class="line"><span class="cl">	}
+</span></span><span class="line"><span class="cl">);
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>MapReduce 函数对于可执行的操作有所限制。它必须是纯函数，这意味着只能使用传递进去的数据作为输入，而不能执行额外的数据库查询，也不能有任何副作用。这些限制使得数据库能够在任何位置、以任意顺序来运行函数，并在失败时重新运行这些函数。</p>
+<h2 id="图状数据模型">图状数据模型</h2>
+<p>图由两种对象组成：<strong>顶点（也称为结点或实体）<strong>和</strong>边（也称为关系或弧）</strong>。很多数据可以建模为图。典型的例子包括：</p>
+<ul>
+<li><strong>社交网络</strong>：顶点是人，边指示哪些人彼此认识。</li>
+<li><strong>Web 图</strong>：顶点是网页，边表示与其他页面的 HTML 链接。</li>
+<li><strong>公路或铁路网</strong>：顶点是交叉路口，边表示他们之间的公路或铁路线。</li>
+</ul>
+<p>如下图，即使用图来存储族谱信息：</p>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia19.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h3 id="属性图">属性图</h3>
+<p>在属性图模型中，每个顶点包括：</p>
+<ul>
+<li>
+<p>唯一的标识符。</p>
+</li>
+<li>
+<p>出边的集合。</p>
+</li>
+<li>
+<p>入边的集合。</p>
+</li>
+<li>
+<p>属性的集合（键值对） 。</p>
+</li>
+</ul>
+<p>每个边包括：</p>
+<ul>
+<li>
+<p>唯一的标识符。</p>
+</li>
+<li>
+<p>边开始的顶点（尾部顶点） 。</p>
+</li>
+<li>
+<p>边结束的顶点（头部顶点） 。</p>
+</li>
+<li>
+<p>描述两个顶点间关系类型的标签。</p>
+</li>
+<li>
+<p>属性的集合（键-值对）。</p>
+</li>
+</ul>
+<p>**可以将图存储看作由两个关系表组成，一个用于顶点， 另一个用于边。**如下列代码使用关系模式来标识属性图：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">vertices</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">vertex_id</span><span class="w">  </span><span class="nb">INTEGER</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">properties</span><span class="w"> </span><span class="n">JSON</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">edges</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">edge_id</span><span class="w">     </span><span class="nb">INTEGER</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">tail_vertex</span><span class="w"> </span><span class="nb">INTEGER</span><span class="w"> </span><span class="k">REFERENCES</span><span class="w"> </span><span class="n">vertices</span><span class="w"> </span><span class="p">(</span><span class="n">vertex_id</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">head_vertex</span><span class="w"> </span><span class="nb">INTEGER</span><span class="w"> </span><span class="k">REFERENCES</span><span class="w"> </span><span class="n">vertices</span><span class="w"> </span><span class="p">(</span><span class="n">vertex_id</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">label</span><span class="w">       </span><span class="nb">TEXT</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">properties</span><span class="w">  </span><span class="n">JSON</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">edges_tails</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">edges</span><span class="w"> </span><span class="p">(</span><span class="n">tail_vertex</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">edges_heads</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">edges</span><span class="w"> </span><span class="p">(</span><span class="n">head_vertex</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>对于图模型还有一些值得注意的地方：</p>
+<ul>
+<li>任何顶点都可以连接到其他任何顶点。没有模式限制哪种事物可以或不可以关联。</li>
+<li>给定某个顶点，可以高效地得到它的所有人边和出边，从而遍历图，即沿着这些顶点链条一直向前或向后。</li>
+<li>通过对不同类型的关系使用不同的标签，可以在单个图中存储多种不同类型的信息，同时仍然保持整洁的数据模型。</li>
+</ul>
+<h3 id="cypher查询语言">Cypher查询语言</h3>
+<p>Cypher 是一种用于属性图的声明式查询语言，最早为 Neo4j 图形数据库而创建。</p>
+<p>来看看一个创建的代码示例，每个顶点都有一个像 USA、Idaho 这样的名称，查询可以使用这些名称创建顶点之间的边，如使用箭头符号： <code>(Idaho) -[:WITHIN]-&gt;  (USA)</code> 创建一个标签为 <code>WITHIN</code> 边，其中 <code>Idaho</code> 为尾结点， <code>USA</code> 为头结点。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">CREATE
+</span></span><span class="line"><span class="cl">  (NAmerica:Location {name:&#39;North America&#39;, type:&#39;continent&#39;}),
+</span></span><span class="line"><span class="cl">  (USA:Location      {name:&#39;United States&#39;, type:&#39;country&#39;  }),
+</span></span><span class="line"><span class="cl">  (Idaho:Location    {name:&#39;Idaho&#39;,         type:&#39;state&#39;    }),
+</span></span><span class="line"><span class="cl">  (Lucy:Person       {name:&#39;Lucy&#39; }),
+</span></span><span class="line"><span class="cl">  (Idaho) -[:WITHIN]-&gt;  (USA)  -[:WITHIN]-&gt; (NAmerica),
+</span></span><span class="line"><span class="cl">  (Lucy)  -[:BORN_IN]-&gt; (Idaho)
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>接下来看一个使用 MATCH 语句的查询示例（查询从美国移民到欧洲的人员名单），其使用与上面相同的箭头语义：<code>(person) -[:BORN_IN]-&gt; ()</code> 即匹配所有顶点间带有标签 <code>BORN_IN</code> 的边，且尾部顶点对应于变量 <code>person</code> ，而头部顶点则没有要求。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">MATCH
+</span></span><span class="line"><span class="cl">  (person) -[:BORN_IN]-&gt;  () -[:WITHIN*0..]-&gt; (us:Location {name:&#39;United States&#39;}),
+</span></span><span class="line"><span class="cl">  (person) -[:LIVES_IN]-&gt; () -[:WITHIN*0..]-&gt; (eu:Location {name:&#39;Europe&#39;})
+</span></span><span class="line"><span class="cl">RETURN person.name
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>该代码会匹配所有满足以下两个条件的任何顶点：</p>
+<ul>
+<li>
+<p><code>person</code> 有一个到其他顶点的出边 <code>BORN_IN</code> 。从该顶点开始，可以沿着一系列出边 <code>WITHIN</code>，直到最终到达类型为 <code>Location</code> 的顶点，<code>name</code> 属性为 <code>United States</code></p>
+<p>States</p>
+</li>
+<li>
+<p><code>person</code> 顶点也有一个出边 <code>LIVES_IN</code>。沿着这条边，然后是一系列出边 <code>WITHIN</code>，最终到达类型为 <code>Location</code> 的顶点， <code>name</code> 属性为 <code>Europe</code>。</p>
+</li>
+</ul>
+<p>我们不需要关注它底层是如何进行查询的，对于声明式查询语言，通常在编写查询语句时，不需要指定执行细节,查询优化器会自动选择效率最高的执行策略，因此开发者可以专注于应用的其他部分。</p>
+<h3 id="sql中的图查询">SQL中的图查询</h3>
+<p>既然可以使用关系数据库来表示图数据，那如果把图数据放在关系结构中，是否意味着也可以支持 SQL 查询呢？</p>
+<p>在关系数据库中，通常会预先知道查询中需要哪些 join 操作。而对于图查询，在找到要查询的顶点之前，可能需要遍历数量未知的边。也就是说，<strong>join 操作数量并不是预先确定的</strong>。</p>
+<p>在 SQL 查询过程中，这种可变的遍历路径可以使用<strong>递归公用表表达式</strong>（<code>WITH RECURSIVE</code> 语法）来表示。</p>
+<p>例如在上面 Cypher 中提到的用例，用 SQL 表示如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">WITH</span><span class="w"> </span><span class="k">RECURSIVE</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c1">-- in_usa 包含所有的美国境内的位置ID
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="n">in_usa</span><span class="p">(</span><span class="n">vertex_id</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">SELECT</span><span class="w"> </span><span class="n">vertex_id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">vertices</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">properties</span><span class="w"> </span><span class="o">-&gt;&gt;</span><span class="w"> </span><span class="s1">&#39;name&#39;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;United States&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">UNION</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">SELECT</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">tail_vertex</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">edges</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="k">JOIN</span><span class="w"> </span><span class="n">in_usa</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">head_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in_usa</span><span class="p">.</span><span class="n">vertex_id</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="k">WHERE</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">label</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;within&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c1">-- in_europe 包含所有的欧洲境内的位置ID
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="n">in_europe</span><span class="p">(</span><span class="n">vertex_id</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">SELECT</span><span class="w"> </span><span class="n">vertex_id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">vertices</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">properties</span><span class="w"> </span><span class="o">-&gt;&gt;</span><span class="w"> </span><span class="s1">&#39;name&#39;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;Europe&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">UNION</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">SELECT</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">tail_vertex</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">edges</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="k">JOIN</span><span class="w"> </span><span class="n">in_europe</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">head_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in_europe</span><span class="p">.</span><span class="n">vertex_id</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="k">WHERE</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">label</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;within&#39;</span><span class="w"> </span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c1">-- born_in_usa 包含了所有类型为Person，且出生在美国的顶点
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="n">born_in_usa</span><span class="p">(</span><span class="n">vertex_id</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="k">SELECT</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">tail_vertex</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">edges</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">JOIN</span><span class="w"> </span><span class="n">in_usa</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">head_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in_usa</span><span class="p">.</span><span class="n">vertex_id</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">WHERE</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">label</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;born_in&#39;</span><span class="w"> </span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c1">-- lives_in_europe 包含了所有类型为Person，且居住在欧洲的顶点。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">    </span><span class="n">lives_in_europe</span><span class="p">(</span><span class="n">vertex_id</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="k">SELECT</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">tail_vertex</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">edges</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">JOIN</span><span class="w"> </span><span class="n">in_europe</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">head_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in_europe</span><span class="p">.</span><span class="n">vertex_id</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">WHERE</span><span class="w"> </span><span class="n">edges</span><span class="p">.</span><span class="n">label</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;lives_in&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">SELECT</span><span class="w"> </span><span class="n">vertices</span><span class="p">.</span><span class="n">properties</span><span class="w"> </span><span class="o">-&gt;&gt;</span><span class="w"> </span><span class="s1">&#39;name&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">FROM</span><span class="w"> </span><span class="n">vertices</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">JOIN</span><span class="w"> </span><span class="n">born_in_usa</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">vertices</span><span class="p">.</span><span class="n">vertex_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">born_in_usa</span><span class="p">.</span><span class="n">vertex_id</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">JOIN</span><span class="w"> </span><span class="n">lives_in_europe</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">vertices</span><span class="p">.</span><span class="n">vertex_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lives_in_europe</span><span class="p">.</span><span class="n">vertex_id</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>下面来看看上述代码的逻辑：</p>
+<ol>
+<li>
+<p>首先，查找 <code>name</code> 属性为 <code>United States</code> 的顶点，将其作为 <code>in_usa</code> 顶点的集合的第一个元素。</p>
+</li>
+<li>
+<p>从 <code>in_usa</code> 集合的顶点出发，沿着所有的 <code>with_in</code> 入边，将其尾顶点加入同一集合，不断递归直到所有 <code>with_in </code>入边都被访问完毕。</p>
+</li>
+<li>
+<p>同理，从 <code>name</code> 属性为 <code>Europe</code> 的顶点出发，建立 <code>in_europe</code> 顶点的集合。</p>
+</li>
+<li>
+<p>对于 <code>in_usa</code> 集合中的每个顶点，根据 <code>born_in</code> 入边来查找出生在美国某个地方的人。</p>
+</li>
+<li>
+<p>同样，对于 <code>in_europe</code> 集合中的每个顶点，根据 <code>lives_in</code> 入边来查找居住在欧洲的人。</p>
+</li>
+<li>
+<p>最后，把在美国出生的人的集合与在欧洲居住的人的集合相交。</p>
+</li>
+</ol>
+<p>经过对比，如果相同的查询可以用 Cypher 查询语言写 4 行代码就可以完成，而使用 SQL 需要 29 行代码，这足以说明不同的数据模型适用于不同的场景。</p>
+<h3 id="三元存储与sparql">三元存储与SPARQL</h3>
+<p>三元存储模式几乎等同于属性图模型，只是使用不同的名词描述了相同的思想。在三元存储中，所有信息都以非常简单的三部分形式存储**（主体，谓语，客体）** 。</p>
+<p>三元组的主体相当于图中的顶点。而客体是以下两种之一：</p>
+<ol>
+<li><strong>原始数据类型中的值，如字符串或数字。</strong> 在这种情况下，三元组的谓语和客体分别相当于主体（顶点）属性中的键和值。</li>
+<li><strong>图中的另一个顶点。</strong> 此时，谓语是图中的边，主体是尾部顶点，而客体是头部顶点。</li>
+</ol>
+<p>我们再次拿出 Cypher 中提到的例子，以 Turtle 三元组方式来表示这些数据：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-turtle" data-lang="turtle"><span class="line"><span class="cl"><span class="k">@prefix</span><span class="w"> </span><span class="nn">:</span><span class="w"> </span><span class="nv">&lt;urn:example:&gt;</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">lucy</span><span class="w">     </span><span class="kt">a</span><span class="w">       </span><span class="nn">:</span><span class="nt">Person</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">lucy</span><span class="w">     </span><span class="nn">:</span><span class="nt">name</span><span class="w">   </span><span class="s">&#34;Lucy&#34;</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">lucy</span><span class="w">     </span><span class="nn">:</span><span class="nt">bornIn</span><span class="w"> </span><span class="err">_</span><span class="nn">:</span><span class="nt">idaho</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">idaho</span><span class="w">    </span><span class="kt">a</span><span class="w">       </span><span class="nn">:</span><span class="nt">Location</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">idaho</span><span class="w">    </span><span class="nn">:</span><span class="nt">name</span><span class="w">   </span><span class="s">&#34;Idaho&#34;</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">idaho</span><span class="w">    </span><span class="nn">:</span><span class="nt">type</span><span class="w">   </span><span class="s">&#34;state&#34;</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">idaho</span><span class="w">    </span><span class="nn">:</span><span class="nt">within</span><span class="w"> </span><span class="err">_</span><span class="nn">:</span><span class="nt">usa</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">usa</span><span class="w">      </span><span class="kt">a</span><span class="w">       </span><span class="nn">:</span><span class="nt">Location</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">usa</span><span class="w">      </span><span class="nn">:</span><span class="nt">name</span><span class="w">   </span><span class="s">&#34;United States&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">usa</span><span class="w">      </span><span class="nn">:</span><span class="nt">type</span><span class="w">   </span><span class="s">&#34;country&#34;</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">usa</span><span class="w">      </span><span class="nn">:</span><span class="nt">within</span><span class="w"> </span><span class="err">_</span><span class="nn">:</span><span class="nt">namerica</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">namerica</span><span class="w"> </span><span class="kt">a</span><span class="w">       </span><span class="nn">:</span><span class="nt">Location</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">namerica</span><span class="w"> </span><span class="nn">:</span><span class="nt">name</span><span class="w">   </span><span class="s">&#34;North America&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">namerica</span><span class="w"> </span><span class="nn">:</span><span class="nt">type</span><span class="w">   </span><span class="p">:</span><span class="s">&#34;continent&#34;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>顶点的名字在定义文件以外没有任何意义，只是为了区分三元组的不同顶点。</p>
+<p>如果要定义相同主体的多个三元组，反复输入相同的单词就略显枯燥。可以使用分号来说明同一主体的多个对象信息。下面即用更简洁的语法来重写上面的逻辑：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-turtle" data-lang="turtle"><span class="line"><span class="cl"><span class="k">@prefix</span><span class="w"> </span><span class="nn">:</span><span class="w"> </span><span class="nv">&lt;urn:example:&gt;</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">lucy</span><span class="w">      </span><span class="kt">a</span><span class="w"> </span><span class="nn">:</span><span class="nt">Person</span><span class="p">;</span><span class="w">   </span><span class="nn">:</span><span class="nt">name</span><span class="w"> </span><span class="s">&#34;Lucy&#34;</span><span class="p">;</span><span class="w">          </span><span class="nn">:</span><span class="nt">bornIn</span><span class="w"> </span><span class="err">_</span><span class="nn">:</span><span class="nt">idaho</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">idaho</span><span class="w">     </span><span class="kt">a</span><span class="w"> </span><span class="nn">:</span><span class="nt">Location</span><span class="p">;</span><span class="w"> </span><span class="nn">:</span><span class="nt">name</span><span class="w"> </span><span class="s">&#34;Idaho&#34;</span><span class="p">;</span><span class="w">         </span><span class="nn">:</span><span class="nt">type</span><span class="w"> </span><span class="s">&#34;state&#34;</span><span class="p">;</span><span class="w">   </span><span class="nn">:</span><span class="nt">within</span><span class="w"> </span><span class="err">_</span><span class="nn">:</span><span class="nt">usa</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">usa</span><span class="w">       </span><span class="kt">a</span><span class="w"> </span><span class="nn">:</span><span class="nt">Loaction</span><span class="p">;</span><span class="w"> </span><span class="nn">:</span><span class="nt">name</span><span class="w"> </span><span class="s">&#34;United States&#34;</span><span class="p">;</span><span class="w"> </span><span class="nn">:</span><span class="nt">type</span><span class="w"> </span><span class="s">&#34;country&#34;</span><span class="p">;</span><span class="w"> </span><span class="nn">:</span><span class="nt">within</span><span class="w"> </span><span class="err">_</span><span class="nn">:</span><span class="nt">namerica</span><span class="p">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="err">_</span><span class="nn">:</span><span class="nt">namerica</span><span class="w">  </span><span class="kt">a</span><span class="w"> </span><span class="nn">:</span><span class="nt">Location</span><span class="p">;</span><span class="w"> </span><span class="nn">:</span><span class="nt">name</span><span class="w"> </span><span class="s">&#34;North America&#34;</span><span class="p">;</span><span class="w"> </span><span class="nn">:</span><span class="nt">type</span><span class="w"> </span><span class="s">&#34;continent&#34;</span><span class="p">.</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h4 id="rdf数据模型">RDF数据模型</h4>
+<p>语义网从本质上讲源于一个简单而合理的想法：<strong>网站通常将信息以文字和图片的方式发布给人类阅读，那为什么不把信息发布为机器可读的格式给计算机阅读呢？</strong></p>
+<p><strong>资源描述框架（Resource Description Framework, RDF）</strong> 就是这样一种机制，<strong>它让不同网站以一致的格式发布数据，这样来自不同网站的数据自动合并成一个数据网络，一种互联网级别包含所有数据的数据库。</strong></p>
+<p>Turtle 语言代表了 RDF 数据的人类可读格式。有时候 RDF 也用 XML 格式编写，不过更冗长一些，人眼容易阅读 Turtle 这种格式，因此通常会借助一些自动化工具（如 Apache Jena）来快速转换各种 RDF 格式。</p>
+<p>下面即用 RDF/XML 语法重写上面的示例：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-xml" data-lang="xml"><span class="line"><span class="cl"><span class="nt">&lt;rdf:RDF</span> <span class="na">xmlns=</span><span class="s">&#34;urn:example:&#34;</span>
+</span></span><span class="line"><span class="cl">         <span class="na">xmlns:rdf=</span><span class="s">&#34;http://www.w3.org/1999/02/22-rdf-syntax-ns#&#34;</span><span class="nt">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;Location</span> <span class="na">rdf:nodeID=</span><span class="s">&#34;idaho&#34;</span><span class="nt">&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&lt;name&gt;</span>Idaho<span class="nt">&lt;/name&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&lt;type&gt;</span>state<span class="nt">&lt;/type&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&lt;within&gt;</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&lt;Location</span> <span class="na">rdf:nodeID=</span><span class="s">&#34;usa&#34;</span><span class="nt">&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="nt">&lt;name&gt;</span>United States<span class="nt">&lt;/name&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="nt">&lt;type&gt;</span>country<span class="nt">&lt;/type&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="nt">&lt;within&gt;</span>
+</span></span><span class="line"><span class="cl">                    <span class="nt">&lt;Location</span> <span class="na">rdf:nodeID=</span><span class="s">&#34;namerica&#34;</span><span class="nt">&gt;</span>
+</span></span><span class="line"><span class="cl">                        <span class="nt">&lt;name&gt;</span>North America<span class="nt">&lt;/name&gt;</span>
+</span></span><span class="line"><span class="cl">                        <span class="nt">&lt;type&gt;</span>continent<span class="nt">&lt;/type&gt;</span>
+</span></span><span class="line"><span class="cl">                    <span class="nt">&lt;/Location&gt;</span>
+</span></span><span class="line"><span class="cl">                <span class="nt">&lt;/within&gt;</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&lt;/Location&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&lt;/within&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;/Location&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;Person</span> <span class="na">rdf:nodeID=</span><span class="s">&#34;lucy&#34;</span><span class="nt">&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&lt;name&gt;</span>Lucy<span class="nt">&lt;/name&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&lt;bornIn</span> <span class="na">rdf:nodeID=</span><span class="s">&#34;idaho&#34;</span><span class="nt">/&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;/Person&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="nt">&lt;/rdf:RDF&gt;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>因为旨在为全网数据交换而设计，RDF 存在一些特殊的约定：<strong>三元组的主体、谓语和客体通常是 URI</strong>。这种设计背后的原因是其假设你的数据需要和其他人的数据相结合，万一不同的人给同一个单词附加了不同的含义，采用 URI 则可以避免冲突。</p>
+<h4 id="sparql查询语言">SPARQL查询语言</h4>
+<p>SPARQL 是一种采用 RDF 数据模型的三元存储查询语言，它比 Cypher 更早，并且由于 Cypher 的模式匹配是借用 SPARQL 的，所以二者看起来非常相似。</p>
+<p>让我们再次使用 Cypher 中的那个示例，如果用 SPARQL 执行相同的查询，其会比 Cypher 要简洁的多，代码如下:</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-SPARQL" data-lang="SPARQL"><span class="line"><span class="cl"><span class="k">PREFIX</span> <span class="p">:</span> <span class="nl">&lt;urn:example:&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="k">SELECT</span> <span class="nv">?personName</span> <span class="k">WHERE</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nv">?person</span> <span class="p">:</span><span class="nt">name</span> <span class="nv">?personName</span><span class="p">.</span>
+</span></span><span class="line"><span class="cl">  <span class="nv">?person</span> <span class="p">:</span><span class="nt">bornIn</span>  <span class="o">/</span> <span class="p">:</span><span class="nt">within</span><span class="o">*</span> <span class="o">/</span> <span class="p">:</span><span class="nt">name</span> <span class="s">&#34;United States&#34;</span><span class="p">.</span>
+</span></span><span class="line"><span class="cl">  <span class="nv">?person</span> <span class="p">:</span><span class="nt">livesIn</span> <span class="o">/</span> <span class="p">:</span><span class="nt">within</span><span class="o">*</span> <span class="o">/</span> <span class="p">:</span><span class="nt">name</span> <span class="s">&#34;Europe&#34;</span><span class="p">.</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>SPARQL 是一种非常优秀的查询语言， 即使语义网从未实际出现，它也可以成为应用程序内部使用的强大查询工具。</p>
+<h3 id="datalog">Datalog</h3>
+<p>Datalog 是比 SPARQL 和 Cypher 更为古老的语言，在 20 世纪 80 年代被学者广泛研究。其数据模型类似于三元组模式，但进行了一点泛化。把三元组写成<strong>谓语（主语，客体）</strong>，而不是**（主语，谓语，客体）**。</p>
+<p>我们尝试用 Datalog 来表示之前的查询，代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">within_recursive(Location, Name) :- name(Location, Name). /* Rule 1 */
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">within_recursive(Location, Name) :- within(Location, Via), /* Rule 2 */
+</span></span><span class="line"><span class="cl">                  within_recursive(Via, Name).
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">migrated(Name, BornIn, LivingIn) :- name(Person, Name), /* Rule 3 */
+</span></span><span class="line"><span class="cl">                                    born_in(Person, BornLoc),
+</span></span><span class="line"><span class="cl">                                    within_recursive(BornLoc, BornIn),
+</span></span><span class="line"><span class="cl">                                    lives_in(Person, LivingLoc),
+</span></span><span class="line"><span class="cl">                                    within_recursive(LivingLoc, LivingIn).
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">?- migrated(Who, &#39;United States&#39;, &#39;Europe&#39;). /* Who = &#39;Lucy&#39;. */
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>从上面的代码可以看出，<strong>Cypher 和 SPARQL 使用 SELECT 一次完成查询，而 Datalog 则每次查询一部分</strong>。我们定义了告诉数据库关于新谓语的规则。例如两个新的谓语，<code>within_recursive</code> 和 <code>migrated</code>。</p>
+<p>这些谓语并不是存储在数据库中的三元组，而是从数据或其他规则派生而来。规则可以引用其他规则，就像函数可以调用其他函数或者递归调用自己一样。像这样，<strong>复杂的查询可以通过每次完成一小块而逐步构建</strong>。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/">数据密集型应用系统设计</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 20:12 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E4%B8%80%E6%B5%81%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十一）：流处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E6%89%B9%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十）：批处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B9%9D%E4%B8%80%E8%87%B4%E6%80%A7%E4%B8%8E%E5%85%B1%E8%AF%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（九）：一致性与共识</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AB%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%8C%91%E6%88%98/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（八）：分布式系统的挑战</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%83%E4%BA%8B%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（七）：事务</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#关系模型与文档模型">关系模型与文档模型</a>
+      <ol>
+        <li><a href="#nosql的诞生">NoSQL的诞生</a></li>
+        <li><a href="#对象-关系不匹配">对象-关系不匹配</a></li>
+        <li><a href="#数据模型">数据模型</a>
+          <ol>
+            <li><a href="#层次模型">层次模型</a></li>
+            <li><a href="#网络模型">网络模型</a></li>
+            <li><a href="#关系模型">关系模型</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#数据查询语言">数据查询语言</a>
+      <ol>
+        <li><a href="#声明式命令式查询语言">声明式/命令式查询语言</a></li>
+        <li><a href="#mapreduce查询">MapReduce查询</a></li>
+      </ol>
+    </li>
+    <li><a href="#图状数据模型">图状数据模型</a>
+      <ol>
+        <li><a href="#属性图">属性图</a></li>
+        <li><a href="#cypher查询语言">Cypher查询语言</a></li>
+        <li><a href="#sql中的图查询">SQL中的图查询</a></li>
+        <li><a href="#三元存储与sparql">三元存储与SPARQL</a>
+          <ol>
+            <li><a href="#rdf数据模型">RDF数据模型</a></li>
+            <li><a href="#sparql查询语言">SPARQL查询语言</a></li>
+          </ol>
+        </li>
+        <li><a href="#datalog">Datalog</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

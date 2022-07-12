@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='批处理 从高层次来看，存储和处理数据的系统可以分为两大类：
+ 记录系统：其持有数据的权威版本。当新的数据进入时首先会记录在这里。每个记录在系统中只表示一次。如果其他系统和记录系统之间存在任何差异，那么此时将以记录系统中的值为准。 派生数据系统：派生数据系统中的数据通常是另一个系统中的现有数据以某种方式进行转换或处理的结果。如果丢失派生数据，可以从原始数据源中重新创建。典型的例子是缓存（cache）：如果数据在缓存中，则可以从缓存中读取；如果缓存不包含所需数据，则降级由底层数据库提供。非规范化的值，索引和物化视图亦属此类。在推荐系统中，预测汇总数据通常衍生自用户日志。   派生数据是冗余的（redundant），因为它重复了已有的信息。但是派生数据对于获得良好的只读查询性能通常是至关重要的。它通常是非规范化的。可以从单个源头衍生出多个不同的数据集，使我们能从不同的视角观察数据。
+ 根据响应时间的不同，数据处理系统通常分为以下三种类型：
+ 在线服务（在线系统）：服务等待客户的请求或指令到达。每收到一个，服务会试图尽快处理它，并发回一个响应。 批处理系统（离线系统）：一个批处理系统有大量的输入数据，通过运行一个 job 来处理这些数据，并生成一些输出数据，这往往需要一段时间（从几分钟到几天），所以通常不会有用户等待 job 完成。相反，批量作业通常会定期运行。 流处理系统（准实时系统）：处于在线和离线系统之间。像批处理系统一样，流处理消费输入并产生输出（并不需要响应请求）。但是，流式作业在事件发生后不久就会对事件进行操作，而批处理作业则需等待固定的一组输入数据。这种差异使流处理系统比起批处理系统具有更低的延迟。  基于 UNIX 工具的批处理 最简便的批处理方案是基于 UNIX 工具实现的，例如我们需要在一个网站中找出访问最高频的五个网页：
+1 2 3 4 5 6 7 8 9 10 11 12  # 原始数据 216.58.210.78 - - [27/Feb/2015:17:55:11 &#43;0000] &amp;#34;GET /css/typography.css HTTP/1.1&amp;#34; 200 3377 &amp;#34;http://martin.kleppmann.com/&amp;#34; &amp;#34;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.115 Safari/537.36&amp;#34; # 处理方案 cat /var/log/nginx/access.log | #1 awk &amp;#39;{print $7}&amp;#39; | #2 sort | #3 uniq -c | #4 sort -r -n | #5 head -n 5 #6    cat 读取日志文件。 awk 每行只获取第七个字段，恰好是 URL 的那个。 sort 按照字段序排列 URL。 uniq -c 计算出每一个 URL 重复的次数。 sort -r -n 按照每一个 URL 出现的次数降序排序。 head -n 5 取出现次数最高的五个 URL。  使用 awk、sed、grep、sort、uniq 和 xargs 的组合，可以在几分钟内完成许多数据分析，并且它们的性能也相当不错。'><title>数据密集型应用系统设计 学习笔记（十）：批处理</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E6%89%B9%E5%A4%84%E7%90%86/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='数据密集型应用系统设计 学习笔记（十）：批处理'>
+<meta property='og:description' content='批处理 从高层次来看，存储和处理数据的系统可以分为两大类：
+ 记录系统：其持有数据的权威版本。当新的数据进入时首先会记录在这里。每个记录在系统中只表示一次。如果其他系统和记录系统之间存在任何差异，那么此时将以记录系统中的值为准。 派生数据系统：派生数据系统中的数据通常是另一个系统中的现有数据以某种方式进行转换或处理的结果。如果丢失派生数据，可以从原始数据源中重新创建。典型的例子是缓存（cache）：如果数据在缓存中，则可以从缓存中读取；如果缓存不包含所需数据，则降级由底层数据库提供。非规范化的值，索引和物化视图亦属此类。在推荐系统中，预测汇总数据通常衍生自用户日志。   派生数据是冗余的（redundant），因为它重复了已有的信息。但是派生数据对于获得良好的只读查询性能通常是至关重要的。它通常是非规范化的。可以从单个源头衍生出多个不同的数据集，使我们能从不同的视角观察数据。
+ 根据响应时间的不同，数据处理系统通常分为以下三种类型：
+ 在线服务（在线系统）：服务等待客户的请求或指令到达。每收到一个，服务会试图尽快处理它，并发回一个响应。 批处理系统（离线系统）：一个批处理系统有大量的输入数据，通过运行一个 job 来处理这些数据，并生成一些输出数据，这往往需要一段时间（从几分钟到几天），所以通常不会有用户等待 job 完成。相反，批量作业通常会定期运行。 流处理系统（准实时系统）：处于在线和离线系统之间。像批处理系统一样，流处理消费输入并产生输出（并不需要响应请求）。但是，流式作业在事件发生后不久就会对事件进行操作，而批处理作业则需等待固定的一组输入数据。这种差异使流处理系统比起批处理系统具有更低的延迟。  基于 UNIX 工具的批处理 最简便的批处理方案是基于 UNIX 工具实现的，例如我们需要在一个网站中找出访问最高频的五个网页：
+1 2 3 4 5 6 7 8 9 10 11 12  # 原始数据 216.58.210.78 - - [27/Feb/2015:17:55:11 &#43;0000] &amp;#34;GET /css/typography.css HTTP/1.1&amp;#34; 200 3377 &amp;#34;http://martin.kleppmann.com/&amp;#34; &amp;#34;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.115 Safari/537.36&amp;#34; # 处理方案 cat /var/log/nginx/access.log | #1 awk &amp;#39;{print $7}&amp;#39; | #2 sort | #3 uniq -c | #4 sort -r -n | #5 head -n 5 #6    cat 读取日志文件。 awk 每行只获取第七个字段，恰好是 URL 的那个。 sort 按照字段序排列 URL。 uniq -c 计算出每一个 URL 重复的次数。 sort -r -n 按照每一个 URL 出现的次数降序排序。 head -n 5 取出现次数最高的五个 URL。  使用 awk、sed、grep、sort、uniq 和 xargs 的组合，可以在几分钟内完成许多数据分析，并且它们的性能也相当不错。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E6%89%B9%E5%A4%84%E7%90%86/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='数据密集型应用系统设计' /><meta property='article:published_time' content='2022-07-10T09:11:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T20:09:11&#43;08:00'/>
+<meta name="twitter:title" content="数据密集型应用系统设计 学习笔记（十）：批处理">
+<meta name="twitter:description" content="批处理 从高层次来看，存储和处理数据的系统可以分为两大类：
+ 记录系统：其持有数据的权威版本。当新的数据进入时首先会记录在这里。每个记录在系统中只表示一次。如果其他系统和记录系统之间存在任何差异，那么此时将以记录系统中的值为准。 派生数据系统：派生数据系统中的数据通常是另一个系统中的现有数据以某种方式进行转换或处理的结果。如果丢失派生数据，可以从原始数据源中重新创建。典型的例子是缓存（cache）：如果数据在缓存中，则可以从缓存中读取；如果缓存不包含所需数据，则降级由底层数据库提供。非规范化的值，索引和物化视图亦属此类。在推荐系统中，预测汇总数据通常衍生自用户日志。   派生数据是冗余的（redundant），因为它重复了已有的信息。但是派生数据对于获得良好的只读查询性能通常是至关重要的。它通常是非规范化的。可以从单个源头衍生出多个不同的数据集，使我们能从不同的视角观察数据。
+ 根据响应时间的不同，数据处理系统通常分为以下三种类型：
+ 在线服务（在线系统）：服务等待客户的请求或指令到达。每收到一个，服务会试图尽快处理它，并发回一个响应。 批处理系统（离线系统）：一个批处理系统有大量的输入数据，通过运行一个 job 来处理这些数据，并生成一些输出数据，这往往需要一段时间（从几分钟到几天），所以通常不会有用户等待 job 完成。相反，批量作业通常会定期运行。 流处理系统（准实时系统）：处于在线和离线系统之间。像批处理系统一样，流处理消费输入并产生输出（并不需要响应请求）。但是，流式作业在事件发生后不久就会对事件进行操作，而批处理作业则需等待固定的一组输入数据。这种差异使流处理系统比起批处理系统具有更低的延迟。  基于 UNIX 工具的批处理 最简便的批处理方案是基于 UNIX 工具实现的，例如我们需要在一个网站中找出访问最高频的五个网页：
+1 2 3 4 5 6 7 8 9 10 11 12  # 原始数据 216.58.210.78 - - [27/Feb/2015:17:55:11 &#43;0000] &amp;#34;GET /css/typography.css HTTP/1.1&amp;#34; 200 3377 &amp;#34;http://martin.kleppmann.com/&amp;#34; &amp;#34;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.115 Safari/537.36&amp;#34; # 处理方案 cat /var/log/nginx/access.log | #1 awk &amp;#39;{print $7}&amp;#39; | #2 sort | #3 uniq -c | #4 sort -r -n | #5 head -n 5 #6    cat 读取日志文件。 awk 每行只获取第七个字段，恰好是 URL 的那个。 sort 按照字段序排列 URL。 uniq -c 计算出每一个 URL 重复的次数。 sort -r -n 按照每一个 URL 出现的次数降序排序。 head -n 5 取出现次数最高的五个 URL。  使用 awk、sed、grep、sort、uniq 和 xargs 的组合，可以在几分钟内完成许多数据分析，并且它们的性能也相当不错。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/" style="background-color: #2a9d8f; color: #fff;">
+                数据密集型应用系统设计
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E6%89%B9%E5%A4%84%E7%90%86/">数据密集型应用系统设计 学习笔记（十）：批处理</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 10, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="批处理">批处理</h1>
+<p>从高层次来看，存储和处理数据的系统可以分为两大类：</p>
+<ul>
+<li><strong>记录系统</strong>：其持有数据的权威版本。当新的数据进入时首先会记录在这里。每个记录在系统中只表示一次。如果其他系统和记录系统之间存在任何差异，那么此时将以记录系统中的值为准。</li>
+<li><strong>派生数据系统</strong>：派生数据系统中的数据通常是另一个系统中的现有数据以某种方式进行转换或处理的结果。如果丢失派生数据，可以从原始数据源中重新创建。典型的例子是<strong>缓存（cache）</strong>：如果数据在缓存中，则可以从缓存中读取；如果缓存不包含所需数据，则降级由底层数据库提供。非规范化的值，索引和物化视图亦属此类。在推荐系统中，预测汇总数据通常衍生自用户日志。</li>
+</ul>
+<blockquote>
+<p>派生数据是<strong>冗余的（redundant）</strong>，因为它重复了已有的信息。但是派生数据对于获得良好的只读查询性能通常是至关重要的。它通常是非规范化的。可以从单个源头衍生出多个不同的数据集，使我们能从不同的视角观察数据。</p>
+</blockquote>
+<p>根据<strong>响应时间</strong>的不同，数据处理系统通常分为以下三种类型：</p>
+<ul>
+<li><strong>在线服务（在线系统）</strong>：服务等待客户的请求或指令到达。每收到一个，服务会试图尽快处理它，并发回一个响应。</li>
+<li><strong>批处理系统（离线系统）</strong>：一个批处理系统有大量的输入数据，通过运行一个 job 来处理这些数据，并生成一些输出数据，这往往需要一段时间（从几分钟到几天），所以通常不会有用户等待 job 完成。相反，批量作业通常会定期运行。</li>
+<li><strong>流处理系统（准实时系统）</strong>：处于在线和离线系统之间。像批处理系统一样，流处理消费输入并产生输出（并不需要响应请求）。但是，流式作业在事件发生后不久就会对事件进行操作，而批处理作业则需等待固定的一组输入数据。这种差异使流处理系统比起批处理系统具有更低的延迟。</li>
+</ul>
+<h2 id="基于-unix-工具的批处理">基于 UNIX 工具的批处理</h2>
+<p>最简便的批处理方案是基于 UNIX 工具实现的，例如我们需要在一个网站中找出访问最高频的五个网页：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="c1"># 原始数据</span>
+</span></span><span class="line"><span class="cl">216.58.210.78 - - <span class="o">[</span>27/Feb/2015:17:55:11 +0000<span class="o">]</span> <span class="s2">&#34;GET /css/typography.css HTTP/1.1&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="m">200</span> <span class="m">3377</span> <span class="s2">&#34;http://martin.kleppmann.com/&#34;</span> <span class="s2">&#34;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5)
+</span></span></span><span class="line"><span class="cl"><span class="s2">AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.115 Safari/537.36&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 处理方案</span>
+</span></span><span class="line"><span class="cl">cat /var/log/nginx/access.log <span class="p">|</span> <span class="c1">#1</span>
+</span></span><span class="line"><span class="cl">  awk <span class="s1">&#39;{print $7}&#39;</span> <span class="p">|</span> <span class="c1">#2</span>
+</span></span><span class="line"><span class="cl">  sort             <span class="p">|</span> <span class="c1">#3</span>
+</span></span><span class="line"><span class="cl">  uniq -c          <span class="p">|</span> <span class="c1">#4</span>
+</span></span><span class="line"><span class="cl">  sort -r -n       <span class="p">|</span> <span class="c1">#5</span>
+</span></span><span class="line"><span class="cl">  head -n <span class="m">5</span>          <span class="c1">#6</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><ul>
+<li><code>cat</code> 读取日志文件。</li>
+<li><code>awk</code> 每行只获取第七个字段，恰好是 URL 的那个。</li>
+<li><code>sort</code> 按照字段序排列 URL。</li>
+<li><code>uniq -c</code> 计算出每一个 URL 重复的次数。</li>
+<li><code>sort -r -n</code> 按照每一个 URL 出现的次数降序排序。</li>
+<li><code>head -n 5</code> 取出现次数最高的五个 URL。</li>
+</ul>
+<p>使用 <code>awk</code>、<code>sed</code>、<code>grep</code>、<code>sort</code>、<code>uniq</code> 和 <code>xargs</code> 的组合，可以在几分钟内完成许多数据分析，并且它们的性能也相当不错。</p>
+<p>然而这些 Unix 工具有一个致命的缺陷，它们只能在一台机器上运行。为了解决这个问题，MapReduce 诞生了。</p>
+<h2 id="mapreduce">MapReduce</h2>
+<h3 id="mapreduce-作业执行">MapReduce 作业执行</h3>
+<p>MapReduce 是一个编程框架，你可以使用它编写代码来处理 HDFS 等分布式文件系统中的大型数据集。其数据处理流程如下：</p>
+<ol>
+<li>读取一组输入文件，并将其分解成<strong>记录（records）</strong>。</li>
+<li>调用 <code>Mapper</code> 函数，从每条输入记录中提取一对键值。</li>
+<li>按键排序所有的键值对。</li>
+<li>调用 <code>Reducer</code> 函数遍历排序后的键值对。</li>
+</ol>
+<p>这四个步骤可以作为一个 MapReduce 作业执行。由于步骤 1（将文件分解成记录）由输入格式解析器处理，而步骤 3 中的排序步骤隐含在 MapReduce，因此我们去需要自己去实现 <code>Mapper</code> 和 <code>Reducer</code> 函数即可：</p>
+<ul>
+<li><strong>Mapper</strong>：Mapper 会在每条输入记录上调用一次，其工作是从输入记录中提取键值。对于每个输入，它可以生成任意数量的键值对。它不会保留从一个输入记录到下一个记录的任何状态，因此每个记录都是独立处理的。</li>
+<li><strong>Reducer</strong>：MapReduce 框架拉取由 Mapper 生成的键值对，收集属于同一个键的所有值，并在这组值上迭代调用 Reducer。 Reducer 可以产生输出记录。</li>
+</ul>
+<h4 id="分布式执行-mapreduce">分布式执行 MapReduce</h4>
+<p>MapReduce 与 Unix 命令管道的主要区别在于：<strong>MapReduce 可以在多台机器上并行执行计算，而无需编写代码来显式处理并行问题。</strong></p>
+<p>下图即为 Hadoop MapReduce 作业中的数据流，其并行化基于<strong>分区</strong>实现：作业的输入通常是 HDFS 中的一个目录，输入目录中的每个文件或文件块都被认为是一个单独的分区，可以单独处理 <code>map</code> 任务。</p>
+<blockquote>
+<p>只要有足够的空闲内存和 CPU 资源，MapReduce 调度器就会尝试在其中一台存储输入文件副本的机器上运行 Mapper 任务。这个原则被称为<strong>将计算放在数据附近</strong>：它节省了通过网络复制输入文件的开销，减少网络负载并增加局部性。</p>
+</blockquote>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia32.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如上图，MapReduce 的完整执行流程如下：</p>
+<ol>
+<li>MapReduce 框架首先将代码复制到适当的机器。然后启动 <code>Map</code> 任务并开始读取输入文件，一次将一条记录传入 <code>Mapper</code> 回调函数。</li>
+<li>键值对必须进行排序，但数据集可能太大，无法在单台机器上使用常规排序算法进行排序。因此每个 <code>Map</code> 任务都按照 <code>Reducer</code> 对输出进行分区。每个分区都被写入 <code>Mapper</code> 程序的本地磁盘</li>
+<li>当 <code>Mapper</code> 读取完输入文件，并写完排序后的输出文件后，MapReduce 调度器就会通知 <code>Reducer</code> 可以从该 <code>Mapper</code> 中获取输出文件。</li>
+<li><code>Reducer</code> 连接到每个 <code>Mapper</code>，并下载自己相应分区的有序键值对文件。按 <code>Reducer</code> 分区，排序，从 <code>Mapper </code>向 <code>Reducer</code> 复制分区数据，这一整个过程被称为 <code>shuffle</code>。</li>
+<li><code>Reduce</code> 任务从 <code>Mapper</code> 获取文件，并将它们 <code>merge</code> 在一起，并保留有序特性。因此，如果不同的 <code>Mapper</code> 生成了键相同的记录，则在 <code>Reducer</code> 的输入中，这些记录将会相邻。</li>
+<li><code>Reducer</code> 调用时会收到一个键，和一个迭代器作为参数，迭代器会顺序地扫过所有具有该键的记录。<code>Reducer</code> 可以使用任意逻辑来处理这些记录，并且可以生成任意数量的输出记录。这些输出记录会写入分布式文件系统上的文件中。</li>
+</ol>
+<blockquote>
+<p>考虑到单个 MapReduce 作业可以解决的问题范围很有限，因此我们可以将 MapReduce 作业链接成一个工作流，即一个作业的输出成为下一个作业的输入。</p>
+<p>只有当作业成功完成后，批处理作业的输出才会被视为有效的。因此，工作流中的一项作业只有在先前的作业成功完成后才能开始。</p>
+</blockquote>
+<h3 id="reduce-侧-join-与分组">Reduce 侧 join 与分组</h3>
+<blockquote>
+<p>在许多数据集中，一条记录与另一条记录存在关联是很常见的，例如关系模型中的<strong>外键</strong>、文档模型中的<strong>文档引用</strong>、图模型中的<strong>边</strong>。当你需要同时访问这一关联的两侧时，就必须进行 join。</p>
+</blockquote>
+<h4 id="排序合并-join">排序合并 join</h4>
+<p>在 Reducer 中执行实际的 join 逻辑，被称为 Reduce 侧 join 。</p>
+<p>通常我们会采用排序合并 join，其原理如下：<strong>每个参与 join 的输入都会由一个提取 join 键的 Mapper 进行处理。通过分区、排序和合并，具有相同键的所有记录最终都会进入相同的 Reducer 调用，然后这个函数输出 join 好的记录。</strong></p>
+<h4 id="分组">分组</h4>
+<p>除了 join 之外，还有另一种方法能将相关数据放在一起，即按某个键对记录分组（如 SQL 中的 <code>GROUP BY</code> ）。</p>
+<p>使用 MapReduce 实现这种分组操作的最简单方法是设置 Mapper，使它们生成的键值对使用所需的分组键。然后在分区和排序过程将所有具有相同分区键的记录导向同一个 Reducer。（因此在 MapReduce 之上实现分组和 join 看上去非常相似。）</p>
+<h4 id="数据倾斜">数据倾斜</h4>
+<p>如果存在与单个键关联的大量数据，则将具有相同键的所有记录放到相同的位置这种模式就会产生问题：大量的数据放到一台机器上，从而导致负载不均衡。这种情况也被称为数据倾斜，而这种数据被称为热点数据（热键）。</p>
+<p>为了处理这种情况，当 join 的输入存在热键的时候，可以采取一些补偿机制，例如下面几种方法：</p>
+<ul>
+<li><strong>Pig 的解决方案</strong>：首先运行一个抽样作业来确定哪些键是热键。join 实际执行时，Mapper 会将热键的关联记录随机发送到几个 Reducer 之一。对于另外一侧的 join 输入，与热键相关的记录需要被复制所有处理该键的 Reducer 上。</li>
+<li><strong>Hive 的解决方案</strong>：在表格元数据中显式指定热键，并将与这些键相关的记录单独存放，与其它文件分开。当在该表上执行连接时，对于热键，它会使用 Map 端 join。</li>
+</ul>
+<h3 id="map-侧-join">Map 侧 join</h3>
+<p>Reduce 侧 join 的优点是不需要对输入数据做任何假设：无论其属性和结构如何，Mapper 都可以对其预处理以备连接。然而不利的一面是，排序，复制至 Reducer，以及合并 Reducer 输入，所有这些操作可能开销巨大。当数据通过 MapReduce 阶段时，数据可能需要落盘好几次（次数取决于可用的内存缓冲区）。</p>
+<p>倘若我们能够对输入数据做一些假设，我们就可以使用 Map 侧 join 来加快我们的 join 速度。</p>
+<h4 id="广播哈希-join">广播哈希 join</h4>
+<p>适用于执行 Map 端连接的最简单场景是大数据集与小数据集连接的情况。</p>
+<p>其要求小数据集需要足够小，不需要进行分区，以便可以将其完全加载进一个哈希表中。因此，你可以为连接输入大端的每个分区启动一个 Mapper，将输入小端的哈希表加载到每个 Mapper 中，然后扫描大端，一次一条记录，并为每条记录查询哈希表。</p>
+<blockquote>
+<p>除了将较小的连接输入加载到内存哈希表中，另一种方法是将较小输入存储在本地磁盘上的只读索引中。索引中经常使用的部分将保留在操作系统的页面缓存中，因而这种方法可以提供与内存哈希表几乎一样快的随机查找性能。</p>
+</blockquote>
+<h4 id="分区哈希-join">分区哈希 join</h4>
+<p>如果两个连接输入以相同的方式分区（使用相同的键，相同的哈希函数和相同数量的分区），则可以独立地对每个分区应用哈希表方法。</p>
+<h4 id="map-侧合并-join">Map 侧合并 join</h4>
+<p>如果输入数据集不仅以相同的方式进行分区，而且还基于相同的键进行排序，则可适用另一种 Map 侧连接的变体。</p>
+<p>在这种情况下，输入是否小到能放入内存并不重要，因为这时候 Mapper 同样可以执行归并操作（通常由 Reducer 执行）：按键递增的顺序依次读取两个输入文件，将具有相同键的记录配对。</p>
+<h4 id="mapreduce-工作流与-map-侧-join">Mapreduce 工作流与 Map 侧 join</h4>
+<p>当下游作业使用 MapReduce join 的输出时，选择 Map 侧 join 或 Reduce 侧 join 会影响输出的结构。Reduce 侧 join 的输出是按照 join 键进行分区和排序的，而 Map 端 join 的输出则按照与较大输入相同的方式进行分区和排序。</p>
+<h3 id="批处理的应用场景">批处理的应用场景</h3>
+<p>批处理有以下几种常见的使用场景：</p>
+<ul>
+<li>构建搜索引擎。</li>
+<li>构建机器学习系统，例如分类器（比如垃圾邮件过滤器，异常检测，图像识别）与推荐系统（例如，你可能认识的人，你可能感兴趣的产品或相关的搜索）。</li>
+<li>……</li>
+</ul>
+<h2 id="mapreduce-之后">MapReduce 之后</h2>
+<h3 id="物化中间状态">物化中间状态</h3>
+<p>在很多情况下，一个作业的输出只能用作另一个作业的输入。在这种情况下，分布式文件系统上的文件只是简单的<strong>中间状态（intermediate state）</strong>：一种将数据从一个作业传递到下一个作业的方式。将这个中间状态写入文件的过程称为<strong>物化（materialization）</strong>。</p>
+<p>在之前的例子中，Unix 利用管道将一个命令的输出与另一个命令的输入连接起来。管道并没有完全物化中间状态，而是只使用一个小的内存缓冲区，将输出增量地<strong>流（stream）</strong> 向输入。与 Unix 管道相比，MapReduce 完全物化中间状态的方法存在以下不足之处：</p>
+<ul>
+<li>MapReduce 作业只有在前驱作业中的所有任务都完成时才能启动，而由 Unix 管道连接的进程会同时启动，输出一旦生成就会被消费。不同机器上的数据偏斜或负载不均意味着一个作业往往会有一些掉队的任务，比其他任务要慢得多才能完成，拖慢了整个工作流程的执行。</li>
+<li>Mapper 通常是多余的：它们仅仅是读取刚刚由 Reducer 写入的同样文件，为下一个阶段的分区和排序做准备。在许多情况下，Mapper 代码可能是前驱 Reducer 的一部分：如果 Reducer 和 Mapper 的输出有着相同的分区与排序方式，那么 Reducer 就可以直接串在一起，而不用与 Mapper 相互交织。</li>
+<li>将中间状态存储在分布式文件系统中意味着这些文件被复制到多个节点，对这些临时数据来说显得有些浪费。</li>
+</ul>
+<h4 id="数据流引擎">数据流引擎</h4>
+<p>为了解决 MapReduce 的这些问题，几种用于分布式批处理的新执行引擎被开发出来（如 Spark、Flink 等）。它们的设计方式有一个共同点：<strong>把整个工作流作为单个作业来处理，而不是把它分解为独立的子作业。</strong></p>
+<p>由于它们将工作流显式建模为数据从几个处理阶段穿过，所以这些系统被称为<strong>数据流引擎（dataflow engines）</strong>。像 MapReduce 一样，它们在一条线上通过反复调用用户定义的函数来一次处理一条记录，它们通过输入分区来并行化载荷，它们通过网络将一个函数的输出复制到另一个函数的输入。</p>
+<p>与 MapReduce 不同，这些函数不需要严格扮演交织的 Map 与 Reduce 的角色，而是可以以更灵活的方式进行组合。我们称这些函数为<strong>算子（operators）</strong>，数据流引擎提供了几种不同的选项来将一个算子的输出连接到另一个算子的输入：</p>
+<ul>
+<li>对记录按键重新分区并排序，就像在 MapReduce 的 shuffle 阶段一样。</li>
+<li>接受多个输入，并以相同的方式进行分区，但跳过排序。</li>
+<li>将一个算子的输出，发送到连接算子的所有分区。</li>
+</ul>
+<p>与 MapReduce 模型相比，它有几个优点：</p>
+<ul>
+<li>排序等昂贵的工作只需要在实际需要的地方执行，而不是默认地在每个 Map 和 Reduce 阶段之间出现。</li>
+<li>没有不必要的 Map 任务，因为 Mapper 所做的工作通常可以合并到前面的 Reduce 算子中。</li>
+<li>由于工作流中的所有连接和数据依赖都是显式声明的，因此调度程序能够总览全局，知道哪里需要哪些数据，因而能够利用局部性进行优化。</li>
+<li>算子间的中间状态足以保存在内存中或写入本地磁盘，这比写入 HDFS 需要更少的 I/O（必须将其复制到多台机器，并将每个副本写入磁盘）。</li>
+<li>算子可以在输入就绪后立即开始执行；后续阶段无需等待前驱阶段整个完成后再开始。</li>
+<li>与 MapReduce（为每个任务启动一个新的 JVM）相比，现有JVM 进程可以重用来运行新算子，从而减少启动开销。</li>
+</ul>
+<h4 id="容错">容错</h4>
+<p>完全物化中间状态至 HDFS 的一个优点是，它具有持久性，这使得 MapReduce 中的容错相当容易：如果一个任务失败，它可以在另一台机器上重新启动，并从文件系统重新读取相同的输入。</p>
+<p>Spark、Flink 和 Tez 避免将中间状态写入 HDFS，因此它们采取了不同的方法来容错：如果一台机器发生故障，并且该机器上的中间状态丢失，则它会从其他仍然可用的数据重新计算（在可行的情况下是先前的中间状态，要么就只能是原始输入数据，通常在 HDFS 上）。</p>
+<blockquote>
+<p>为了实现重新计算，框架需要获取一个数据的计算信息（输入分区、算子等）。 Spark 使用**弹性分布式数据集（RDD，Resilient Distributed Dataset）**的抽象来跟踪数据的谱系，而 Flink 对算子状态存档，允许恢复运行在执行过程中遇到错误的算子。</p>
+</blockquote>
+<h3 id="图与迭代处理">图与迭代处理</h3>
+<blockquote>
+<p>像 Spark、Flink 和 Tez 这样的数据流引擎通常将算子作为**有向无环图（DAG）**的一部分安排在作业中。这与图处理不一样：在数据流引擎中，<strong>从一个算子到另一个算子的数据流</strong>被构造成一个图，而数据本身通常由关系型元组构成。在图处理中，数据本身具有图的形式。</p>
+</blockquote>
+<p>许多图算法是通过一次遍历一条边来表示的，将一个顶点与近邻的顶点连接起来，以传播一些信息，并不断重复，直到满足一些条件为止（例如，直到没有更多的边要跟进，或直到一些指标收敛）。</p>
+<p>可以在分布式文件系统中存储图（包含顶点和边的列表的文件），但是这种重复至完成的想法不能用普通的 MapReduce 来表示，因为它只扫过一趟数据。这种算法因此经常以<strong>迭代</strong>的风格实现：</p>
+<ol>
+<li>外部调度程序运行批处理来计算算法的一个步骤。</li>
+<li>当批处理过程完成时，调度器检查它是否完成（基于完成条件 —— 例如，没有更多的边要跟进，或者与上次迭代相比的变化低于某个阈值）。</li>
+<li>如果尚未完成，则调度程序返回到步骤 1 并运行另一轮批处理。</li>
+</ol>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/">数据密集型应用系统设计</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 20:09 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E4%B8%80%E6%B5%81%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十一）：流处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B9%9D%E4%B8%80%E8%87%B4%E6%80%A7%E4%B8%8E%E5%85%B1%E8%AF%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（九）：一致性与共识</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AB%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%8C%91%E6%88%98/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（八）：分布式系统的挑战</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%83%E4%BA%8B%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（七）：事务</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AD%E5%88%86%E5%8C%BA/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（六）：分区</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#基于-unix-工具的批处理">基于 UNIX 工具的批处理</a></li>
+    <li><a href="#mapreduce">MapReduce</a>
+      <ol>
+        <li><a href="#mapreduce-作业执行">MapReduce 作业执行</a>
+          <ol>
+            <li><a href="#分布式执行-mapreduce">分布式执行 MapReduce</a></li>
+          </ol>
+        </li>
+        <li><a href="#reduce-侧-join-与分组">Reduce 侧 join 与分组</a>
+          <ol>
+            <li><a href="#排序合并-join">排序合并 join</a></li>
+            <li><a href="#分组">分组</a></li>
+            <li><a href="#数据倾斜">数据倾斜</a></li>
+          </ol>
+        </li>
+        <li><a href="#map-侧-join">Map 侧 join</a>
+          <ol>
+            <li><a href="#广播哈希-join">广播哈希 join</a></li>
+            <li><a href="#分区哈希-join">分区哈希 join</a></li>
+            <li><a href="#map-侧合并-join">Map 侧合并 join</a></li>
+            <li><a href="#mapreduce-工作流与-map-侧-join">Mapreduce 工作流与 Map 侧 join</a></li>
+          </ol>
+        </li>
+        <li><a href="#批处理的应用场景">批处理的应用场景</a></li>
+      </ol>
+    </li>
+    <li><a href="#mapreduce-之后">MapReduce 之后</a>
+      <ol>
+        <li><a href="#物化中间状态">物化中间状态</a>
+          <ol>
+            <li><a href="#数据流引擎">数据流引擎</a></li>
+            <li><a href="#容错">容错</a></li>
+          </ol>
+        </li>
+        <li><a href="#图与迭代处理">图与迭代处理</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

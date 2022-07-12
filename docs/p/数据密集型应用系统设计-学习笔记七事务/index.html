@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='事务 深入理解事务 ACID 事务所提供的安全保证即大家所熟知的 ACID ，分别代表原子性（Atomicity）， 一致性（Consistency），隔离性（Isolation）与持久性（Durability）。
+而不符合 ACID 标准的系统有时被称为 BASE ，取另外几个特性的首字母，即基本可用性（Basically Available），软状态（Soft State） 和最终一致性（ Eventual consistency）。
+原子性 ACID 中原子性所定义的特征是：在出错时中止事务，并将部分完成的写入全部丢弃。
+假如没有原子性保证，当多个更新操作中间发生了错误，就需要知道哪些更改已经生效，哪些没有生效，这个寻找过程会非常麻烦。或许应用程序可以重试，但情况类似，并且可能导致重复更新或者不正确的结果。原子性则大大简化了这个问题：如果事务已经中止，应用程序可以确定没有实质发生任何更改，所以可以安全地重试。
+一致性 ACID 中的一致性的主要是指对数据有特定的预期状态，任何数据更改必须满足这些状态约束（或者恒等条件）。
+例如一个账单系统，账户的贷款余额应和借款余额保持平衡。如果某事务从一个有效的状态开始，并且事务中任何更新操作都没有违背约束，那么最后的结果依然符合有效状态。
+这种一致性本质上要求应用层来维护状态一致（或者恒等），应用程序有责任正确地定义事务来保持一致性。这不是数据库可以保证的事情：即如果提供的数据修改违背了恒等条件，数据库很难检测进而阻止该操作（数据库可以完成针对某些特定类型的恒等约束检查，例如使用外键约束或唯一性约束。但通常主要靠应用程序来定义数据的有效／无效状态，数据库主要负责存储）。
+隔离性 ACID 语义中的隔离性意味着并发执行的多个事务相互隔离，它们不能互相交叉。
+例如，如果某个事务进行多次写入，则另一个事务应该观察到的是其全部完成（或者一个都没完成）的结果，而不应该看到中间的部分结果。
+持久性 持久性即保证事务提交成功，即使存在硬件故障或数据库崩溃， 事务所写入的任何数据也不会消失。
+对于单节点数据库，持久性通常意味着数据已被写入非易失性存储设备，如硬盘或 SSD。在写入执行过程中，通常还涉及预写日志等， 这样万一	磁盘数据损坏可以进行恢复。而对于支持远程复制的数据库，持久性则意味着数据已成功复制到多个节点。为了实现持久性的保证，数据库必须等到这些写入或复制完成之后才能报告事务成功提交。
+弱隔离级别 可串行化的隔离会严重影响性能，而许多数据库却不愿意牺牲性能，因而更多倾向于采用较弱的隔离级别，它可以防止某些但并非全部的并发问题。
+读已提交 读已提交是最基本的的事务隔离级别，它只提供以下两个保证：
+ 读数据库时，只能看到巳成功提交的数据（防止脏读）。 写数据库时，只会覆盖已成功提交的数据（防止脏写）。  某些数据库提供更弱的隔离级别，称为读未提交。它只防止脏写，而不防止脏读。
+脏读 假定某个事务已经完成部分数据写入，但事务尚未提交（或中止），此时如果可以看到尚未提交的数据的话，那就是脏读。
+脏写 如果两个事务同时尝试更新相同的对象，先前的写入是尚未提交的事务的一部分，如果被覆盖，那就是脏写。
+实现方法 数据库通常采用行级锁来防止脏写。当事务想修改某个对象时，它必须首先获得该对象的锁，然后一直持有锁直到事务提交（或中止）。 给定时刻，只有一个事务可以拿到特定对象的锁，如果有另一个事务尝试更新同一个对象，则必须等待，直到前面的事务完成了提交（或中止）后，才能获得锁并继续。
+但上述方法应用于脏写则不够理想。因为运行时间较长的写事务会导致许多只读的事务等待太长时间，这会严重影响只读事务的响应延迟，且可操作性差。
+因此，大多数数据库采用 MVCC 的方式来实现。对于每个待更新的对象，数据库都会维护其旧值和当前持锁事务将要设置的新值两个版本。在事务提交之前，所有其他读操作都读取旧值；仅当写事务提交之后，才会切换到读取新值。
+快照隔离级别与可重复读  快照级别隔离对于只读事务特别有效。但是，具体到实现，许多数据库却对它有不同的命名。 Oracle 称之为可串行化， PostgreSQL、MySQL 则称为可重复读。
+这种命名混淆的原因是 SQL 标准并没有定义快照级别隔离，而仍然是基于老的 System R 1975 年所定义的隔离级别，而当时还没有出现快照级别隔离。标准定义的是可重复读，这看起来比较接近于快照级别隔离，所以 PostgreSQL、MySQL 称它们的快照级别隔离为可重复读，这符合标准要求（即合规性）。'><title>数据密集型应用系统设计 学习笔记（七）：事务</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%83%E4%BA%8B%E5%8A%A1/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='数据密集型应用系统设计 学习笔记（七）：事务'>
+<meta property='og:description' content='事务 深入理解事务 ACID 事务所提供的安全保证即大家所熟知的 ACID ，分别代表原子性（Atomicity）， 一致性（Consistency），隔离性（Isolation）与持久性（Durability）。
+而不符合 ACID 标准的系统有时被称为 BASE ，取另外几个特性的首字母，即基本可用性（Basically Available），软状态（Soft State） 和最终一致性（ Eventual consistency）。
+原子性 ACID 中原子性所定义的特征是：在出错时中止事务，并将部分完成的写入全部丢弃。
+假如没有原子性保证，当多个更新操作中间发生了错误，就需要知道哪些更改已经生效，哪些没有生效，这个寻找过程会非常麻烦。或许应用程序可以重试，但情况类似，并且可能导致重复更新或者不正确的结果。原子性则大大简化了这个问题：如果事务已经中止，应用程序可以确定没有实质发生任何更改，所以可以安全地重试。
+一致性 ACID 中的一致性的主要是指对数据有特定的预期状态，任何数据更改必须满足这些状态约束（或者恒等条件）。
+例如一个账单系统，账户的贷款余额应和借款余额保持平衡。如果某事务从一个有效的状态开始，并且事务中任何更新操作都没有违背约束，那么最后的结果依然符合有效状态。
+这种一致性本质上要求应用层来维护状态一致（或者恒等），应用程序有责任正确地定义事务来保持一致性。这不是数据库可以保证的事情：即如果提供的数据修改违背了恒等条件，数据库很难检测进而阻止该操作（数据库可以完成针对某些特定类型的恒等约束检查，例如使用外键约束或唯一性约束。但通常主要靠应用程序来定义数据的有效／无效状态，数据库主要负责存储）。
+隔离性 ACID 语义中的隔离性意味着并发执行的多个事务相互隔离，它们不能互相交叉。
+例如，如果某个事务进行多次写入，则另一个事务应该观察到的是其全部完成（或者一个都没完成）的结果，而不应该看到中间的部分结果。
+持久性 持久性即保证事务提交成功，即使存在硬件故障或数据库崩溃， 事务所写入的任何数据也不会消失。
+对于单节点数据库，持久性通常意味着数据已被写入非易失性存储设备，如硬盘或 SSD。在写入执行过程中，通常还涉及预写日志等， 这样万一	磁盘数据损坏可以进行恢复。而对于支持远程复制的数据库，持久性则意味着数据已成功复制到多个节点。为了实现持久性的保证，数据库必须等到这些写入或复制完成之后才能报告事务成功提交。
+弱隔离级别 可串行化的隔离会严重影响性能，而许多数据库却不愿意牺牲性能，因而更多倾向于采用较弱的隔离级别，它可以防止某些但并非全部的并发问题。
+读已提交 读已提交是最基本的的事务隔离级别，它只提供以下两个保证：
+ 读数据库时，只能看到巳成功提交的数据（防止脏读）。 写数据库时，只会覆盖已成功提交的数据（防止脏写）。  某些数据库提供更弱的隔离级别，称为读未提交。它只防止脏写，而不防止脏读。
+脏读 假定某个事务已经完成部分数据写入，但事务尚未提交（或中止），此时如果可以看到尚未提交的数据的话，那就是脏读。
+脏写 如果两个事务同时尝试更新相同的对象，先前的写入是尚未提交的事务的一部分，如果被覆盖，那就是脏写。
+实现方法 数据库通常采用行级锁来防止脏写。当事务想修改某个对象时，它必须首先获得该对象的锁，然后一直持有锁直到事务提交（或中止）。 给定时刻，只有一个事务可以拿到特定对象的锁，如果有另一个事务尝试更新同一个对象，则必须等待，直到前面的事务完成了提交（或中止）后，才能获得锁并继续。
+但上述方法应用于脏写则不够理想。因为运行时间较长的写事务会导致许多只读的事务等待太长时间，这会严重影响只读事务的响应延迟，且可操作性差。
+因此，大多数数据库采用 MVCC 的方式来实现。对于每个待更新的对象，数据库都会维护其旧值和当前持锁事务将要设置的新值两个版本。在事务提交之前，所有其他读操作都读取旧值；仅当写事务提交之后，才会切换到读取新值。
+快照隔离级别与可重复读  快照级别隔离对于只读事务特别有效。但是，具体到实现，许多数据库却对它有不同的命名。 Oracle 称之为可串行化， PostgreSQL、MySQL 则称为可重复读。
+这种命名混淆的原因是 SQL 标准并没有定义快照级别隔离，而仍然是基于老的 System R 1975 年所定义的隔离级别，而当时还没有出现快照级别隔离。标准定义的是可重复读，这看起来比较接近于快照级别隔离，所以 PostgreSQL、MySQL 称它们的快照级别隔离为可重复读，这符合标准要求（即合规性）。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%83%E4%BA%8B%E5%8A%A1/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='数据密集型应用系统设计' /><meta property='article:published_time' content='2022-07-10T06:11:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T20:20:02&#43;08:00'/>
+<meta name="twitter:title" content="数据密集型应用系统设计 学习笔记（七）：事务">
+<meta name="twitter:description" content="事务 深入理解事务 ACID 事务所提供的安全保证即大家所熟知的 ACID ，分别代表原子性（Atomicity）， 一致性（Consistency），隔离性（Isolation）与持久性（Durability）。
+而不符合 ACID 标准的系统有时被称为 BASE ，取另外几个特性的首字母，即基本可用性（Basically Available），软状态（Soft State） 和最终一致性（ Eventual consistency）。
+原子性 ACID 中原子性所定义的特征是：在出错时中止事务，并将部分完成的写入全部丢弃。
+假如没有原子性保证，当多个更新操作中间发生了错误，就需要知道哪些更改已经生效，哪些没有生效，这个寻找过程会非常麻烦。或许应用程序可以重试，但情况类似，并且可能导致重复更新或者不正确的结果。原子性则大大简化了这个问题：如果事务已经中止，应用程序可以确定没有实质发生任何更改，所以可以安全地重试。
+一致性 ACID 中的一致性的主要是指对数据有特定的预期状态，任何数据更改必须满足这些状态约束（或者恒等条件）。
+例如一个账单系统，账户的贷款余额应和借款余额保持平衡。如果某事务从一个有效的状态开始，并且事务中任何更新操作都没有违背约束，那么最后的结果依然符合有效状态。
+这种一致性本质上要求应用层来维护状态一致（或者恒等），应用程序有责任正确地定义事务来保持一致性。这不是数据库可以保证的事情：即如果提供的数据修改违背了恒等条件，数据库很难检测进而阻止该操作（数据库可以完成针对某些特定类型的恒等约束检查，例如使用外键约束或唯一性约束。但通常主要靠应用程序来定义数据的有效／无效状态，数据库主要负责存储）。
+隔离性 ACID 语义中的隔离性意味着并发执行的多个事务相互隔离，它们不能互相交叉。
+例如，如果某个事务进行多次写入，则另一个事务应该观察到的是其全部完成（或者一个都没完成）的结果，而不应该看到中间的部分结果。
+持久性 持久性即保证事务提交成功，即使存在硬件故障或数据库崩溃， 事务所写入的任何数据也不会消失。
+对于单节点数据库，持久性通常意味着数据已被写入非易失性存储设备，如硬盘或 SSD。在写入执行过程中，通常还涉及预写日志等， 这样万一	磁盘数据损坏可以进行恢复。而对于支持远程复制的数据库，持久性则意味着数据已成功复制到多个节点。为了实现持久性的保证，数据库必须等到这些写入或复制完成之后才能报告事务成功提交。
+弱隔离级别 可串行化的隔离会严重影响性能，而许多数据库却不愿意牺牲性能，因而更多倾向于采用较弱的隔离级别，它可以防止某些但并非全部的并发问题。
+读已提交 读已提交是最基本的的事务隔离级别，它只提供以下两个保证：
+ 读数据库时，只能看到巳成功提交的数据（防止脏读）。 写数据库时，只会覆盖已成功提交的数据（防止脏写）。  某些数据库提供更弱的隔离级别，称为读未提交。它只防止脏写，而不防止脏读。
+脏读 假定某个事务已经完成部分数据写入，但事务尚未提交（或中止），此时如果可以看到尚未提交的数据的话，那就是脏读。
+脏写 如果两个事务同时尝试更新相同的对象，先前的写入是尚未提交的事务的一部分，如果被覆盖，那就是脏写。
+实现方法 数据库通常采用行级锁来防止脏写。当事务想修改某个对象时，它必须首先获得该对象的锁，然后一直持有锁直到事务提交（或中止）。 给定时刻，只有一个事务可以拿到特定对象的锁，如果有另一个事务尝试更新同一个对象，则必须等待，直到前面的事务完成了提交（或中止）后，才能获得锁并继续。
+但上述方法应用于脏写则不够理想。因为运行时间较长的写事务会导致许多只读的事务等待太长时间，这会严重影响只读事务的响应延迟，且可操作性差。
+因此，大多数数据库采用 MVCC 的方式来实现。对于每个待更新的对象，数据库都会维护其旧值和当前持锁事务将要设置的新值两个版本。在事务提交之前，所有其他读操作都读取旧值；仅当写事务提交之后，才会切换到读取新值。
+快照隔离级别与可重复读  快照级别隔离对于只读事务特别有效。但是，具体到实现，许多数据库却对它有不同的命名。 Oracle 称之为可串行化， PostgreSQL、MySQL 则称为可重复读。
+这种命名混淆的原因是 SQL 标准并没有定义快照级别隔离，而仍然是基于老的 System R 1975 年所定义的隔离级别，而当时还没有出现快照级别隔离。标准定义的是可重复读，这看起来比较接近于快照级别隔离，所以 PostgreSQL、MySQL 称它们的快照级别隔离为可重复读，这符合标准要求（即合规性）。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/" style="background-color: #2a9d8f; color: #fff;">
+                数据密集型应用系统设计
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%83%E4%BA%8B%E5%8A%A1/">数据密集型应用系统设计 学习笔记（七）：事务</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 10, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="事务">事务</h1>
+<h2 id="深入理解事务">深入理解事务</h2>
+<h3 id="acid">ACID</h3>
+<p>事务所提供的安全保证即大家所熟知的 <strong>ACID</strong> ，分别代表<strong>原子性（Atomicity）</strong>， <strong>一致性（Consistency）</strong>，<strong>隔离性（Isolation）<strong>与</strong>持久性（Durability）</strong>。</p>
+<p>而不符合 ACID 标准的系统有时被称为 <strong>BASE</strong> ，取另外几个特性的首字母，即<strong>基本可用性（Basically Available）</strong>，<strong>软状态（Soft State）</strong> 和<strong>最终一致性（ Eventual consistency）</strong>。</p>
+<h4 id="原子性">原子性</h4>
+<p>ACID 中原子性所定义的特征是：<strong>在出错时中止事务，并将部分完成的写入全部丢弃</strong>。</p>
+<p>假如没有原子性保证，当多个更新操作中间发生了错误，就需要知道哪些更改已经生效，哪些没有生效，这个寻找过程会非常麻烦。或许应用程序可以重试，但情况类似，并且可能导致重复更新或者不正确的结果。原子性则大大简化了这个问题：<strong>如果事务已经中止，应用程序可以确定没有实质发生任何更改，所以可以安全地重试</strong>。</p>
+<h4 id="一致性">一致性</h4>
+<p>ACID 中的一致性的主要是指<strong>对数据有特定的预期状态，任何数据更改必须满足这些状态约束（或者恒等条件）。</strong></p>
+<p>例如一个账单系统，账户的贷款余额应和借款余额保持平衡。如果某事务从一个有效的状态开始，并且事务中任何更新操作都没有违背约束，那么最后的结果依然符合有效状态。</p>
+<p>这种一致性本质上<strong>要求应用层来维护状态一致（或者恒等）</strong>，应用程序有责任正确地定义事务来保持一致性。这不是数据库可以保证的事情：即如果提供的数据修改违背了恒等条件，数据库很难检测进而阻止该操作（数据库可以完成针对某些特定类型的恒等约束检查，例如使用外键约束或唯一性约束。但通常主要靠应用程序来定义数据的有效／无效状态，数据库主要负责存储）。</p>
+<h4 id="隔离性">隔离性</h4>
+<p>ACID 语义中的隔离性意味着<strong>并发执行的多个事务相互隔离，它们不能互相交叉。</strong></p>
+<p>例如，如果某个事务进行多次写入，则另一个事务应该观察到的是其全部完成（或者一个都没完成）的结果，而不应该看到中间的部分结果。</p>
+<h4 id="持久性">持久性</h4>
+<p>持久性即<strong>保证事务提交成功，即使存在硬件故障或数据库崩溃， 事务所写入的任何数据也不会消失</strong>。</p>
+<p>对于单节点数据库，持久性通常意味着数据已被写入非易失性存储设备，如硬盘或 SSD。在写入执行过程中，通常还涉及预写日志等， 这样万一	磁盘数据损坏可以进行恢复。而对于支持远程复制的数据库，持久性则意味着数据已成功复制到多个节点。为了实现持久性的保证，数据库必须等到这些写入或复制完成之后才能报告事务成功提交。</p>
+<h2 id="弱隔离级别">弱隔离级别</h2>
+<p>可串行化的隔离会严重影响性能，而许多数据库却不愿意牺牲性能，因而更多倾向于采用较弱的隔离级别，它可以防止某些但并非全部的并发问题。</p>
+<h3 id="读已提交">读已提交</h3>
+<p>读已提交是最基本的的事务隔离级别，它只提供以下两个保证：</p>
+<ol>
+<li>读数据库时，只能看到巳成功提交的数据（防止脏读）。</li>
+<li>写数据库时，只会覆盖已成功提交的数据（防止脏写）。</li>
+</ol>
+<p>某些数据库提供更弱的隔离级别，称为读未提交。它只防止脏写，而不防止脏读。</p>
+<h4 id="脏读">脏读</h4>
+<p>假定某个事务已经完成部分数据写入，但事务尚未提交（或中止），此时如果可以看到尚未提交的数据的话，那就是<strong>脏读</strong>。</p>
+<h4 id="脏写">脏写</h4>
+<p>如果两个事务同时尝试更新相同的对象，先前的写入是尚未提交的事务的一部分，如果被覆盖，那就是<strong>脏写</strong>。</p>
+<h4 id="实现方法">实现方法</h4>
+<p><strong>数据库通常采用行级锁来防止脏写</strong>。<strong>当事务想修改某个对象时，它必须首先获得该对象的锁，然后一直持有锁直到事务提交（或中止）。</strong> 给定时刻，只有一个事务可以拿到特定对象的锁，如果有另一个事务尝试更新同一个对象，则必须等待，直到前面的事务完成了提交（或中止）后，才能获得锁并继续。</p>
+<p>但上述方法应用于脏写则不够理想。因为运行时间较长的写事务会导致许多只读的事务等待太长时间，这会严重影响只读事务的响应延迟，且可操作性差。</p>
+<p>因此，大多数数据库采用 <strong>MVCC</strong> 的方式来实现。<strong>对于每个待更新的对象，数据库都会维护其旧值和当前持锁事务将要设置的新值两个版本。在事务提交之前，所有其他读操作都读取旧值；仅当写事务提交之后，才会切换到读取新值。</strong></p>
+<h3 id="快照隔离级别与可重复读">快照隔离级别与可重复读</h3>
+<blockquote>
+<p>快照级别隔离对于只读事务特别有效。但是，具体到实现，许多数据库却对它有不同的命名。 Oracle 称之为可串行化， PostgreSQL、MySQL 则称为可重复读。</p>
+<p>这种命名混淆的原因是 SQL 标准并没有定义快照级别隔离，而仍然是基于老的 System R 1975 年所定义的隔离级别，而当时还没有出现快照级别隔离。标准定义的是可重复读，这看起来比较接近于快照级别隔离，所以 PostgreSQL、MySQL 称它们的快照级别隔离为可重复读，这符合标准要求（即合规性）。</p>
+</blockquote>
+<h4 id="实现方法-1">实现方法</h4>
+<p>为了实现快照隔离级别，数据库采用了一种防止脏读但却更为通用的机制。考虑到多个正在进行的事务可能会在不同的时间点查看数据库状态，所以<strong>数据库保留了对象多个不同的提交版本</strong>，这种技术因此也被称为<strong>多版本并发控制（Multi-Version Concurrency Control，MVCC）</strong></p>
+<p>如果只是为了提供读已提交级别隔离，而不是完整的快照隔离级别，则只保留对象的两个版本就足够了：一个己提交的旧版本和尚未提交的新版本。所以，支持快照隔离级别的存储引擎往往直接采用 MVCC 来实现读已提交隔离。典型的做法是，<strong>在读已提交级别下，对每一个不同的查询单独创建一个快照；而快照隔离级别级别隔离则是使用一个快照来运行整个事务。</strong></p>
+<p>接下来看看 PostgreSQL 是如何实现基于 MVCC 的快照隔离级别 （其他实现基本类似）。</p>
+<p>当事务开始时，首先赋予一个<strong>唯一的、单调递增</strong>的事务 ID（txid）。每当事务向数据库写入新内容时，所写的数据都会被标记写入者的事务 ID。</p>
+<p>表中的每行都有 <code>created_by</code> 字段，其中包含了创建该行的事务 ID 。还有一个 <code>deleted_by</code> 字段，初始为空。 如果事务要删除某行，该行实际上并未从数据库中删除，而只是将 <code>deleted_by</code> 字段设置为请求删除的事务 ID （<strong>标记删除</strong>） 。事后，当确定没有其他事务引用该标记删除的行时，数据库的垃圾回收进程才去真正删除井释放存储空间。<strong>这样一笔更新操作在内部会被转换为一个删除操作加一个创建操作。</strong></p>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia12.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>如上图，事务 13 从账户中扣除 100 美元，余额从 500 美元减为 400 美元。 accounts 表里会出现两行账户 2 。一行是余额为 500 但标记为删除（由事务 13 删除），另一个余额为 400 ，由事务 13 创建。</p>
+<h4 id="一致性快照的可见规则">一致性快照的可见规则</h4>
+<p>当事务读数据库时·，通过事务 ID 可以决定哪些对象可见，哪些不可见。要想对上层应用维护好快照的一致性，需要精心定义数据的可见性规则。例如：</p>
+<ul>
+<li>每笔事务开始时，数据库列出所有当时尚在进行中的其他事务（即尚未提交或中止），然后忽略这些事务完成的部分写入（尽管之后可能会被提交），即不可见。</li>
+<li>所有中止事务所做的修改全部不可见。</li>
+<li>较晚事务ID（即晚于当前事务）所做的任何修改不可见，不管这些事务是否完成了提交。</li>
+<li>除此之外，其他所有的写入都对应用查询可见。</li>
+</ul>
+<p>换句话说，仅当以下两个条件都成立， 主数据对象对事务可见：</p>
+<ul>
+<li>
+<p>事务开始的时刻，创建该对象的事务已经完成了提交。</p>
+</li>
+<li>
+<p>对象没有被标记为删除；或者即使标记了，但删除事务在当前事务开始时还没有完成提交。</p>
+</li>
+</ul>
+<h3 id="防止丢失更新">防止丢失更新</h3>
+<p>写事务并发除了脏写以外，还会带来其他一些值得关注的冲突问题，最著名的就是<strong>更新丢失</strong>问题。</p>
+<p>更新丢失可能发生在这样一个操作场景中：应用程序从数据库读取某些值，根据应用逻辑做出修改，然后写回新值 （read-modify-write）。 <strong>当有两个事务在同样的数据对象上执行类似操作时，由于隔离性，第二个写操作并不包括第一个事务修改后的值，最终会导致第一事务的修改值可能会丢失。</strong></p>
+<p>这种冲突还可能在其他不同的场景下发生，例如：</p>
+<ul>
+<li>递增计数器，或更新账户余额（需要读取当前值，计算新值井写回更新后的值）。</li>
+<li>对某复杂对象的一部分内容执行修改，例如对 JSON 文档中一个列表添加新元素（需要读取并解析文档，执行更改井写回修改后的文档）。</li>
+<li>两个用户同时编辑 wiki 页面，且每个用户都尝试将整个页面发送到服务器，覆盖数据库中现有内容以使更改生效 。</li>
+</ul>
+<p>并发写事务冲突是一个普遍问题，目前有多种可行的解决方案。</p>
+<h4 id="原子写操作">原子写操作</h4>
+<p>许多数据库提供了<strong>原子更新</strong>操作，以避免在应用层代码完成读取-修改-写回操作，如果支持的话，通常这就是最好的解决方案。例如，以下指令在多数关系数据库中都是井发安全的：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">UPDATE</span><span class="w"> </span><span class="n">counters</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="k">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;foo&#39;</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>原子操作通常采用<strong>对读取对象加独占锁的方式来实现</strong>，这样在更新被提交之前不会让其他事务读取它。这种技术有时被称为<strong>游标稳定性</strong>。另一种实现方式是<strong>强制所有的原子操作都在单线程上执行</strong>。</p>
+<h4 id="显式加锁">显式加锁</h4>
+<p>如果数据库不支持内置原子操作，另一种防止更新丢失的方法是<strong>由应用程序显式锁定待更新的对象</strong>。 然后，应用程序可以执行读取-修改-写回这样的操作序列。此时如果有其他事务尝试并发读取对象，则必须等待当前正在执行的序列全部完成。</p>
+<p>例如这样一个场景，在一个多人游戏中，几个玩家可以同时移动同 个数字。只靠原子操作可能还不够，因为应用程序还需要确保玩家的移动还需遵守其他游戏规则，这涉及应用层逻辑，不可能将其剥离转移给数据库层在查询时执行。此时，可以使用锁来防止两名玩家同时操作相同的棋子，如下列代码：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">BEGIN</span><span class="w"> </span><span class="k">TRANSACTION</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">figures</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">WHERE</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;robot&#39;</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">game_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">222</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- FOR UPDATE 指令指示数据库对返回的所有结果行要加锁。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- 检查玩家的操作是否有效，然后更新先前SELECT返回棋子的位置。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">UPDATE</span><span class="w"> </span><span class="n">figures</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="k">position</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;c4&#39;</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1234</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">COMMIT</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><h4 id="原子比较和设置">原子比较和设置</h4>
+<p>原子操作和锁都是通过强制读取-修改-写回操作序列串行执行来防止丢失更新。另一种思路则是<strong>先让他们并发执行，但是如果事务管理器检测到了更新丢失的风险，则会中止当前事务，并强制回退到安全的读取-修改-写回方式。</strong></p>
+<p>该方法的一个优点是<strong>数据库完全可以借助快照级别隔离来高效地执行检查</strong>。的确，PostgreSQL 的可重复读， Oracle 的可串行化以及 SQL Server 的快照级别隔离等，都可以自动检测何时发生了更新丢失，然后会中止违规的那个事务。但是，MySQL/InnoDB 的可重复读却并不支持检测更新丢失。有一些观点认为，数据库必须防止更新丢失，要不然就不能宣称符合快照级别隔离，如果基于这样的定义，那么 MySQL 就属于没有完全支持快照级别隔离。</p>
+<h4 id="冲突解决和复制">冲突解决和复制</h4>
+<p>对于支持多副本的数据库，防止丢失更新还需要考虑另一个维度 ：<strong>由多节点上的数据副本，不同的节点可能会并发修改数据</strong>，因此必须采取一些额外的措施来防止丢失更新。</p>
+<p>加锁和原子修改都有个前提即<strong>只有一个最新的数据副本</strong>。然而，对于多主节点或者无主节点的多副本数据库，由于支持多个井发写 ，且通常以异步方式来同步更新，所以会出现多个最新的数据副本。<strong>此时加锁和原子比较将不再适用。</strong></p>
+<p>多副本数据库通常支持多个井发写，然后保留多个冲突版本，之后由应用层逻辑或依靠特定的数据结构来解决、合并多版本。</p>
+<p>如果操作可交换（顺序无关，在不同的副本上以不同的顺序执行时仍然得到相同的结果），则原子操作在多副本情况下也可以工作。例如，计数器递增或向集合中添加元素等都是典型的可交换操作。</p>
+<h3 id="写倾斜与幻读">写倾斜与幻读</h3>
+<h4 id="写倾斜">写倾斜</h4>
+<p><strong>当两笔事务根据读取相同的一组记录进行条件判断通过后，更新了不同的记录对象，刚刚的写操作改变了决定的前提条件，结果可能违背了业务约束要求</strong>，此时的异常情况称为<strong>写倾斜</strong>。只有<strong>可串行化</strong>的隔离级别才能防止这种异常。</p>
+<p>写倾斜看起来很晦涩拗口，下面举几个常见场景：</p>
+<ul>
+<li><strong>会议室预订系统</strong>：要求在同一时间内，同一个会议室不能被预订两次。</li>
+<li><strong>用户名</strong>：网站通常要求每个用户有唯一的用户名，两个用户可能同时尝试创建相同的用户名。</li>
+<li><strong>防止双重开支</strong>：支付或积分相关的服务通常需要检查用户的花费不能超过其限额。如果有两笔交易同时进行，两个交易各自都不能超额，也不能加在一起后超额。</li>
+</ul>
+<p><strong>可以将写倾斜视为一种更广义的更新丢失问题。</strong> 即如果两个事务读取相同的一组对象，然后更新其中一部分：不同的事务可能更新不同的对象，则可能发生写倾斜。不同的事务如果更新的是同一个对象，则可能发生脏写或更新丢失。</p>
+<h4 id="幻读">幻读</h4>
+<p><strong>事务读取了某些符合查询条件的对象，同时另一个客户端执行写入，改变了先前的查询结果。</strong> 快照隔离可以防止只读查询的幻读，但写倾斜情况则需要特殊处理，例如采用区间范围锁。</p>
+<h2 id="串行化">串行化</h2>
+<p>可串行化隔离通常被认为是<strong>最强的隔离级别</strong>。 <strong>它保证即使事务可能会井行执行，但最终的结果与每次一个即串行执行结果相同。</strong> 这意味着，如果事务在单独运行时表现正确，那么它们在并发运行时结果仍然正确，换句话说，<strong>数据库可以防止所有可能的竞争条件。</strong></p>
+<p>目前大多数提供可串行化的数据库都使用了以下三种技术之一：</p>
+<ul>
+<li><strong>严格按照串行顺序执行</strong></li>
+<li><strong>两阶段加锁</strong></li>
+<li><strong>乐观井发控制技术</strong>，例如可串行化的快照隔离。</li>
+</ul>
+<h3 id="严格串行执行">严格串行执行</h3>
+<p>解决并发问题最直接的方法是<strong>避免并发</strong>，<strong>即在一个线程上按顺序方式每次只执行一个事务</strong>。这样我们完全回避了诸如检测、防止事务冲突等问题，其对应的隔离级别是严格串行化的。</p>
+<p>当满足以下约束条件时，串行执行事务可以实现串行化隔离：</p>
+<ul>
+<li>事务必须简短而高效，否则一个缓慢的事务将会影响到所有事务的执行性能。</li>
+<li>仅限于活动数据集完全可以加载到内存的场景。有些很少访问的数据可能会被移动到磁盘，但万一单线程事务需要访问它，就会严重拖累性能 。</li>
+<li>写入吞吐量必须足够低，才能在单个 CPU 核上处理，否则就需要采用分区，最好没有跨分区事务。</li>
+<li>跨分区事务虽然也可以支持，但是占比必须很小。</li>
+</ul>
+<h3 id="两阶段加锁">两阶段加锁</h3>
+<blockquote>
+<p>虽然两阶段加锁（2PL）听起来和两阶段提交（two-phase commit，2PC）很相近，但它们是完全不同的东西。</p>
+</blockquote>
+<p>近三十年来，可以说数据库只有一种被广泛使用的串行化算法，那就是<strong>两阶段加锁（two-phase locking，2PL）</strong>。</p>
+<p>两阶段加锁与前面提到的加锁方法类似，但锁的强制性更高。<strong>多个事务可以同时读取同一对象，但只要出现任何写操作（包括修改或删除），则必须加锁以独占访问</strong>：</p>
+<ul>
+<li>如果事务 A 已经读取了某个对象，此时事务 B 想要写入该对象，那么就必须等到 事务 A 提交或中止之才能继续。以确保事务 B 不会在事务 A 执行的过程中间去修改对象。</li>
+<li>如果事务 A 已经修改了对象， 此时事务 B 想要读取该对象， 则事务 B 必须等到事务 A 提交或者中止之后才能继续。对于 2PL ，不会出现读到旧值的情况。</li>
+</ul>
+<p>因此 2PL <strong>不仅在并发写操作之间互斥，读取也会和修改产生互斥。<strong>另一方面，因为 2PL 提供了串行化，所以它</strong>可以防止前面讨论的所有竞争条件，包括更新丢失和写倾斜。</strong></p>
+<h4 id="实现方法-2">实现方法</h4>
+<p>目前， 2PL 已经用于 MySQL（InnoDB）和 SQL Server 中的可串行化， 以及 DB2 中的可重复读。</p>
+<p><strong>数据库的每个对象都有一个读写锁来隔离读写操作，即锁可以处于共享模式或独占模式。</strong> 基本用法如下：</p>
+<ul>
+<li><strong>如果事务要读取对象 ，必须先以共享模式获得锁。</strong> 可以有多个事务同时获得一个对象的共享锁，但是如果某个事务已经获得了对象的独占锁，则所有其他事务必须等待。</li>
+<li><strong>如果事务要修改对象，必须以独占模式获取锁。</strong> 不允许多个事务同时持有该锁（包括共享或独占模式），换句话说，如果对象上已被加锁，则修改事务必须等待。</li>
+<li><strong>如果事务先是读取对象，然后尝试写入对象，则需要将共享锁升级为独占锁。</strong> 升级锁的流程等价于直接获得独占锁。</li>
+<li><strong>事务获得锁之后，一直持有锁直到事务结束（包括提交或中止）。</strong> 这也是名字两阶段的来由，在第一阶段（事务执行前）获取锁，第二阶段（事务结束后）释放锁。</li>
+</ul>
+<p>由于使用了很多锁机制，所以很容易出现<strong>死锁</strong> ，例如事务 A 可能在等待事务 B 释放它的锁， 事务 B 在等待事务 A 释放所持有的锁（循环等待）。数据库系统会自动检测事务之间的死锁情况（常见方法是超时或者回路检测），并强行中止其中的一个以打破僵局，这样另一个可以继续向前执行，而被中止的事务需要由应用层来重试。</p>
+<h4 id="谓词锁">谓词锁</h4>
+<p>在前面的章节我们提到了幻读的问题，那么可串行化是如何解决幻读的呢？</p>
+<p>我们需要引入一种<strong>谓词锁</strong>。它的作用于之前描述的共享/独占锁， 区别在于，<strong>它并不属于某个特定的对象（行），而是作用于满足某些搜索条件的所有查询对象（区间）</strong>。</p>
+<p>谓词锁甚至可以保护数据库中那些尚不存在但可能马上会被插入的对象（幻读）。将两阶段加锁与谓词锁结合使用，数据库可以防止所有形式的写倾斜以及其他竞争条件，隔离变得真正可串行化。</p>
+<h4 id="索引区间锁">索引区间锁</h4>
+<p>但是由于谓词锁性能不佳，如果活动事务中存在过多的锁，那么检查匹配这些锁就变得非常耗时。因此，大多数使用 2PL 的数据库实际上实现的是<strong>索引区间锁</strong>（<strong>index-range locking，也称为next-key locking</strong>）。本质上它是对谓词锁的简化或者近似。</p>
+<p><strong>简化谓词锁的方式是将其保护的对象扩大化到一整个索引上。</strong> 例如存在下面这样一个场景，我们有一个酒店的管理系统，假设谓词锁保护的查询条件是：房间 123 ，时间段是周六 。</p>
+<ul>
+<li><strong>如果索引建立在房间号上</strong>：此时数据库会将共享锁附加到房间号索引上，此时会锁定 123 号房间的所有记录。</li>
+<li><strong>如果索引建立在日期上</strong>：此时数据库会将共享锁附加到日期上，此时会锁定周六的所有记录。</li>
+</ul>
+<p><strong>无论哪种方式，查询条件的近似值都附加到某个索引上。</strong> 接下来，如果另一个事务想要插入、更新或删除同一个房间或重叠时间段的预订，则肯定需要更新这些索引，一定就会与共享锁冲突，因此会自动处于等待状态直到共享锁释放。</p>
+<p>这样就有效防止了 写倾斜和幻读问题。 的确，索引区间锁不像谓词锁那么精确，但由于开销低得多，可以认为是一种很好的折中方案。</p>
+<p><strong>如果没有合适的索引可以施加区间锁，则数据库可以回退到对整个表施加共享锁。</strong> 这种方式的性能肯定不好，它甚至会阻止所有其他事务的写操作，但的确可以保证安全性。</p>
+<h4 id="性能">性能</h4>
+<p>两阶段加锁的主要缺点在于其性能，其事务吞吐量和查询响应时间相比于其他弱隔离级别下降非常多。</p>
+<p>其主要原因有以下几点：</p>
+<ul>
+<li><strong>锁的获取和释放本身的开销大</strong>：开销大的同时也降低了事务的并发性。两个并发事务如果做任何可能导致竞争条件的事情，其中一个必须等待对方完成。一旦出现多个事务同时访问同一对象，会形成一个等待队列，事务就必须等待队列前面所有其他事务完成之后才能继续。</li>
+<li><strong>数据库的访问延迟具有非常大的不确定性</strong>：某个事务本身很慢，或者是由于需要访问大量数据而获得了许多锁， 则它还会导致系统的其它部分都停顿下来。如果应用需要稳定的性能，这种不确定性就是致命的。</li>
+<li><strong>死锁变得更为频繁</strong>：如果事务由于死锁而被强行中止，应用层就必须从头重试，假如死锁过于频繁，则最后的性能和效率必然大打折扣。</li>
+</ul>
+<h3 id="可串行化的快照隔离">可串行化的快照隔离</h3>
+<p>两阶段加锁虽然可以保证串行化，但性能差强人意且无法扩展（由于串行执行）。弱级别隔离虽然性能不错，但容易引发各种边界条件（如更新丢失，写倾斜 ，幻读等）。那有什么方法可以使性能和串行化隔离得到均衡吗？</p>
+<p>这时候就需要提到<strong>可串行化的快照隔离（Serializable Snapshot Isolation, SSI) 算法</strong>。它提供了完整的可串行性保证，而性能相比于快照隔离损失很小。目前， SSI 可用于单节点数据库（如 PostgreSQL 9.1 之后的可串行化隔离）或者分布式数据库（如 FoundationDB 采用了类似的算法）。</p>
+<h4 id="实现">实现</h4>
+<p><strong>可串行化的快照隔离是一种乐观井发控制</strong>。<strong>如果可能发生潜在冲突，事务会继续执行而不是中止，寄希望一切相安无事。而当事务提交时（只有可串行化的事务被允许提交），数据库会检查是否确实发生了冲突，如果是的话，中止事务并接下来重试。</strong></p>
+<p><strong>SSI 基于快照隔离</strong>，也就是说，<strong>事务中的所有读取操作都是基于数据库的一致性快照</strong>。这是与早期的乐观并发控制主要区别。在快照隔离的基础上， <strong>SSI 新增加了相关算法来检测写入之间的串行化冲突从而决定中止哪些事务。</strong></p>
+<h4 id="性能-1">性能</h4>
+<p><strong>与两阶段加锁相比，可串行化快照隔离的一大优点是事务不需要等待其他事务所持有的锁。</strong> 这一点和快照隔离一样 ，读写通常不会互相阻塞。这样的设计使得查询延迟更加稳定、可预测。特别是，在一致性快照上执行只读查询不需要任何锁，这对于读密集的负载非常有吸引力。</p>
+<p><strong>与串行执行相比，可串行化快照隔离可以突破单个 CPU 的限制。</strong> FoundationDB 将冲突检测分布在多台机器上，从而提高总体吞吐量。即使数据可能跨多台机器进行分区，事务也可以在多个分区上读、写数据并保证可串行化隔离。</p>
+<p><strong>但是，事务中止的比例会显著影响 SSI 的性能表现。</strong> 例如，一个运行很长时间的事务，读取和写入了大量数据，因而产生冲突并中止的概率就会增大，所以 SSI 要求读写型事务要简短（而长时间执行的只读事务则没有此限制）。但总体讲，<strong>相比于两阶段加锁与串行执行， SSI 更能容忍那些执行缓慢的事务。</strong></p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/">数据密集型应用系统设计</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 20:20 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E4%B8%80%E6%B5%81%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十一）：流处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E6%89%B9%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十）：批处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B9%9D%E4%B8%80%E8%87%B4%E6%80%A7%E4%B8%8E%E5%85%B1%E8%AF%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（九）：一致性与共识</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AB%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%8C%91%E6%88%98/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（八）：分布式系统的挑战</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AD%E5%88%86%E5%8C%BA/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（六）：分区</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#深入理解事务">深入理解事务</a>
+      <ol>
+        <li><a href="#acid">ACID</a>
+          <ol>
+            <li><a href="#原子性">原子性</a></li>
+            <li><a href="#一致性">一致性</a></li>
+            <li><a href="#隔离性">隔离性</a></li>
+            <li><a href="#持久性">持久性</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#弱隔离级别">弱隔离级别</a>
+      <ol>
+        <li><a href="#读已提交">读已提交</a>
+          <ol>
+            <li><a href="#脏读">脏读</a></li>
+            <li><a href="#脏写">脏写</a></li>
+            <li><a href="#实现方法">实现方法</a></li>
+          </ol>
+        </li>
+        <li><a href="#快照隔离级别与可重复读">快照隔离级别与可重复读</a>
+          <ol>
+            <li><a href="#实现方法-1">实现方法</a></li>
+            <li><a href="#一致性快照的可见规则">一致性快照的可见规则</a></li>
+          </ol>
+        </li>
+        <li><a href="#防止丢失更新">防止丢失更新</a>
+          <ol>
+            <li><a href="#原子写操作">原子写操作</a></li>
+            <li><a href="#显式加锁">显式加锁</a></li>
+            <li><a href="#原子比较和设置">原子比较和设置</a></li>
+            <li><a href="#冲突解决和复制">冲突解决和复制</a></li>
+          </ol>
+        </li>
+        <li><a href="#写倾斜与幻读">写倾斜与幻读</a>
+          <ol>
+            <li><a href="#写倾斜">写倾斜</a></li>
+            <li><a href="#幻读">幻读</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#串行化">串行化</a>
+      <ol>
+        <li><a href="#严格串行执行">严格串行执行</a></li>
+        <li><a href="#两阶段加锁">两阶段加锁</a>
+          <ol>
+            <li><a href="#实现方法-2">实现方法</a></li>
+            <li><a href="#谓词锁">谓词锁</a></li>
+            <li><a href="#索引区间锁">索引区间锁</a></li>
+            <li><a href="#性能">性能</a></li>
+          </ol>
+        </li>
+        <li><a href="#可串行化的快照隔离">可串行化的快照隔离</a>
+          <ol>
+            <li><a href="#实现">实现</a></li>
+            <li><a href="#性能-1">性能</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

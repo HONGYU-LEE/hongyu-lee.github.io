@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='右值引用、移动语义和完美转发 条款 23：std::move 与 std::forward   std::move 执行的是无条件的向右值类型的强制类型转换，就其本身而言并不会执行移动操作。
+  下面是 std::move 在 C&#43;&#43; 11 与 C&#43;&#43; 14 中的实现：
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18  //C&#43;&#43;11 template&amp;lt;typename T&amp;gt; typename remove_reference&amp;lt;T&amp;gt;::type&amp;amp;&amp;amp; move(T&amp;amp;&amp;amp; param) { using ReturnType = typename remove_reference&amp;lt;T&amp;gt;::type&amp;amp;&amp;amp;; return static_cast&amp;lt;ReturnType&amp;gt;(param); } //C&#43;&#43;14 template&amp;lt;typename T&amp;gt; decltype(auto) move(T&amp;amp;&amp;amp; param) //C&#43;&#43;14，仍然在std命名空间 { using ReturnType = remove_referece_t&amp;lt;T&amp;gt;&amp;amp;&amp;amp;; return static_cast&amp;lt;ReturnType&amp;gt;(param); }   可以看到，std::move 只是简单的将类型原本的引用属性去掉，再将其强转为右值版本后返回，本身并不存在移动操作。'><title>Effective Modern C&#43;&#43; 读书笔记（四）：右值引用、移动语义和完美转发</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%9B%9B%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E7%A7%BB%E5%8A%A8%E8%AF%AD%E4%B9%89%E5%92%8C%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='Effective Modern C&#43;&#43; 读书笔记（四）：右值引用、移动语义和完美转发'>
+<meta property='og:description' content='右值引用、移动语义和完美转发 条款 23：std::move 与 std::forward   std::move 执行的是无条件的向右值类型的强制类型转换，就其本身而言并不会执行移动操作。
+  下面是 std::move 在 C&#43;&#43; 11 与 C&#43;&#43; 14 中的实现：
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18  //C&#43;&#43;11 template&amp;lt;typename T&amp;gt; typename remove_reference&amp;lt;T&amp;gt;::type&amp;amp;&amp;amp; move(T&amp;amp;&amp;amp; param) { using ReturnType = typename remove_reference&amp;lt;T&amp;gt;::type&amp;amp;&amp;amp;; return static_cast&amp;lt;ReturnType&amp;gt;(param); } //C&#43;&#43;14 template&amp;lt;typename T&amp;gt; decltype(auto) move(T&amp;amp;&amp;amp; param) //C&#43;&#43;14，仍然在std命名空间 { using ReturnType = remove_referece_t&amp;lt;T&amp;gt;&amp;amp;&amp;amp;; return static_cast&amp;lt;ReturnType&amp;gt;(param); }   可以看到，std::move 只是简单的将类型原本的引用属性去掉，再将其强转为右值版本后返回，本身并不存在移动操作。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%9B%9B%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E7%A7%BB%E5%8A%A8%E8%AF%AD%E4%B9%89%E5%92%8C%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='Effective Modern C&#43;&#43;' /><meta property='article:tag' content='读书笔记' /><meta property='article:published_time' content='2022-07-12T15:54:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T16:43:29&#43;08:00'/>
+<meta name="twitter:title" content="Effective Modern C&#43;&#43; 读书笔记（四）：右值引用、移动语义和完美转发">
+<meta name="twitter:description" content="右值引用、移动语义和完美转发 条款 23：std::move 与 std::forward   std::move 执行的是无条件的向右值类型的强制类型转换，就其本身而言并不会执行移动操作。
+  下面是 std::move 在 C&#43;&#43; 11 与 C&#43;&#43; 14 中的实现：
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18  //C&#43;&#43;11 template&amp;lt;typename T&amp;gt; typename remove_reference&amp;lt;T&amp;gt;::type&amp;amp;&amp;amp; move(T&amp;amp;&amp;amp; param) { using ReturnType = typename remove_reference&amp;lt;T&amp;gt;::type&amp;amp;&amp;amp;; return static_cast&amp;lt;ReturnType&amp;gt;(param); } //C&#43;&#43;14 template&amp;lt;typename T&amp;gt; decltype(auto) move(T&amp;amp;&amp;amp; param) //C&#43;&#43;14，仍然在std命名空间 { using ReturnType = remove_referece_t&amp;lt;T&amp;gt;&amp;amp;&amp;amp;; return static_cast&amp;lt;ReturnType&amp;gt;(param); }   可以看到，std::move 只是简单的将类型原本的引用属性去掉，再将其强转为右值版本后返回，本身并不存在移动操作。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/c&#43;&#43;/" style="background-color: #2a9d8f; color: #fff;">
+                C&#43;&#43;
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%9B%9B%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E7%A7%BB%E5%8A%A8%E8%AF%AD%E4%B9%89%E5%92%8C%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91/">Effective Modern C&#43;&#43; 读书笔记（四）：右值引用、移动语义和完美转发</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 12, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="右值引用移动语义和完美转发">右值引用、移动语义和完美转发</h1>
+<h2 id="条款-23stdmove-与-stdforward">条款 23：std::move 与 std::forward</h2>
+<ul>
+<li>
+<p>std::move 执行的是无条件的向右值类型的强制类型转换，就其本身而言并不会执行移动操作。</p>
+<ul>
+<li>
+<p>下面是 std::move 在 C++ 11 与 C++ 14 中的实现：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">//C++11
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>                           
+</span></span><span class="line"><span class="cl"><span class="k">typename</span> <span class="n">remove_reference</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;::</span><span class="n">type</span><span class="o">&amp;&amp;</span>
+</span></span><span class="line"><span class="cl"><span class="n">move</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">param</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">using</span> <span class="n">ReturnType</span> <span class="o">=</span>                          
+</span></span><span class="line"><span class="cl">        <span class="k">typename</span> <span class="n">remove_reference</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;::</span><span class="n">type</span><span class="o">&amp;&amp;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">ReturnType</span><span class="o">&gt;</span><span class="p">(</span><span class="n">param</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//C++14
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="k">decltype</span><span class="p">(</span><span class="k">auto</span><span class="p">)</span> <span class="n">move</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">param</span><span class="p">)</span>          <span class="c1">//C++14，仍然在std命名空间
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">using</span> <span class="n">ReturnType</span> <span class="o">=</span> <span class="n">remove_referece_t</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&amp;&amp;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">ReturnType</span><span class="o">&gt;</span><span class="p">(</span><span class="n">param</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>可以看到，std::move 只是简单的将类型原本的引用属性去掉，再将其强转为右值版本后返回，本身并不存在移动操作。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>std::forward 仅当传入的实参被绑定到右值时，才会将参数强制转换为右值类型。</p>
+<ul>
+<li>与 std::move 的无条件转换不同，std::forward 是有条件的转换：仅当参数是使用右值完成初始化时，它才会执行向右值类型的强制转换（通过解码模板参数 T 来分辨是左值还是右值）。</li>
+</ul>
+</li>
+<li>
+<p>在运行期，std::move 与 std::forward 都不会做任何操作。</p>
+</li>
+</ul>
+<h2 id="条款-24万能引用与右值引用">条款 24：万能引用与右值引用</h2>
+<ul>
+<li>
+<p>如果函数模板形参具备 T&amp;&amp; 类型，且 T 的类型是推导得来的，又或者对象使用 auto&amp;&amp; 声明类型（必定会类型推导），则表示这个形参或者对象是一个万能引用。</p>
+<ul>
+<li>
+<p>例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">//函数模板形参具备T&amp;&amp;类型，且T的类型是推导得来的
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">f</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">param</span><span class="p">);</span>                  <span class="c1">//param是一个万能引用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">//使用 auto&amp;&amp; 声明类型
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span><span class="o">&amp;&amp;</span> <span class="n">var2</span> <span class="o">=</span> <span class="n">var1</span><span class="p">;</span>                 <span class="c1">//var2是一个万能引用
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>如果类型声明不是标准的 type&amp;&amp;，或者类型推导没有发生，则 type&amp;&amp; 就代表右值引用。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>			<span class="c1">//加上了const属性，不是标准的type&amp;&amp;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">void</span> <span class="n">f</span><span class="p">(</span><span class="k">const</span> <span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">param</span><span class="p">);</span>        <span class="c1">//param是一个右值引用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="n">Widget</span><span class="o">&amp;&amp;</span> <span class="n">param</span><span class="p">);</span>         <span class="c1">//没有类型推导，
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                <span class="c1">//param是一个右值引用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">Widget</span><span class="o">&amp;&amp;</span> <span class="n">var1</span> <span class="o">=</span> <span class="n">Widget</span><span class="p">();</span>       <span class="c1">//没有类型推导，
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>                                <span class="c1">//var1是一个右值引用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span> <span class="nc">T</span><span class="p">,</span> <span class="k">class</span> <span class="nc">Allocator</span> <span class="o">=</span> <span class="n">allocator</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span>   
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">vector</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>							<span class="c1">//需要使用一个类型来实例化模板类，不存在类型推导
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">void</span> <span class="n">push_back</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">x</span><span class="p">);</span>		<span class="c1">//右值引用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>如果用一个右值来初始化万能引用，则会得到一个右值引用。同理，如果使用左值来初始化万能引用，就会得到一个左值引用。</p>
+</li>
+</ul>
+<h2 id="条款-25对右值引用使用-stdmove对万能引用使用-stdforward">条款 25：对右值引用使用 std::move，对万能引用使用 std::forward</h2>
+<ul>
+<li>
+<p>在最后一次使用时，对右值引用使用 std::move，对万能引用使用 std::forward。</p>
+<ul>
+<li>当转发右值引用给其他函数时，应当对它使用向右值的无条件转换（std::move），因为它们一定绑定到右值。而转发万能引用时，应该对它使用向右值的有条件转换转换（std::forward），因为它们不一定绑定到右值。</li>
+</ul>
+</li>
+<li>
+<p>对按值返回的函数，无论是右值引用和万能引用，都按照上一条采取相同的行为。</p>
+</li>
+<li>
+<p>若局部变量适用于返回值优化时，避免使用 std::move 或者 std::forward。</p>
+<ul>
+<li>
+<p>在 C++ 中有返回值优化（return value optimization，RVO）机制，可以直接在函数返回值分配的内存上创建的临时对象，然后可以达到少调用拷贝/移动构造的操作目的。</p>
+<p>但是使用这个机制有两个前提：</p>
+<ol>
+<li>局部对象类型和函数返回值类型相同。</li>
+<li>返回的就是局部变量本身。</li>
+</ol>
+<p>而 std::move 和 std::forward 会将返回值变为该局部变量的引用，此时不满足上述的前提，因此限制了编译器优化。</p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-26避免用万能引用类型进行重载">条款 26：避免用万能引用类型进行重载</h2>
+<ul>
+<li>
+<p>把万能引用作为重载的参数，总是会让该重载版本在始料未及的情况下被调用。</p>
+<ul>
+<li>
+<p>万能引用在具限过程中几乎能够和任何实参类型产生精确匹配，一旦将万能引用作为重载的参数，它们就会在预期之外的情况下进行调用，例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">logAndAdd</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">name</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">now</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">system_lock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="n">log</span><span class="p">(</span><span class="n">now</span><span class="p">,</span> <span class="s">&#34;logAndAdd&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">names</span><span class="p">.</span><span class="n">emplace</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">name</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">logAndAdd</span><span class="p">(</span><span class="kt">int</span> <span class="n">idx</span><span class="p">)</span>             <span class="c1">//新的重载
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">now</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">system_lock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="n">log</span><span class="p">(</span><span class="n">now</span><span class="p">,</span> <span class="s">&#34;logAndAdd&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">names</span><span class="p">.</span><span class="n">emplace</span><span class="p">(</span><span class="n">nameFromIdx</span><span class="p">(</span><span class="n">idx</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">logAndAdd</span><span class="p">(</span><span class="s">&#34;Patty Dog&#34;</span><span class="p">);</span>                 <span class="c1">//T&amp;&amp;重载版本
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">logAndAdd</span><span class="p">(</span><span class="mi">22</span><span class="p">);</span>                          <span class="c1">//调用int重载版本
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">short</span> <span class="n">nameIdx</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="err">…</span>                                       <span class="c1">//给nameIdx一个值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">logAndAdd</span><span class="p">(</span><span class="n">nameIdx</span><span class="p">);</span>                     <span class="c1">//错误！
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>在上面的代码中，我们传递了一个 short 类型的 index，我们的预期是将他匹配到同为整数类型的 int 版本上，但由于 short 类型在转换为 int 类型时需要进行隐式类型转换（整型提升）后才能匹配，此时就会精准的匹配到万能引用版本上，从而导致报错。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>完美转发构造函数的问题尤其严重，因为对于非常量的左值类型而言，它门不会调用拷贝构造，而是调用完美转发构造，并且还会劫持派生类中对基类的拷贝和移动构造的调用。</p>
+<ul>
+<li>
+<p>对于非常量的左值类型而言，它门不会调用拷贝构造，而是调用完美转发构造，例如下面的代码：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Person</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>            <span class="c1">//完美转发的构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">explicit</span> <span class="n">Person</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">n</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">:</span> <span class="n">name</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">n</span><span class="p">))</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">explicit</span> <span class="nf">Person</span><span class="p">(</span><span class="kt">int</span> <span class="n">idx</span><span class="p">);</span>       <span class="c1">//int的构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="n">Person</span><span class="p">(</span><span class="k">const</span> <span class="n">Person</span><span class="o">&amp;</span> <span class="n">rhs</span><span class="p">);</span>      <span class="c1">//拷贝构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="n">Person</span><span class="p">(</span><span class="n">Person</span><span class="o">&amp;&amp;</span> <span class="n">rhs</span><span class="p">);</span>           <span class="c1">//移动构造函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Person</span> <span class="nf">p</span><span class="p">(</span><span class="s">&#34;Nancy&#34;</span><span class="p">);</span> 
+</span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="nf">cloneOfP</span><span class="p">(</span><span class="n">p</span><span class="p">);</span>                   <span class="c1">//调用完美转发构造；报错！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">const</span> <span class="n">Person</span> <span class="nf">cp</span><span class="p">(</span><span class="s">&#34;Nancy&#34;</span><span class="p">);</span>   <span class="c1">//现在对象是const的
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="nf">cloneOfP</span><span class="p">(</span><span class="n">cp</span><span class="p">);</span>          <span class="c1">//调用拷贝构造函数！
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>在使用非常量左值类型时，如果要调用拷贝构造函数，就需要为该类型添加 const 属性，而完美转发构造函数却不要求添加任何饰词，因此是精准匹配，此时就会调用完美转发构造函数。</p>
+</li>
+<li>
+<p>完美转发构造函数会劫持派生类中对基类的拷贝和移动构造的调用，例如下面的代码：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">SpecialPerson</span><span class="o">:</span> <span class="k">public</span> <span class="n">Person</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">SpecialPerson</span><span class="p">(</span><span class="k">const</span> <span class="n">SpecialPerson</span><span class="o">&amp;</span> <span class="n">rhs</span><span class="p">)</span> <span class="c1">//拷贝构造函数，调用基类的
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="o">:</span> <span class="n">Person</span><span class="p">(</span><span class="n">rhs</span><span class="p">)</span>                           <span class="c1">//完美转发构造函数！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">{</span> <span class="err">…</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">SpecialPerson</span><span class="p">(</span><span class="n">SpecialPerson</span><span class="o">&amp;&amp;</span> <span class="n">rhs</span><span class="p">)</span>      <span class="c1">//移动构造函数，调用基类的
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="o">:</span> <span class="n">Person</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">rhs</span><span class="p">))</span>                <span class="c1">//完美转发构造函数！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">{</span> <span class="err">…</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>这里也是一样，由于我们将派生类对象传递给了基类的构造函数，而如果要想使用基类的拷贝/移动构造，就需要进进行对象切割，而完美转发构造函数则可以直接进行精准匹配，因此调用会被劫持。</p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-27替代万能引用类型进行重载的方案">条款 27：替代万能引用类型进行重载的方案</h2>
+<ul>
+<li>
+<p>如果不使用万能引用和重载的组合，则替代方案包括使用不同的函数名、传递 const T&amp; 类型的形参、按值传参、标签分派。</p>
+<ul>
+<li>
+<p>使用不同的函数名</p>
+<ul>
+<li>最简单的方法就是舍弃重载，将重载的不同版本重新命名为不同名字的函数，这样就可以避免万能引用劫持匹配。</li>
+</ul>
+</li>
+<li>
+<p>传递 const T&amp; 类型的形参</p>
+<ul>
+<li>回归 C++ 98 的写法，放弃高效率而选择保持代码逻辑的简洁，继续使用 const T&amp; 类型。</li>
+</ul>
+</li>
+<li>
+<p>按值传参</p>
+<ul>
+<li>
+<p>把传递的参数类型从引用类型改为值类型，代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Person</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">explicit</span> <span class="n">Person</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">n</span><span class="p">)</span>  <span class="c1">//代替T&amp;&amp;构造函数，
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="o">:</span> <span class="n">name</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">n</span><span class="p">))</span> <span class="p">{}</span>         <span class="c1">//std::move的使用见条款41
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="k">explicit</span> <span class="nf">Person</span><span class="p">(</span><span class="kt">int</span> <span class="n">idx</span><span class="p">)</span>        <span class="c1">//同之前一样
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="o">:</span> <span class="n">name</span><span class="p">(</span><span class="n">nameFromIdx</span><span class="p">(</span><span class="n">idx</span><span class="p">))</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">name</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>标签分派</p>
+<ul>
+<li>
+<p>如果既不想放弃重载，又不想放弃万能引用，那么我们可以采用标签分派的方式来重写代码，即使用一个标签来辨别该调用哪种类型的重载函数。我们可以使用类型萃取的方式，根据不同的类型生成不同的标签，从而调用不同的重载函数。代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">logAndAdd</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">name</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">logAndAddImpl</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">name</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">        <span class="n">std</span><span class="o">::</span><span class="n">is_integral</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">std</span><span class="o">::</span><span class="n">remove_reference</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;::</span><span class="n">type</span><span class="o">&gt;</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>                           
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">logAndAddImpl</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">name</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">false_type</span><span class="p">)</span>	<span class="c1">//std::false_type
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">now</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">system_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="n">log</span><span class="p">(</span><span class="n">now</span><span class="p">,</span> <span class="s">&#34;logAndAdd&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">names</span><span class="p">.</span><span class="n">emplace</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">name</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">nameFromIdx</span><span class="p">(</span><span class="kt">int</span> <span class="n">idx</span><span class="p">);</span>           
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">logAndAddImpl</span><span class="p">(</span><span class="kt">int</span> <span class="n">idx</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">true_type</span><span class="p">)</span> <span class="c1">//std::true_type
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">logAndAdd</span><span class="p">(</span><span class="n">nameFromIdx</span><span class="p">(</span><span class="n">idx</span><span class="p">));</span> 
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p>经由 std::enable_if 对模板施加限制，就可以将万能引用和重载一起使用，std::enable_if 控制了编译器调用到接受万能引用的重载版本的条件。</p>
+<ul>
+<li>
+<p>通过这种方式，我们就能够解决条款 26 中提到的使用完美转发构造函数的几个问题：</p>
+<ul>
+<li>
+<p>对于非常量的左值类型而言，它门不会调用拷贝构造，而是调用完美转发构造。解决方法如下，我们可以使用 std::decay 来去掉参数原有的引用、const、volatile 饰词，消除隐式转换的可能，再以 std::is_same 来判断类型是否相同，来达到精确匹配。代码如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Person</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">template</span><span class="o">&lt;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">typename</span> <span class="n">T</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="k">typename</span> <span class="o">=</span> <span class="k">typename</span> <span class="n">std</span><span class="o">::</span><span class="n">enable_if</span><span class="o">&lt;</span>
+</span></span><span class="line"><span class="cl">                       <span class="o">!</span><span class="n">std</span><span class="o">::</span><span class="n">is_same</span><span class="o">&lt;</span><span class="n">Person</span><span class="p">,</span> 
+</span></span><span class="line"><span class="cl">                                     <span class="k">typename</span> <span class="n">std</span><span class="o">::</span><span class="n">decay</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;::</span><span class="n">type</span>
+</span></span><span class="line"><span class="cl">                                    <span class="o">&gt;::</span><span class="n">value</span>
+</span></span><span class="line"><span class="cl">                   <span class="o">&gt;::</span><span class="n">type</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">explicit</span> <span class="n">Person</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">n</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+<li>
+<p>完美转发构造函数会劫持派生类中对基类的拷贝和移动构造的调用。解决方案如下，我们可以使用 is_base_of 来区分对待派生类和基类对象：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">//C++11
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">class</span> <span class="nc">Person</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">template</span><span class="o">&lt;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">typename</span> <span class="n">T</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="k">typename</span> <span class="o">=</span> <span class="k">typename</span> <span class="n">std</span><span class="o">::</span><span class="n">enable_if</span><span class="o">&lt;</span>
+</span></span><span class="line"><span class="cl">                       <span class="o">!</span><span class="n">std</span><span class="o">::</span><span class="n">is_base_of</span><span class="o">&lt;</span><span class="n">Person</span><span class="p">,</span> 
+</span></span><span class="line"><span class="cl">                                        <span class="k">typename</span> <span class="n">std</span><span class="o">::</span><span class="n">decay</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;::</span><span class="n">type</span>
+</span></span><span class="line"><span class="cl">                                       <span class="o">&gt;::</span><span class="n">value</span>
+</span></span><span class="line"><span class="cl">                   <span class="o">&gt;::</span><span class="n">type</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">explicit</span> <span class="n">Person</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">n</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">//C++14，可以使用别名模板简化代码
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">class</span> <span class="nc">Person</span>  <span class="p">{</span>                                         
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">template</span><span class="o">&lt;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">typename</span> <span class="n">T</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="k">typename</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span>                    
+</span></span><span class="line"><span class="cl">                       <span class="o">!</span><span class="n">std</span><span class="o">::</span><span class="n">is_base_of</span><span class="o">&lt;</span><span class="n">Person</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                        <span class="n">std</span><span class="o">::</span><span class="n">decay_t</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> 
+</span></span><span class="line"><span class="cl">                                       <span class="o">&gt;::</span><span class="n">value</span>
+</span></span><span class="line"><span class="cl">                   <span class="o">&gt;</span>                                   
+</span></span><span class="line"><span class="cl">    <span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">explicit</span> <span class="n">Person</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">n</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p>万能引用形参在性能方面具备优势，但是在易用性方面则具有劣势。</p>
+</li>
+</ul>
+<h2 id="条款-28引用折叠">条款 28：引用折叠</h2>
+<ul>
+<li>
+<p>引用折叠会在四种情况下发生：模板实例化、auto 类型推导、typedef 和别名声明、decltype。</p>
+</li>
+<li>
+<p>当编译器在引用折叠的情况下生成引用的引用时，通过引用折叠会变成单个引用。如果原始的引用中有左值引用，则结果位左值引用。反之，则为右值引用。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">Widget</span> <span class="nf">widgetFactory</span><span class="p">();</span>     <span class="c1">//返回右值的函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">Widget</span> <span class="n">w</span><span class="p">;</span>                   <span class="c1">//一个变量（左值）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">func</span><span class="p">(</span><span class="n">w</span><span class="p">);</span>                    <span class="c1">//用左值调用func；T被推导为Widget&amp;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">func</span><span class="p">(</span><span class="n">widgetFactory</span><span class="p">());</span>      <span class="c1">//用又值调用func；T被推导为Widget
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">auto</span><span class="o">&amp;&amp;</span> <span class="n">w1</span> <span class="o">=</span> <span class="n">w</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">Widget</span><span class="o">&amp;</span> <span class="o">&amp;&amp;</span> <span class="n">w1</span> <span class="o">=</span> <span class="n">w</span><span class="p">;</span>	<span class="c1">//等价于上一条，auto推导出Widget&amp;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">Widget</span><span class="o">&amp;</span> <span class="n">w1</span> <span class="o">=</span> <span class="n">w</span>		<span class="c1">//引用折叠后为左值 
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">auto</span><span class="o">&amp;&amp;</span> <span class="n">w2</span> <span class="o">=</span> <span class="n">widgetFactory</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"><span class="n">Widget</span><span class="o">&amp;&amp;</span> <span class="n">w2</span> <span class="o">=</span> <span class="n">widgetFactory</span><span class="p">()</span>	<span class="c1">//等价于上一条，auto推导出Widget，为右值
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>万能引用通过类型推导区分左值和右值，以及会发生引用折叠情况下的右值引用。</p>
+<ul>
+<li>万能引用的类型推导会区分左值和右值。T 类型的左值会推导为 T&amp;，而 T 类型的右值会推导为 T 类型。接着会发生引用折叠。</li>
+</ul>
+</li>
+</ul>
+<h2 id="条款-29假定移动操作不存在成本高不可用">条款 29：假定移动操作不存在、成本高、不可用</h2>
+<ul>
+<li>
+<p>假定移动操作不存在、成本高、不可用。</p>
+<ul>
+<li>在下面这几个场景中，C++ 11 的移动语义并不会有任何优势：
+<ol>
+<li><strong>没有移动操作</strong>。待移动对象不支持移动操作，因此移动请求就变为拷贝请求。</li>
+<li><strong>移动操作成本高</strong>。移动操作的成本不比拷贝操作更快。</li>
+<li><strong>移动操作不可用</strong>。要求移动操作不可抛出异常，但该操作没加上 noexcept。</li>
+</ol>
+</li>
+</ul>
+</li>
+<li>
+<p>对于那些类型或者移动语义的支持情况已知的代码，则无需做以上假定。</p>
+</li>
+</ul>
+<h2 id="条款-30完美转发的失败情形">条款 30：完美转发的失败情形</h2>
+<ul>
+<li>
+<p>完美转发的失败原因是源于模板类型推导失败，或是推导类型错误。</p>
+<ul>
+<li>
+<p>完美转发会在下面两个条件中的任何一个成立时失败：</p>
+<ol>
+<li><strong>编译器无法为一个或者多个转发函数模板形参推导出类型</strong>。这种情况下代码无法通过编译。</li>
+<li><strong>编译器为一个或多个转发函数模板的形参推导出了错误的结果</strong>。这种情况即可以指转发函数模板根据类型推导结果的实例化无法通过编译，也可以指转发函数模板推导出的类型与直接传递给转发函数模板的实参调用的行为不一致。</li>
+</ol>
+<p>例如下面这些代码：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="p">...</span> <span class="n">Ts</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">fwd</span><span class="p">(</span><span class="n">Ts</span><span class="o">&amp;&amp;</span><span class="p">...</span> <span class="n">params</span><span class="p">)</span>            <span class="c1">//接受任何实参
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">f</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">Ts</span><span class="o">&gt;</span><span class="p">(</span><span class="n">params</span><span class="p">)...);</span> <span class="c1">//转发给f
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">f</span><span class="p">(</span> <span class="n">expression</span> <span class="p">);</span>        <span class="c1">//调用f执行某个操作
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">fwd</span><span class="p">(</span> <span class="n">expression</span> <span class="p">);</span>		<span class="c1">//但调用fwd执行另一个操作，则fwd不能完美转发expression给f
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>导致完美转发失败的实参种类有大括号初始化；以 0 或者 NULL 表示的空指针；仅有声明的整型 static、const 数据成员；模板或重载函数的名字；位域。</p>
+<ul>
+<li>
+<p><strong>大括号初始化</strong></p>
+<ul>
+<li>
+<p>如下面的代码，由于 fwd 的形参并未声明为 std::initializer_list&lt;T&gt;，因此在使用大括号初始化时，编译器就会被禁止在 fwd 的调用过程中从表达式 {1，2，3} 中推导出类型，从而导致编译错误。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;&amp;</span> <span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">f</span><span class="p">({</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span> <span class="p">});</span>         <span class="c1">//可以，“{1, 2, 3}”隐式转换为std::vector&lt;int&gt;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">fwd</span><span class="p">({</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span> <span class="p">});</span>       <span class="c1">//错误！不能编译
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>这有一个简单的方法可以转发大括号初始化，即先用一个 auto 变量来接收初始化表达式，接着再将这个变量转发给函数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">il</span> <span class="o">=</span> <span class="p">{</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span> <span class="p">};</span>  <span class="c1">//il的类型被推导为std::initializer_list&lt;int&gt;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">fwd</span><span class="p">(</span><span class="n">il</span><span class="p">);</span>                <span class="c1">//可以，完美转发il给f
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>以 0 或者 NULL 表示的空指针</strong></p>
+<ul>
+<li>使用 0 或者 NULL 表示空指针时会被推导为整数类型而不是所传递实参的指针类型。</li>
+</ul>
+</li>
+<li>
+<p><strong>仅有声明的整型 static、const 数据成员</strong></p>
+<ul>
+<li>C++ 允许我们只声明一个 static、const 成员而不去定义它。因为编译器会根据这些成员的值实行常量传播，从而不必再为它们保留内存。但是由于引用与指针的本质相同，都需要获取到对象的地址，而这些没有存储在内存中的对象自然没有地址，如果之后没有人去定义这些变量，则它们会在链接时报错。</li>
+</ul>
+</li>
+<li>
+<p><strong>模板或重载函数的名字</strong></p>
+<ul>
+<li>
+<p>当向转发函数模板传递模板/重载函数名时，由于它没有任何关于类型的信息，这就导致编译器无法决定选择调用哪个重载版本。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="kt">int</span> <span class="n">pf</span><span class="p">(</span><span class="kt">int</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">processVal</span><span class="p">(</span><span class="kt">int</span> <span class="n">value</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">processVal</span><span class="p">(</span><span class="kt">int</span> <span class="n">value</span><span class="p">,</span> <span class="kt">int</span> <span class="n">priority</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">f</span><span class="p">(</span><span class="n">processVal</span><span class="p">);</span>                      <span class="c1">//可以
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">fwd</span><span class="p">(</span><span class="n">processVal</span><span class="p">);</span>                    <span class="c1">//错误！那个processVal？
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>要想适用于转发函数模板，就得将函数名转换为对应类型的函数指针，再将这个明确类型的函数指针传递给转发函数模板。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">using</span> <span class="n">ProcessFuncType</span> <span class="o">=</span>                         <span class="c1">//写个类型定义
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="p">)(</span><span class="kt">int</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">ProcessFuncType</span> <span class="n">processValPtr</span> <span class="o">=</span> <span class="n">processVal</span><span class="p">;</span>     <span class="c1">//指定所需的processVal签名
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">fwd</span><span class="p">(</span><span class="n">processValPtr</span><span class="p">);</span>                             <span class="c1">//可以
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">fwd</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">ProcessFuncType</span><span class="o">&gt;</span><span class="p">(</span><span class="n">workOnVal</span><span class="p">));</span>   <span class="c1">//也可以
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>位域</strong></p>
+<ul>
+<li>
+<p>C++ 标准规定非 const 引用无法绑定到位域。因为位域是由机器字的若干个任意部分组成的，这样的实体无法直接对其取址，而引用与指针的本质相同，既然无法创建指向任意比特的指针，自然也无法创建这样的引用。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">IPv4Header</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span> <span class="nl">version</span><span class="p">:</span><span class="mi">4</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                  <span class="nl">IHL</span><span class="p">:</span><span class="mi">4</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                  <span class="nl">DSCP</span><span class="p">:</span><span class="mi">6</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                  <span class="nl">ECN</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                  <span class="nl">totalLength</span><span class="p">:</span><span class="mi">16</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">f</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">size_t</span> <span class="n">sz</span><span class="p">);</span>         <span class="c1">//要调用的函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="n">IPv4Header</span> <span class="n">h</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="err">…</span>
+</span></span><span class="line"><span class="cl"><span class="n">f</span><span class="p">(</span><span class="n">h</span><span class="p">.</span><span class="n">totalLength</span><span class="p">);</span>               <span class="c1">//可以
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">fwd</span><span class="p">(</span><span class="n">h</span><span class="p">.</span><span class="n">totalLength</span><span class="p">);</span>             <span class="c1">//错误！
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果一定要转发位域也不是不行，我们可以通过强制类型转换，将位域的值提取出来：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">//拷贝位域值；
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">auto</span> <span class="n">length</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint16_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">h</span><span class="p">.</span><span class="n">totalLength</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">fwd</span><span class="p">(</span><span class="n">length</span><span class="p">);</span>                    <span class="c1">//转发这个副本
+</span></span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/c&#43;&#43;/">C&#43;&#43;</a>
+        
+            <a href="/tags/effective-modern-c&#43;&#43;/">Effective Modern C&#43;&#43;</a>
+        
+            <a href="/tags/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/">读书笔记</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 16:43 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%B8%83%E5%BE%AE%E8%B0%83/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（七）：微调</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E5%85%AD%E5%B9%B6%E5%8F%91-api/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（六）：并发 API</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%BA%94lambda-%E8%A1%A8%E8%BE%BE%E5%BC%8F/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（五）：lambda 表达式</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%B8%89%E6%99%BA%E8%83%BD%E6%8C%87%E9%92%88/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（三）：智能指针</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/effective-modern-c-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0%E4%BA%8C%E7%8E%B0%E4%BB%A3-c-/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Effective Modern C&#43;&#43; 读书笔记（二）：现代 C&#43;&#43;</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#条款-23stdmove-与-stdforward">条款 23：std::move 与 std::forward</a></li>
+    <li><a href="#条款-24万能引用与右值引用">条款 24：万能引用与右值引用</a></li>
+    <li><a href="#条款-25对右值引用使用-stdmove对万能引用使用-stdforward">条款 25：对右值引用使用 std::move，对万能引用使用 std::forward</a></li>
+    <li><a href="#条款-26避免用万能引用类型进行重载">条款 26：避免用万能引用类型进行重载</a></li>
+    <li><a href="#条款-27替代万能引用类型进行重载的方案">条款 27：替代万能引用类型进行重载的方案</a></li>
+    <li><a href="#条款-28引用折叠">条款 28：引用折叠</a></li>
+    <li><a href="#条款-29假定移动操作不存在成本高不可用">条款 29：假定移动操作不存在、成本高、不可用</a></li>
+    <li><a href="#条款-30完美转发的失败情形">条款 30：完美转发的失败情形</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

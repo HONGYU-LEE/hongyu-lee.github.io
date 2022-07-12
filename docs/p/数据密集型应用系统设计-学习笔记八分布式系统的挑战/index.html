@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='分布式系统的挑战 故障与部分失效 在分布式系统中，可能会出现系统的一部分工作正常，但其他某些部分出现难以预测的故障，我们称之为部分失效。问题的难点就在于这种部分失效是不确定的:如果涉及多个节点和网络，几乎肯定会碰到有时网络正常，有时则莫名的失败。
+正是由于这种不确定性和部分失效大大提高了分布式系统的复杂性。要使分布式系统可靠工作，就必然面临部分失效，这就需要依靠软件系统来提供容错机制。换句话说，我们需要在不可靠的组件之上构建可靠的系统。
+不可靠的网络 互联网和数据中心中的大多数内部网络都是异步分组网络（asynchronous packet networks）。在这种网络中，一个节点可以向另一个节点发送一个消息，但是网络不能保证它什么时候到达，甚至是能否到达。发送之后等待响应过程中，有很多事情可能会出错：
+  请求可能已经丢失（可能有人拔掉了网线）。
+  请求可能正在排队，稍后将交付（也许网络或接收方过载）。
+  远程节点可能已经失效（比如是崩溃或关机）。
+  远程节点可能暂时停止了响应（遇到长时间的垃圾回收）。
+  远程节点可能已经处理了请求，但是网络上的响应已经丢失（可能是网络交换机配置错误）。
+  远程节点可能已经处理了请求，但是响应被延迟处理（可能是网络或者你自己的机器过载）。
+  发送者甚至不清楚数据包是否完成了发送，只能选择让接收者来回复响应消息，但回复也有可能丟失或延迟。这些问题在一个异步网络中无法明确区分，发送者拥有的唯一信息是，尚未收到响应，但却无法判定具体原因。
+处理这个问题通常采用超时机制，即在等待一段时间之后，如果仍然没有收到回复则选择放弃，并且认为响应不会到达。 但是，即使判定超时，仍然并不清楚远程节点是否收到了请求（一种情况，请求仍然在某个地方排队，即使发送者放弃了，但最终请求会发送到接收者)。
+ 那如何确定这个超时时间呢？
+  较长的超时值意味着更长时间的等待，才能宣告节点失效。而在此期间， 用户只能等待或者拿到错误信息。 较短的超时设置可以帮助快速检测故障，但可能会出现误判，例如实际上节点只是出现暂时的性能波动(由于节点或网络上的高负载峰值，结果却被错误地宣布为失效。  这并没有一个标准的答案，而需要结合具体的业务场景来进行分析。 通常通过实验的方式来一步步设置超时。先在多台机器上，多次测量网络往返时间，以确定延迟的大概范围，然后结合应用特点，在故障检测与过早超时风险之间选择一个合适的中间值。
+超时设置并不是一个不变的常量，而是需要持续测量响应时间及其变化，然后根据最新的响应时间分布来自动调整。 可以用 Phi Accrual 故障检测器完成，该检测器目前已在 Akka 和 Cassandra 中使用。TCP的重传超时也采用了类似的机制。
+不可靠的时钟 在分布式系统中， 时间总是件棘手的问题，由于跨节点通信不可能即时完成，消息由网络从一台机器到另一台机器总是需要花费时间。收到消息的时间应该晚于发送的时间，但是由于网络的不确定延迟，精确测量面临着很多挑战。这些情况使得多节点通信时很难确定事情发生的先后顺序。
+同时，网络上的每台机器都有自己的时钟硬件设备。这些设备并非绝对准确，即每台机器都维护自己本地的时间版本，可能比其他机器稍快或更慢。
+时钟 现代计算机内部至少有两种不同的时钟，一个是日历时钟（time-of-day clock）， 另一个是单调时钟（monotonic clock）。虽然它们都可以衡量时间，但要仔细区分二者，本质上他们是服务于不同的目的。
+日历时钟 日历时钟会根据某个日历返回当前的日期与时间。 例如，Linux 上的 clock_gettime(CLOCK_REALTIME) 会返回自纪元 1970 年 1 月 1 日（ UTC ）以来的秒数和毫秒数，不含闺秒。而有些系统则使用其他日期作为参考点。'><title>数据密集型应用系统设计 学习笔记（八）：分布式系统的挑战</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AB%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%8C%91%E6%88%98/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='数据密集型应用系统设计 学习笔记（八）：分布式系统的挑战'>
+<meta property='og:description' content='分布式系统的挑战 故障与部分失效 在分布式系统中，可能会出现系统的一部分工作正常，但其他某些部分出现难以预测的故障，我们称之为部分失效。问题的难点就在于这种部分失效是不确定的:如果涉及多个节点和网络，几乎肯定会碰到有时网络正常，有时则莫名的失败。
+正是由于这种不确定性和部分失效大大提高了分布式系统的复杂性。要使分布式系统可靠工作，就必然面临部分失效，这就需要依靠软件系统来提供容错机制。换句话说，我们需要在不可靠的组件之上构建可靠的系统。
+不可靠的网络 互联网和数据中心中的大多数内部网络都是异步分组网络（asynchronous packet networks）。在这种网络中，一个节点可以向另一个节点发送一个消息，但是网络不能保证它什么时候到达，甚至是能否到达。发送之后等待响应过程中，有很多事情可能会出错：
+  请求可能已经丢失（可能有人拔掉了网线）。
+  请求可能正在排队，稍后将交付（也许网络或接收方过载）。
+  远程节点可能已经失效（比如是崩溃或关机）。
+  远程节点可能暂时停止了响应（遇到长时间的垃圾回收）。
+  远程节点可能已经处理了请求，但是网络上的响应已经丢失（可能是网络交换机配置错误）。
+  远程节点可能已经处理了请求，但是响应被延迟处理（可能是网络或者你自己的机器过载）。
+  发送者甚至不清楚数据包是否完成了发送，只能选择让接收者来回复响应消息，但回复也有可能丟失或延迟。这些问题在一个异步网络中无法明确区分，发送者拥有的唯一信息是，尚未收到响应，但却无法判定具体原因。
+处理这个问题通常采用超时机制，即在等待一段时间之后，如果仍然没有收到回复则选择放弃，并且认为响应不会到达。 但是，即使判定超时，仍然并不清楚远程节点是否收到了请求（一种情况，请求仍然在某个地方排队，即使发送者放弃了，但最终请求会发送到接收者)。
+ 那如何确定这个超时时间呢？
+  较长的超时值意味着更长时间的等待，才能宣告节点失效。而在此期间， 用户只能等待或者拿到错误信息。 较短的超时设置可以帮助快速检测故障，但可能会出现误判，例如实际上节点只是出现暂时的性能波动(由于节点或网络上的高负载峰值，结果却被错误地宣布为失效。  这并没有一个标准的答案，而需要结合具体的业务场景来进行分析。 通常通过实验的方式来一步步设置超时。先在多台机器上，多次测量网络往返时间，以确定延迟的大概范围，然后结合应用特点，在故障检测与过早超时风险之间选择一个合适的中间值。
+超时设置并不是一个不变的常量，而是需要持续测量响应时间及其变化，然后根据最新的响应时间分布来自动调整。 可以用 Phi Accrual 故障检测器完成，该检测器目前已在 Akka 和 Cassandra 中使用。TCP的重传超时也采用了类似的机制。
+不可靠的时钟 在分布式系统中， 时间总是件棘手的问题，由于跨节点通信不可能即时完成，消息由网络从一台机器到另一台机器总是需要花费时间。收到消息的时间应该晚于发送的时间，但是由于网络的不确定延迟，精确测量面临着很多挑战。这些情况使得多节点通信时很难确定事情发生的先后顺序。
+同时，网络上的每台机器都有自己的时钟硬件设备。这些设备并非绝对准确，即每台机器都维护自己本地的时间版本，可能比其他机器稍快或更慢。
+时钟 现代计算机内部至少有两种不同的时钟，一个是日历时钟（time-of-day clock）， 另一个是单调时钟（monotonic clock）。虽然它们都可以衡量时间，但要仔细区分二者，本质上他们是服务于不同的目的。
+日历时钟 日历时钟会根据某个日历返回当前的日期与时间。 例如，Linux 上的 clock_gettime(CLOCK_REALTIME) 会返回自纪元 1970 年 1 月 1 日（ UTC ）以来的秒数和毫秒数，不含闺秒。而有些系统则使用其他日期作为参考点。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AB%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%8C%91%E6%88%98/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='数据密集型应用系统设计' /><meta property='article:published_time' content='2022-07-10T07:11:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T20:21:31&#43;08:00'/>
+<meta name="twitter:title" content="数据密集型应用系统设计 学习笔记（八）：分布式系统的挑战">
+<meta name="twitter:description" content="分布式系统的挑战 故障与部分失效 在分布式系统中，可能会出现系统的一部分工作正常，但其他某些部分出现难以预测的故障，我们称之为部分失效。问题的难点就在于这种部分失效是不确定的:如果涉及多个节点和网络，几乎肯定会碰到有时网络正常，有时则莫名的失败。
+正是由于这种不确定性和部分失效大大提高了分布式系统的复杂性。要使分布式系统可靠工作，就必然面临部分失效，这就需要依靠软件系统来提供容错机制。换句话说，我们需要在不可靠的组件之上构建可靠的系统。
+不可靠的网络 互联网和数据中心中的大多数内部网络都是异步分组网络（asynchronous packet networks）。在这种网络中，一个节点可以向另一个节点发送一个消息，但是网络不能保证它什么时候到达，甚至是能否到达。发送之后等待响应过程中，有很多事情可能会出错：
+  请求可能已经丢失（可能有人拔掉了网线）。
+  请求可能正在排队，稍后将交付（也许网络或接收方过载）。
+  远程节点可能已经失效（比如是崩溃或关机）。
+  远程节点可能暂时停止了响应（遇到长时间的垃圾回收）。
+  远程节点可能已经处理了请求，但是网络上的响应已经丢失（可能是网络交换机配置错误）。
+  远程节点可能已经处理了请求，但是响应被延迟处理（可能是网络或者你自己的机器过载）。
+  发送者甚至不清楚数据包是否完成了发送，只能选择让接收者来回复响应消息，但回复也有可能丟失或延迟。这些问题在一个异步网络中无法明确区分，发送者拥有的唯一信息是，尚未收到响应，但却无法判定具体原因。
+处理这个问题通常采用超时机制，即在等待一段时间之后，如果仍然没有收到回复则选择放弃，并且认为响应不会到达。 但是，即使判定超时，仍然并不清楚远程节点是否收到了请求（一种情况，请求仍然在某个地方排队，即使发送者放弃了，但最终请求会发送到接收者)。
+ 那如何确定这个超时时间呢？
+  较长的超时值意味着更长时间的等待，才能宣告节点失效。而在此期间， 用户只能等待或者拿到错误信息。 较短的超时设置可以帮助快速检测故障，但可能会出现误判，例如实际上节点只是出现暂时的性能波动(由于节点或网络上的高负载峰值，结果却被错误地宣布为失效。  这并没有一个标准的答案，而需要结合具体的业务场景来进行分析。 通常通过实验的方式来一步步设置超时。先在多台机器上，多次测量网络往返时间，以确定延迟的大概范围，然后结合应用特点，在故障检测与过早超时风险之间选择一个合适的中间值。
+超时设置并不是一个不变的常量，而是需要持续测量响应时间及其变化，然后根据最新的响应时间分布来自动调整。 可以用 Phi Accrual 故障检测器完成，该检测器目前已在 Akka 和 Cassandra 中使用。TCP的重传超时也采用了类似的机制。
+不可靠的时钟 在分布式系统中， 时间总是件棘手的问题，由于跨节点通信不可能即时完成，消息由网络从一台机器到另一台机器总是需要花费时间。收到消息的时间应该晚于发送的时间，但是由于网络的不确定延迟，精确测量面临着很多挑战。这些情况使得多节点通信时很难确定事情发生的先后顺序。
+同时，网络上的每台机器都有自己的时钟硬件设备。这些设备并非绝对准确，即每台机器都维护自己本地的时间版本，可能比其他机器稍快或更慢。
+时钟 现代计算机内部至少有两种不同的时钟，一个是日历时钟（time-of-day clock）， 另一个是单调时钟（monotonic clock）。虽然它们都可以衡量时间，但要仔细区分二者，本质上他们是服务于不同的目的。
+日历时钟 日历时钟会根据某个日历返回当前的日期与时间。 例如，Linux 上的 clock_gettime(CLOCK_REALTIME) 会返回自纪元 1970 年 1 月 1 日（ UTC ）以来的秒数和毫秒数，不含闺秒。而有些系统则使用其他日期作为参考点。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/" style="background-color: #2a9d8f; color: #fff;">
+                数据密集型应用系统设计
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AB%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%8C%91%E6%88%98/">数据密集型应用系统设计 学习笔记（八）：分布式系统的挑战</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 10, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="分布式系统的挑战">分布式系统的挑战</h1>
+<h2 id="故障与部分失效">故障与部分失效</h2>
+<p>在分布式系统中，可能会出现<strong>系统的一部分工作正常，但其他某些部分出现难以预测的故障</strong>，我们称之为<strong>部分失效</strong>。问题的难点就在于这种部分失效是不确定的:如果涉及多个节点和网络，几乎肯定会碰到有时网络正常，有时则莫名的失败。</p>
+<p>正是由于这种不确定性和部分失效大大提高了分布式系统的复杂性。要使分布式系统可靠工作，就必然面临部分失效，这就需要依靠软件系统来提供容错机制。换句话说，<strong>我们需要在不可靠的组件之上构建可靠的系统</strong>。</p>
+<h2 id="不可靠的网络">不可靠的网络</h2>
+<p>互联网和数据中心中的大多数内部网络都是<strong>异步分组网络（asynchronous packet networks）</strong>。在这种网络中，一个节点可以向另一个节点发送一个消息，但是网络不能保证它什么时候到达，甚至是能否到达。发送之后等待响应过程中，有很多事情可能会出错：</p>
+<ul>
+<li>
+<p><strong>请求可能已经丢失</strong>（可能有人拔掉了网线）。</p>
+</li>
+<li>
+<p><strong>请求可能正在排队，稍后将交付</strong>（也许网络或接收方过载）。</p>
+</li>
+<li>
+<p><strong>远程节点可能已经失效</strong>（比如是崩溃或关机）。</p>
+</li>
+<li>
+<p><strong>远程节点可能暂时停止了响应</strong>（遇到长时间的垃圾回收）。</p>
+</li>
+<li>
+<p><strong>远程节点可能已经处理了请求，但是网络上的响应已经丢失</strong>（可能是网络交换机配置错误）。</p>
+</li>
+<li>
+<p><strong>远程节点可能已经处理了请求，但是响应被延迟处理</strong>（可能是网络或者你自己的机器过载）。</p>
+</li>
+</ul>
+<p><img src="http://img.orekilee.top//imgbed/ddia/ddia4.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>发送者甚至不清楚数据包是否完成了发送，只能选择让接收者来回复响应消息，但回复也有可能丟失或延迟。这些问题在一个异步网络中无法明确区分，发送者拥有的唯一信息是，尚未收到响应，但却无法判定具体原因。</p>
+<p>处理这个问题通常采用<strong>超时机制</strong>，<strong>即在等待一段时间之后，如果仍然没有收到回复则选择放弃，并且认为响应不会到达。</strong> 但是，即使判定超时，仍然并不清楚远程节点是否收到了请求（一种情况，请求仍然在某个地方排队，即使发送者放弃了，但最终请求会发送到接收者)。</p>
+<blockquote>
+<p>那如何确定这个超时时间呢？</p>
+</blockquote>
+<ul>
+<li>较长的超时值意味着更长时间的等待，才能宣告节点失效。而在此期间， 用户只能等待或者拿到错误信息。</li>
+<li>较短的超时设置可以帮助快速检测故障，但可能会出现误判，例如实际上节点只是出现暂时的性能波动(由于节点或网络上的高负载峰值，结果却被错误地宣布为失效。</li>
+</ul>
+<p><strong>这并没有一个标准的答案，而需要结合具体的业务场景来进行分析。</strong> 通常通过实验的方式来一步步设置超时。先在多台机器上，多次测量网络往返时间，以确定延迟的大概范围，然后结合应用特点，在故障检测与过早超时风险之间选择一个合适的中间值。</p>
+<p><strong>超时设置并不是一个不变的常量，而是需要持续测量响应时间及其变化，然后根据最新的响应时间分布来自动调整。</strong> 可以用 Phi Accrual 故障检测器完成，该检测器目前已在 Akka 和 Cassandra 中使用。TCP的重传超时也采用了类似的机制。</p>
+<h2 id="不可靠的时钟">不可靠的时钟</h2>
+<p>在分布式系统中， 时间总是件棘手的问题，由于跨节点通信不可能即时完成，消息由网络从一台机器到另一台机器总是需要花费时间。收到消息的时间应该晚于发送的时间，但是由于网络的不确定延迟，精确测量面临着很多挑战。这些情况使得多节点通信时很难确定事情发生的先后顺序。</p>
+<p>同时，网络上的每台机器都有自己的时钟硬件设备。这些设备并非绝对准确，即每台机器都维护自己本地的时间版本，可能比其他机器稍快或更慢。</p>
+<h3 id="时钟">时钟</h3>
+<p>现代计算机内部至少有两种不同的时钟，一个是<strong>日历时钟（time-of-day clock）</strong>， 另一个是<strong>单调时钟（monotonic clock）</strong>。虽然它们都可以衡量时间，但要仔细区分二者，本质上他们是服务于不同的目的。</p>
+<h4 id="日历时钟">日历时钟</h4>
+<p><strong>日历时钟会根据某个日历返回当前的日期与时间。</strong> 例如，Linux 上的 <code>clock_gettime(CLOCK_REALTIME)</code> 会返回自纪元 1970 年 1 月 1 日（ UTC ）以来的秒数和毫秒数，不含闺秒。而有些系统则使用其他日期作为参考点。</p>
+<p><strong>日历时钟通常与 NTP 服务器同步，这意味着来自一台机器的时间戳（理想情况下）与另一台机器上的时间戳相同</strong>。但是，如果本地时钟远远快于 NTP 服务器，则它可能会被强制重置，跳回到先前的某个时间点。这种跳跃经常忽略闰秒 ，导致其不太适合测量时间间隔。可以在一定程度上同步机器之间的时钟，最常用的方法也是<strong>网络时间协议 NTP （Network Time Protocl）</strong>，它可以根据 组专门的时间服务器来调整本地时间，时间服务器则从精确更高的时间源获取高精度时间。</p>
+<h4 id="单调时钟">单调时钟</h4>
+<p><strong>单调时钟适用于测量持续时间（时间间隔），例如超时或服务的响应时间</strong>。Linux 上的 <code>clock_gettime(CLOCK_MONOTONIC)</code> 返回的即是单调时钟。单调时钟的名字来源于它们保证总是向前走（日历时钟会出现的回拨现象）。</p>
+<p>可以在一个时间点读取单调时钟的值，完成某项工作，然后再次检查时钟。时钟值之间的差值即两次检查之间的时间间隔。==注意，单调时钟的绝对值井没有任何意义，它可能是电脑启动以后经历的纳秒数或者其他含义。因此比较不同节点上的单调时钟值毫无意义，它们没有任何相同的基准==。</p>
+<p>在分布式系统中，可以采用单调时钟测量一段任务的持续时间（例如超时 ），它不假定节点间有任何的时钟同步，且可以容忍轻微测量误差。</p>
+<h3 id="进程暂停">进程暂停</h3>
+<p>在分布式环境中，<strong>进程暂停</strong>有时会引起意想不到的时钟问题。</p>
+<p>假如有这样一个场景，主节点从其他节点获得一个租约，类似一个带有超时的锁。为了维持主节点的身份，节点必须在到期之前定期去更新租约 。如果节点发生了故障，则续约失败，这样另一个节点到期之后就可以接管。代码逻辑如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="k">while</span> <span class="p">(</span><span class="nb">true</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="n">request</span> <span class="o">=</span> <span class="n">getIncomingRequest</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// 确保租约还剩下至少10秒
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">if</span> <span class="p">(</span><span class="n">lease</span><span class="p">.</span><span class="n">expiryTimeMillis</span> <span class="o">-</span> <span class="n">System</span><span class="p">.</span><span class="n">currentTimeMillis</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">10000</span><span class="p">){</span>
+</span></span><span class="line"><span class="cl">    <span class="n">lease</span> <span class="o">=</span> <span class="n">lease</span><span class="p">.</span><span class="n">renew</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="n">lease</span><span class="p">.</span><span class="n">isValid</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">process</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>上述代码依赖于同步的时钟，即租约到期时间由另一台机器所设置，并和本地时钟进行比较。如果时钟之间有超过几秒的差异，这段代码会出现些奇怪的事情。</p>
+<p>即使我们改为仅使用本地单调时钟，还有另一个问题：代码假定时间检查点 <code>System.currentTimeMillis()</code> 与请求处理 <code>process(request)</code> 间隔很短，通常代码运行足够快，所以设置 10 秒的缓冲区来确保在请求处理过程中租约不会过期。</p>
+<p>如果程序执行中出现了某些意外的暂停呢？假设线程在 <code>lease.isValid()</code> 消耗了了整 15 秒。那么当开始处理请求时，租约已经过期，而另一个节点已经接管了主节点。可惜我们无告有效通知线程暂停了这么长时间了，后续代码也不会注意到租约已经到期，除非运行到下一个循环迭代。不过，到那个时候它已经做了不安全的请求处理。</p>
+<blockquote>
+<p>那什么原因会带来这么长时间的暂停呢？可能会存在以下事件</p>
+</blockquote>
+<ul>
+<li>许多编程语言都有垃圾收集器（ GC ），有时运行期间会暂停所有正在运行的线程。</li>
+<li>在虚拟化环境中，可能会暂停虚拟机（暂停所有执行进程并将内存状态保存到磁盘）然后继续（从内存中加载数据然后继续执行）。</li>
+<li>运行在终端用户设备时，执行也可能发生暂停。例如用户关机脑或休眠。</li>
+<li>当操作系统执行线程上下文切换时，或者虚拟机管理程序切换到另一个虚拟机时，正在运行的线程可能会在代码的任意位置被暂停。</li>
+<li>如果应用程序执行同步磁盘访问，则线程可能暂停，直到缓慢的磁盘 I/O 操作完成。</li>
+<li>如果操作系统配置了基于磁盘的内存交换分区，内存访问可能触发缺页中断，进而需要从磁盘中加载内存页。 当 I/O 进行时线程为暂停。</li>
+<li>发送 SIGSTOP 信号来暂停 UNIX 进程，例如通过在 shell 中按下 Ctrl+Z。 这个信号立即阻止进程继续执行更多的 CPU 周期，直到 SIGCONT 恢复为止，此时它才会继续运行。</li>
+</ul>
+<p>所有这些事件都可以随时抢占正在运行的线程，并在稍后的时间恢复运行，而线程甚至不会注意到这一点。这个问题类似于在单个机器上使多线程代码线程安全，<strong>因此你不能对时序做任何假设，因为随时可能发生上下文切换，或者出现并行运行</strong>。</p>
+<p>所以分布式系统中的每个节点都必须假定，<strong>执行过程中的任何时刻都可能被暂停相当长一段时间，即使是运行在某个函数中间 。</strong> 暂停期间，整个集群的其他部分都在照常运行，甚至会一致将暂停的节点宣告为故障节点。最终，暂停的节点可能会回来继续运行，除非再次检查时钟，否则它对刚刚过去的暂停一无所知。</p>
+<h2 id="知识真相与谎言">知识、真相与谎言</h2>
+<h3 id="真相由多数决定">真相由多数决定</h3>
+<p>假定在一个发生了非对称故障的网络环境中，即某节点能够收到发送给它的消息，但是该节点发出的所有消息要么被丢弃，要么被推迟发送。<strong>即使该节点本身运行良好，可以接收来自其他节点的请求，但其他节点却无法顺利收到响应。当消息超时之后，由于都收不到回复，其他节点就会一致声明上述节点发生失效。</strong></p>
+<p>综上所述，节点不能根据自己的信息来判断自身的状态。分布式系统不能完全依赖单个节点，因为节点可能随时失效，也可能暂停或者假死，甚至最终无法恢复。目前许多分布式算法都依赖于<strong>法定人数</strong>，<strong>即在节点之间进行投票。任何决策都需要来自多个节点的最小投票数，以减少对于某个特定节点的依赖。</strong></p>
+<p><strong>最常见的法定人数是取系统节点半数以上</strong>。如果某些节点发生故障，quorum 机制可以使系统继续工作（对于三个节点的系统，可以容忍一个节点失效）。由于系统只可能存在一个多数，绝不会有两个多数在同时做出相互冲突的决定，因此系统的决议是可靠的 <strong>（防止脑裂）</strong>。</p>
+<h3 id="拜占庭故障">拜占庭故障</h3>
+<p>如果节点存在撒谎的情况（即故意发送错误的或破坏性的响应），那么分布式系统处理的难度就上了一个台阶。例如，节点明明没有收到某条消息，但却对外声称收到了。这种行为称为<strong>拜占庭故障</strong>，在这样不信任的环境中需要达成共识的问题也被称为<strong>拜占庭将军问题</strong>。</p>
+<blockquote>
+<h3 id="拜占庭将军问题">拜占庭将军问题</h3>
+<p>拜占庭将军问题是所谓“两将军问题”的更抽象标识，后者假定有两名将军需要就战斗计划达成一致。由于他们在两个不同的地点建立了营地， 中间只能通过信使进行沟通，而信使在传递消息时可能会出现延迟或丢失（就像网络中的信息包一样）。</p>
+<p>而在拜占庭版本中，有 n 位将军需要达成共识，并且其中存在一些叛徒试图阻挠共识的达成，即使大多数的将军都是忠诚的，发出了真实的信息，但是叛徒则试图通过发送虚假或不真实的信息来欺骗和混淆他人（同时努力隐藏自己）。而且大家事先并不知道叛徒是谁。</p>
+</blockquote>
+<p>如果某个系统中即使发生部分节点故障，甚至不遵从协议，或者恶意攻击、干扰网络，但仍可继续正常运行，那么我们称之为<strong>拜占庭式容错系统</strong>。这种担忧在某些场景下是合理的：</p>
+<ul>
+<li>在航空航天领域，计算机内存或 CPU 寄存器中的数据可能会被辐射而发生故障，导致以不可预知的方式响应其他节点。这种情况下如果将系统下线，代价将异常昂贵（例如，可能出现飞机撞毁或致使火箭与国际空间站相撞等），飞行控制系统必须做到容忍拜占庭故障 。</li>
+<li>在有多个参与者的系统中，某些参与者可能会作弊或者欺骗他人。这时节点不能完全相信另一个节点所发送的消息，它可能就是恶意的。例如，像比特币和其他区块链一样的点对点网络就是让互不信任的当事方就某项交易达成一致，且不依赖于集中的机制。</li>
+</ul>
+<p>大多数拜占庭容错算法要求系统超过三分之二的节点功能正常，例如有四个节点，则最多允许一台发生故障）。要采用这类算法对付 bug ，必须有四种不同的软件实现，然后希望该 bug 只出现在四个实现中的一个。但这并不现实，通常如果攻击者可以入侵一个节点，则很可能会攻陷几乎所有节点（由于运行相同的软件）。因此，传统的安全措施如认证、访问控制、加密、防火墙等仍是防范攻击的主要保护机制。</p>
+<h3 id="理论系统模型与现实">理论系统模型与现实</h3>
+<p>目前分布式系统方面已有许多不错的具体算法（如共识算法 Raft、Paxos 等），而算法的实现不能过分依赖特定的硬件和软件配置。这就要求我们需要对预期的系统错误进行形式化描述。我们通过定义一些系统模型来形式化描述算法的前提条件。</p>
+<p>关于<strong>计时方面</strong>有三种常见的系统模型：</p>
+<ul>
+<li><strong>同步模型</strong>：假设网络延迟、进程暂停和和时钟误差都是受限的。这并不意味着完全同步的时钟或网络延迟为零。这只意味着你清楚了解网络延迟、进程暂停和时钟漂移将永远不会超过某个固定的上限。大多数实际系统的现实模型并不是同步模型，因为无限延迟和暂停确实会发生。</li>
+<li><strong>部分同步模型</strong>：意味着一个系统在大多数情况下像一个同步系统一样运行，但有时候会超出网络延迟、进程暂停和时钟漂移的界限。这是一个比较现实的模型，大多数情况下，网络和进程表现良好（否则无法持续提供服务），但是我们必须承认，在任何时刻都存在时序假设偶然被破坏的事实。而一旦发生这种情况，网络延迟、暂停和时钟错误可能会变得相当大。</li>
+<li><strong>异步模型</strong>：在这个模型中，一个算法不允许对时序做任何假设——事实上它甚至没有时钟（所以它不能使用超时）。一些算法被设计为可用于异步模型，但非常受限。</li>
+</ul>
+<p>除了时机之外，我们还需要考虑<strong>节点失效</strong>。有以下三种最常见的节点失效系统模型：</p>
+<ul>
+<li>
+<p><strong>崩溃-中止</strong>：在崩溃-中止模型中，算法假设一个节点只能以一种方式发生故障，即遭遇系统</p>
+<p>崩溃。这意味着节点可能在任何时候突然停止响应，且该节点以后永远消失，无法恢复。</p>
+</li>
+<li>
+<p><strong>崩溃-恢复</strong>：节点可能会在任何时候发生崩溃，且可能会在一段时间之后得到恢复并再次响应。在崩溃－恢复模型中，节点上持久性存储的数据会在崩溃之后得以保存，而内存中状态可能会丢失。</p>
+</li>
+<li>
+<p><strong>拜占庭（任意）故障</strong>：节点可以做任何事情，包括试图戏弄和欺骗其他节点。</p>
+</li>
+</ul>
+<p>对于真实系统的建模，最普遍的组合是<strong>崩溃-恢复模型结合部分同步模型</strong>。</p>
+<p>为了定义算法的正确性，我们可以描述它的一些属性信息。如果针对某个系统模型的算法在各种情况下都能满足定义好的属性要求，那么我们称这个算法是正确的。而其中最重要的两种属性是<strong>安全性</strong>与<strong>活性</strong>。安全性通常可以理解为<strong>没有发生意外</strong>，而<strong>活性则类似预期的事情最终一定会发生</strong>（如最终一致性）。</p>
+<p>对于分布式算法，要求在所有可能的系统模型下，都<strong>必须符合安全属性</strong>。也就是说，<strong>即使所有节点都发生崩溃，或者整个网络中断，算法确保不会返回错误的结果。</strong> 而对于活性，则存在一些必要条件。例如，<strong>只有在多数节点没有崩溃，以及网络最终可以恢复的前提下，我们才能保证最终可以收到响应。</strong> 部分同步模型的定义即要求任何网络中断只会持续一段有限的时间，然后得到了修复，系统最终返回到同步的一致状态。</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/">数据密集型应用系统设计</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 20:21 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E4%B8%80%E6%B5%81%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十一）：流处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%8D%81%E6%89%B9%E5%A4%84%E7%90%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（十）：批处理</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B9%9D%E4%B8%80%E8%87%B4%E6%80%A7%E4%B8%8E%E5%85%B1%E8%AF%86/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（九）：一致性与共识</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%83%E4%BA%8B%E5%8A%A1/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（七）：事务</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/%E6%95%B0%E6%8D%AE%E5%AF%86%E9%9B%86%E5%9E%8B%E5%BA%94%E7%94%A8%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1-%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E5%85%AD%E5%88%86%E5%8C%BA/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">数据密集型应用系统设计 学习笔记（六）：分区</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#故障与部分失效">故障与部分失效</a></li>
+    <li><a href="#不可靠的网络">不可靠的网络</a></li>
+    <li><a href="#不可靠的时钟">不可靠的时钟</a>
+      <ol>
+        <li><a href="#时钟">时钟</a>
+          <ol>
+            <li><a href="#日历时钟">日历时钟</a></li>
+            <li><a href="#单调时钟">单调时钟</a></li>
+          </ol>
+        </li>
+        <li><a href="#进程暂停">进程暂停</a></li>
+      </ol>
+    </li>
+    <li><a href="#知识真相与谎言">知识、真相与谎言</a>
+      <ol>
+        <li><a href="#真相由多数决定">真相由多数决定</a></li>
+        <li><a href="#拜占庭故障">拜占庭故障</a></li>
+        <li><a href="#拜占庭将军问题">拜占庭将军问题</a></li>
+        <li><a href="#理论系统模型与现实">理论系统模型与现实</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
