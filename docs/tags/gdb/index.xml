@@ -1,0 +1,1141 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>GDB on 凌桓&#39;s BLOG</title>
+        <link>https://blog.orekilee.top/tags/gdb/</link>
+        <description>Recent content in GDB on 凌桓&#39;s BLOG</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language>
+        <lastBuildDate>Mon, 11 Jul 2022 18:55:13 +0800</lastBuildDate><atom:link href="https://blog.orekilee.top/tags/gdb/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>GDB</title>
+        <link>https://blog.orekilee.top/p/gdb/</link>
+        <pubDate>Mon, 11 Jul 2022 18:55:13 +0800</pubDate>
+        
+        <guid>https://blog.orekilee.top/p/gdb/</guid>
+        <description>&lt;h1 id=&#34;基本概念&#34;&gt;基本概念&lt;/h1&gt;
+&lt;h2 id=&#34;什么是-gdb&#34;&gt;什么是 GDB？&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/gdb/gdb7.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;GDB（GNU Debugger），是一个由 GNU 开源组织发布的、UNIX/LINUX 操作系统下的、&lt;strong&gt;基于命令行的、功能强大的程序调试工具&lt;/strong&gt;；GDB 支持断点、单步执行、打印变量、观察变量、查看寄存器、查看堆栈等调试手段；GDB 支持调试多种编程语言编写的程序，包括 C、C++、Go、Objective-C、OpenCL、Ada 等。实际场景中，GDB 更常用来调试 C 和 C++ 程序。&lt;/p&gt;
+&lt;h2 id=&#34;gdb-可以用来做些什么&#34;&gt;GDB 可以用来做些什么？&lt;/h2&gt;
+&lt;p&gt;一般来说，借助 GDB 调试器可以实现以下几个功能：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;程序启动时，可以按照我们自定义的要求运行程序，例如设置参数和环境变量。&lt;/li&gt;
+&lt;li&gt;可使被调试程序在指定代码处暂停运行，并查看当前程序的运行状态（例如当前变量的值，函数的执行结果等），即支持断点调试。&lt;/li&gt;
+&lt;li&gt;程序执行过程中，可以改变某个变量的值，还可以改变代码的执行顺序，从而尝试修改程序中出现的逻辑错误。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;调试模型&#34;&gt;调试模型&lt;/h2&gt;
+&lt;p&gt;根据 GDB 程序与被调试程序是否运行在同一台机器中，可以把 GDB 的调试模型分为以下两种：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;本地调试&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;远程调试&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;本地调试&#34;&gt;本地调试&lt;/h3&gt;
+&lt;p&gt;本地调试指的是调试程序和被调试程序运行在同一台机器中，如下图所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/gdb/gdb5.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;blockquote&gt;
+&lt;p&gt;可视化调试程序只是对 GDB 操作的一层封装，例如 Visual Studio、CLion 等 IDE 中的可视化调试。当然我们也可以直接通过 bash 来手动输入调试命令。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;远程调试&#34;&gt;远程调试&lt;/h3&gt;
+&lt;p&gt;调试程序运行在一台机器中，被调试程序运行在另一台机器中，如下图所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/gdb/gdb6.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;blockquote&gt;
+&lt;p&gt;GdbServer 的主要工作是负责完成 GDB 与目标程序之间的通信，其采用了 RSP（GDB Remote Serial Protocol） 协议。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;安装-gdb&#34;&gt;安装 GDB&lt;/h2&gt;
+&lt;p&gt;这里以 CentOS 8 举例，来演示 GDB 的安装。&lt;/p&gt;
+&lt;p&gt;首先查看当前机器中是否存在 GDB：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;gdb -v
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;如果提示 &lt;code&gt;bash: gdb: command not found&lt;/code&gt;，则说明当前机器没有，继续执行下面的步骤，反之则无需安装。&lt;/p&gt;
+&lt;p&gt;通过 yum 安装 GDB：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;sudo yum -y install gdb
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;如果使用的是官方的 yum 下载源，这里就会报错 &lt;code&gt;Error: Failed to download metadata for repo &#39;appstream&#39;: Cannot prepare internal mirrorlist: No URLs in mirrorlist&lt;/code&gt;，这主要是因为在 2021 年底官方就停止对 CentOS 8 提供服务，这时我们就需要将 yum 源切换为国内的：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt; 1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 8
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 9
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;10
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;11
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;12
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;13
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;14
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 进入yum的repos目录&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nb&#34;&gt;cd&lt;/span&gt; /etc/yum.repos.d/
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 修改所有的CentOS文件内容&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;sed -i &lt;span class=&#34;s1&#34;&gt;&amp;#39;s/mirrorlist/#mirrorlist/g&amp;#39;&lt;/span&gt; /etc/yum.repos.d/CentOS-*
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;sed -i &lt;span class=&#34;s1&#34;&gt;&amp;#39;s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g&amp;#39;&lt;/span&gt; /etc/yum.repos.d/CentOS-*
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 更新yum源为阿里镜像&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;wget -O /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-vault-8.5.2111.repo
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;yum clean all
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;yum makecache
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;这时候重新通过 yum 安装即可。&lt;/p&gt;
+&lt;h1 id=&#34;实战&#34;&gt;实战&lt;/h1&gt;
+&lt;h2 id=&#34;启动调试&#34;&gt;启动调试&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;GDB 的使用前提&lt;/strong&gt;：需要在编译时加上-g 参数，保留调试信息，否则会提示 no debugging symbols found，无法使用 GDB 进行调试。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3 id=&#34;调试未运行的程序&#34;&gt;调试未运行的程序&lt;/h3&gt;
+&lt;h4 id=&#34;无参数&#34;&gt;无参数&lt;/h4&gt;
+&lt;p&gt;使用 &lt;code&gt;GDB 可执行程序名&lt;/code&gt; 开启调试，输入 &lt;code&gt;run&lt;/code&gt; 命令运行程序：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;gdb test1
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;gdb&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; run
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;h4 id=&#34;有参数&#34;&gt;有参数&lt;/h4&gt;
+&lt;p&gt;直接在 &lt;code&gt;run&lt;/code&gt; 后面跟上参数：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;gdb test1
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;gdb&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; run &lt;span class=&#34;s2&#34;&gt;&amp;#34;hello world&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;也可以通过 &lt;code&gt;set args&lt;/code&gt; 命令指定参数列表：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;gdb test1
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;gdb&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;nb&#34;&gt;set&lt;/span&gt; args &lt;span class=&#34;s2&#34;&gt;&amp;#34;hello world&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;gdb&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; show args &lt;span class=&#34;c1&#34;&gt;# 查看参数列表&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;gdb&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; run
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;h3 id=&#34;调试运行中的程序&#34;&gt;调试运行中的程序&lt;/h3&gt;
+&lt;p&gt;如果程序已经处于运行中的状态，那我们该如何对其进行调试呢？&lt;/p&gt;
+&lt;h4 id=&#34;已生成调试信息&#34;&gt;已生成调试信息&lt;/h4&gt;
+&lt;p&gt;对于已生成调试信息的，我们只需要找到它的进程 id，再使用 &lt;code&gt;attach&lt;/code&gt; 命令绑定进程即可：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt; 1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 8
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 9
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;10
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;11
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;12
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 步骤一：找到进程id&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;ps -ef&lt;span class=&#34;p&#34;&gt;|&lt;/span&gt;grep 进程名
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 或者&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;pidof 进程名
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 步骤二：开启GDB调试&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;gdb
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 步骤三：attach绑定对应的进程id&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;attach &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;进程id&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 或者在启动时直接指定程序名与进程id&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;gdb &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;程序名&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; --pid &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;进程id&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;  
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;h4 id=&#34;未生成调试信息&#34;&gt;未生成调试信息&lt;/h4&gt;
+&lt;p&gt;对于已运行且未生成调试信息的程序，我们可以重新编译出一个带调试信息的版本，再使用 &lt;code&gt;file&lt;/code&gt; 命令将这个版本的符号表读取出来，此时我们再次 attach 程序，就能够进行调试了，并且不需要重新启动程序：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 步骤一：重新编译一个带调试信息的版本&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 步骤二：使用file加载这个版本的符号表&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;file &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;程序名&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 接下来的步骤与已生成调试信息的一样&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;h3 id=&#34;调试-core-文件&#34;&gt;调试 core 文件&lt;/h3&gt;
+&lt;p&gt;当一个程序因为出错而导致异常中断的时候，操作系统会将程序当前的状态（如程序运行时的内存，寄存器状态，堆栈指针，内存管理信息）保存为一个 core 文件。我们可以通过使用 GDB 来调试这个文件，来迅速定位导致程序出错的问题。&lt;/p&gt;
+&lt;h4 id=&#34;配置-core-文件生成&#34;&gt;配置 core 文件生成&lt;/h4&gt;
+&lt;p&gt;首先我们需要使用 &lt;code&gt;ulimit -a&lt;/code&gt; 命令查看系统有没有限制 core 文件的生成：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nb&#34;&gt;ulimit&lt;/span&gt; -c
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;unlimited &lt;span class=&#34;c1&#34;&gt;# 代表没有限制&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;m&#34;&gt;0&lt;/span&gt;         &lt;span class=&#34;c1&#34;&gt;# 如果结果为零则代表无法生成，如果为其他数字则代表限制生成的个数&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;配置 coredump 生成，有临时配置和永久配置两种。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;临时配置&lt;/strong&gt;：只需要简单的命令即可，但是退出 bash 后就会失效。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;$ &lt;span class=&#34;nb&#34;&gt;ulimit&lt;/span&gt; -c unlimited  &lt;span class=&#34;c1&#34;&gt;#表示不限制core文件大小&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;$ &lt;span class=&#34;nb&#34;&gt;ulimit&lt;/span&gt; -c n          &lt;span class=&#34;c1&#34;&gt;#n为数字，表示core文件大小上限，单位为块，一块默认为512字节&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;永久配置&lt;/strong&gt;：需要修改内核参数，指定 core 文件名、存放路径与永久配置。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt; 1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 8
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 9
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;10
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;mkdir -p /www/coredump/
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;chmod &lt;span class=&#34;m&#34;&gt;777&lt;/span&gt; /www/coredump/
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;/etc/profile
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nb&#34;&gt;ulimit&lt;/span&gt; -c unlimited
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;/etc/security/limits.conf
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;*          soft     core   unlimited
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nb&#34;&gt;echo&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&amp;#34;/www/coredump/core-%e-%p-%h-%t&amp;#34;&lt;/span&gt; &amp;gt; /proc/sys/kernel/core_pattern
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;调试--core-文件&#34;&gt;调试  core 文件&lt;/h4&gt;
+&lt;p&gt;这里以一个简单的访问空指针的示例来演示：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt; 1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 7
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 8
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt; 9
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;10
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-c&#34; data-lang=&#34;c&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cp&#34;&gt;#include&lt;/span&gt; &lt;span class=&#34;cpf&#34;&gt;&amp;lt;stdio.h&amp;gt;&lt;/span&gt;&lt;span class=&#34;cp&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cp&#34;&gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kt&#34;&gt;void&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;fault_test&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;kt&#34;&gt;void&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;((&lt;/span&gt;&lt;span class=&#34;kt&#34;&gt;int&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;NULL&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;100&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;	&lt;span class=&#34;c1&#34;&gt;//解引用空指针并尝试修改它的值
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kt&#34;&gt;int&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;main&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;fault_test&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;当我们编译后执行程序时，此时就会因为访问空指针而导致段错误：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;gcc -g -o test_coredump test_coredump.c
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;./test_coredump
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Segmentation fault &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;core dumped&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;此时查看 core 文件的位置：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;cat /proc/sys/kernel/core_pattern
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;|&lt;/span&gt;/usr/lib/systemd/systemd-coredump %P %u %g %s %t %c %h %e
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;这时我们发现这个路径下并没有 core 文件，上述信息表明了 core 文件已经被系统转储，此时有两种方法获取到 core 文件：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;修改生成路径：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 直接在程序所在目录生成core文件&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nb&#34;&gt;echo&lt;/span&gt;  &lt;span class=&#34;s2&#34;&gt;&amp;#34;core-%e-%p-%t&amp;#34;&lt;/span&gt; &amp;gt; /proc/sys/kernel/core_pattern
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;取出 core 文件：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;执行 &lt;code&gt;coredumpctl&lt;/code&gt; 命令，查看所有 coredump 的程序，找到我们需要调试的那个。&lt;/li&gt;
+&lt;li&gt;执行 &lt;code&gt;coredumpctl -o  自定义core文件名 dump  Pid&lt;/code&gt; 取回 core 文件。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;当生成完毕 core 文件后，执行以下命令开始调试：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;gdb 程序名 core文件名
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;此时我们就能够看到 coredump 的原因：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;New LWP 1065384&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Core was generated by &lt;span class=&#34;sb&#34;&gt;`&lt;/span&gt;./test_coredump&lt;span class=&#34;err&#34;&gt;&amp;#39;&lt;/span&gt;.
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Program terminated with signal SIGSEGV, Segmentation fault.
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#0  fault_test () at test_coredump.c:4&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;4	    *&lt;span class=&#34;o&#34;&gt;((&lt;/span&gt;int *&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;NULL&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; 100&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;接着执行 &lt;code&gt;where&lt;/code&gt; 命令就能够查看调用堆栈：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;gdb&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; where
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#0  fault_test () at test_coredump.c:4&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#1  0x0000000000400551 in main () at test_coredump.c:8&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;h2 id=&#34;常用命令&#34;&gt;常用命令&lt;/h2&gt;
+&lt;p&gt;在 GDB 中，最常用的命令有以下这些：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/gdb/gdb1.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;下面就来详细的介绍这些命令。&lt;/p&gt;
+&lt;h3 id=&#34;断点&#34;&gt;断点&lt;/h3&gt;
+&lt;p&gt;断点是最常用的调试功能之一，它可以让程序中断在需要的地方，从而方便我们对程序分析。GDB 中断点主要分为以下三类：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;breakpoint。&lt;/li&gt;
+&lt;li&gt;watchpoint。&lt;/li&gt;
+&lt;li&gt;catchpoint。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;breakpoint&#34;&gt;breakpoint&lt;/h4&gt;
+&lt;p&gt;可以根据行号、函数、条件生成断点，下面是相关命令以及对应的作用说明：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;break [file]:function&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;在文件file的function函数入口设置断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;break [file]:line&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;在文件file的第line行设置断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;info breakpoints&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;查看断点列表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;break [+-]offset&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;在当前位置偏移量为[+-]offset处设置断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;break *addr&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;在地址addr处设置断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;break &amp;hellip; if expr&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;设置条件断点，仅仅在条件满足时&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;ignore n count&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;接下来对于编号为n的断点忽略count次&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;clear&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;删除所有断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;clear function&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;删除所有位于function内的断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;delete n&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;删除指定编号的断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;enable n&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;启用指定编号的断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;disable n&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;禁用指定编号的断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;save breakpoints file&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;保存断点信息到指定文件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;source file&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;导入文件中保存的断点信息&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;break&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;在下一个指令处设置断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;clear [file:]line&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;删除第line行的断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;watchpoint&#34;&gt;watchpoint&lt;/h4&gt;
+&lt;p&gt;watchpoint 是一种特殊类型的断点，其类似于一个表达式的监视器，即当某个表达式改变了值时，它就会让 GDB 发出暂停执行的命令。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;watch variable&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;设置变量数据断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;watch var1 + var2&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;设置表达式数据断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;rwatch variable&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;设置读断点，仅支持硬件实现&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;awatch variable&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;设置读写断点，仅支持硬件实现&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;info watchpoints&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;查看数据断点列表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set can-use-hw-watchpoints 0&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;强制基于软件方式实现&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;使用数据断点时，需要注意：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;当监控变量为局部变量时，一旦局部变量失效，数据断点也会失效&lt;/li&gt;
+&lt;li&gt;如果监控的是指针变量&lt;code&gt;p&lt;/code&gt;，则&lt;code&gt;watch *p&lt;/code&gt;监控的是&lt;code&gt;p&lt;/code&gt;所指内存数据的变化情况，而&lt;code&gt;watch p&lt;/code&gt;监控的是&lt;code&gt;p&lt;/code&gt;指针本身有没有改变指向&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;最常见的数据断点应用场景：&lt;strong&gt;定位堆上的结构体内部成员何时被修改&lt;/strong&gt;。由于指针一般为局部变量，为了解决断点失效，一般有两种方法。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;print &amp;amp;variable&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;查看变量的内存地址&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;watch *(type *)address&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;通过内存地址间接设置断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;watch -l variable&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;指定location参数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;watch variable thread 1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;仅编号为1的线程修改变量var值时会中断&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;catchpoint&#34;&gt;catchpoint&lt;/h4&gt;
+&lt;p&gt;catchpoint 是捕获断点，其主要监测信号的产生。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;含义&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;catch fork&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;程序调用fork时中断&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;tcatch fork&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;设置的断点只触发一次，之后被自动删除&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;catch syscall ptrace&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;为ptrace系统调用设置断点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;调用栈&#34;&gt;调用栈&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;backtrace [n]&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;打印栈帧&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;frame [n]&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;选择第n个栈帧，如果不存在，则打印当前栈帧&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;up n&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;选择当前栈帧编号+n的栈帧&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;down n&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;选择当前栈帧编号-n的栈帧&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;info frame [addr]&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;描述当前选择的栈帧&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;info args&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;当前栈帧的参数列表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;info locals&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;当前栈帧的局部变量&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;输出&#34;&gt;输出&lt;/h3&gt;
+&lt;h4 id=&#34;变量信息&#34;&gt;变量信息&lt;/h4&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;whatis variable&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;查看变量的类型&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;ptype variable&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;查看变量详细的类型信息&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;info variables var&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;查看定义该变量的文件，不支持局部变量&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;字符串&#34;&gt;字符串&lt;/h4&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;x/s str&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;打印字符串&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;set print elements 0&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;打印不限制字符串长度/或不限制数组长度&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;call printf(&amp;quot;%s\n&amp;quot;,xxx)&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;这时打印出的字符串不会含有多余的转义符&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;printf &amp;ldquo;%s\n&amp;rdquo;,xxx&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;同上&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;数组&#34;&gt;数组&lt;/h4&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;print *array@10&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;打印从数组开头连续10个元素的值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;print array[60]@10&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;打印array数组下标从60开始的10个元素，即第60~69个元素&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set print array-indexes on&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;打印数组元素时，同时打印数组的下标&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;指针&#34;&gt;指针&lt;/h4&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;print ptr&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;查看该指针指向的类型及指针地址&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;print *(struct xxx *)ptr&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;查看指向的结构体的内容&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;内存地址&#34;&gt;内存地址&lt;/h4&gt;
+&lt;p&gt;使用 &lt;code&gt;x&lt;/code&gt; 命令来打印内存的值，格式为 &lt;code&gt;x/nfu addr&lt;/code&gt;，以 &lt;code&gt;f&lt;/code&gt; 格式打印从 &lt;code&gt;addr&lt;/code&gt; 开始的 &lt;code&gt;n&lt;/code&gt; 个长度单元为 &lt;code&gt;u&lt;/code&gt; 的内存值。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;n&lt;/code&gt;：输出单元的个数&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;f&lt;/code&gt;：输出格式，如 &lt;code&gt;x&lt;/code&gt; 表示以 &lt;code&gt;16&lt;/code&gt; 进制输出，&lt;code&gt;o&lt;/code&gt; 表示以 &lt;code&gt;8&lt;/code&gt; 进制输出，默认为 &lt;code&gt;x&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;u&lt;/code&gt;：一个单元的长度，&lt;code&gt;b&lt;/code&gt; 表示 &lt;code&gt;1&lt;/code&gt; 个 &lt;code&gt;byte&lt;/code&gt;，&lt;code&gt;h&lt;/code&gt; 表示 &lt;code&gt;2&lt;/code&gt; 个 &lt;code&gt;byte&lt;/code&gt;（&lt;code&gt;half word&lt;/code&gt;），&lt;code&gt;w&lt;/code&gt; 表示 &lt;code&gt;4&lt;/code&gt; 个 &lt;code&gt;byte&lt;/code&gt;，&lt;code&gt;g&lt;/code&gt; 表示 &lt;code&gt;8&lt;/code&gt; 个 &lt;code&gt;byte&lt;/code&gt;（&lt;code&gt;giant word&lt;/code&gt;）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;x/8xb array&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;以16进制打印数组array的前8个byte的值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;x/8xw array&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;以16进制打印数组array的前16个word的值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;局部变量&#34;&gt;局部变量&lt;/h4&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;info locals&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;打印当前函数局部变量的值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;backtrace full&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;打印当前栈帧各个函数的局部变量值，命令可缩写为bt&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;bt full n&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;从内到外显示n个栈帧及其局部变量&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;bt full -n&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;从外向内显示n个栈帧及其局部变量&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;结构体&#34;&gt;结构体&lt;/h4&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set print pretty on&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;每行只显示结构体的一名成员&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set print null-stop&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;不显示&amp;rsquo;\000&amp;rsquo;这种&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;函数跳转&#34;&gt;函数跳转&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set step-mode on&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;不跳过不含调试信息的函数，可以显示和调试汇编代码&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;finish&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;执行完当前函数并打印返回值，然后触发中断&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;return 0&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;不再执行后面的指令，直接返回，可以指定返回值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;call printf(&amp;quot;%s\n&amp;quot;, str)&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;调用printf函数，打印字符串(可以使用call或者print调用函数)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;print func()&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;调用func函数(可以使用call或者print调用函数)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set var variable=xxx&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;设置变量variable的值为xxx&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set {type}address = xxx&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;给存储地址为address，类型为type的变量赋值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;info frame&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;显示函数堆栈的信息（堆栈帧地址、指令寄存器的值等）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;多线程多进程&#34;&gt;多线程、多进程&lt;/h3&gt;
+&lt;h4 id=&#34;多进程&#34;&gt;多进程&lt;/h4&gt;
+&lt;p&gt;GDB 在调试多进程程序（程序含 &lt;code&gt;fork&lt;/code&gt; 调用）时，默认只追踪父进程。可以通过命令设置，实现只追踪父进程或子进程，或者同时调试父进程和子进程。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;命令&lt;/th&gt;
+&lt;th&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;info inferiors&lt;/td&gt;
+&lt;td&gt;查看进程列表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;attach pid&lt;/td&gt;
+&lt;td&gt;绑定进程id&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;inferior num&lt;/td&gt;
+&lt;td&gt;切换到指定进程上进行调试&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;print $_exitcode&lt;/td&gt;
+&lt;td&gt;显示程序退出时的返回值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;set follow-fork-mode child&lt;/td&gt;
+&lt;td&gt;追踪子进程&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;set follow-fork-mode parent&lt;/td&gt;
+&lt;td&gt;追踪父进程&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;set detach-on-fork on&lt;/td&gt;
+&lt;td&gt;fork调用时只追踪其中一个进程&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;set detach-on-fork off&lt;/td&gt;
+&lt;td&gt;fork调用时会同时追踪父子进程&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;在调试多进程程序时候，默认情况下，除了当前调试的进程，其他进程都处于挂起状态，所以，如果需要在调试当前进程的时候，其他进程也能正常执行，那么通过设置 &lt;code&gt;set schedule-multiple on&lt;/code&gt; 即可。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;在默认情况下，GDB 只支持调试主进程（即 main），只有在 GDB 7.0 后才支持单独调试(调试父进程或者子进程)和同时调试多个进程。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h4 id=&#34;多线程&#34;&gt;多线程&lt;/h4&gt;
+&lt;p&gt;默认调试多线程时，一旦程序中断，所有线程都将暂停。如果此时再继续执行当前线程，其他线程也会同时执行。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;info threads&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;查看线程列表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;thread [thread_id]&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;切换进该线程&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;print $_thread&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;显示当前正在调试的线程编号&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set scheduler-locking on&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;调试一个线程时，其他线程暂停执行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set scheduler-locking off&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;调试一个线程时，其他线程同步执行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;set scheduler-locking step&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;仅用step调试线程时其他线程不执行，用其他命令如next调试时仍执行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;如果只关心当前线程，建议临时设置 &lt;code&gt;scheduler-locking&lt;/code&gt; 为 &lt;code&gt;on&lt;/code&gt;，避免其他线程同时运行，导致命中其他断点分散注意力。&lt;/p&gt;
+&lt;h3 id=&#34;其他&#34;&gt;其他&lt;/h3&gt;
+&lt;h4 id=&#34;图形化&#34;&gt;图形化&lt;/h4&gt;
+&lt;p&gt;tui为&lt;code&gt;terminal user interface&lt;/code&gt;的缩写，在启动时候指定&lt;code&gt;-tui&lt;/code&gt;参数，或者调试时使用&lt;code&gt;ctrl+x+a&lt;/code&gt;组合键，可进入或退出图形化界面。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th&gt;含义&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;layout src&lt;/td&gt;
+&lt;td&gt;显示源码窗口&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;layout asm&lt;/td&gt;
+&lt;td&gt;显示汇编窗口&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;layout split&lt;/td&gt;
+&lt;td&gt;显示源码 + 汇编窗口&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;layout regs&lt;/td&gt;
+&lt;td&gt;显示寄存器 + 源码或汇编窗口&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;winheight src +5&lt;/td&gt;
+&lt;td&gt;源码窗口高度增加5行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;winheight asm -5&lt;/td&gt;
+&lt;td&gt;汇编窗口高度减小5行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;winheight cmd +5&lt;/td&gt;
+&lt;td&gt;控制台窗口高度增加5行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;winheight regs -5&lt;/td&gt;
+&lt;td&gt;寄存器窗口高度减小5行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;汇编&#34;&gt;汇编&lt;/h4&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;命令&lt;/th&gt;
+&lt;th style=&#34;text-align:center&#34;&gt;含义&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;disassemble function&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;查看函数的汇编代码&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;disassemble /mr function&lt;/td&gt;
+&lt;td style=&#34;text-align:center&#34;&gt;同时比较函数源代码和汇编代码&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;其他工具&#34;&gt;其他工具&lt;/h2&gt;
+&lt;h3 id=&#34;pstack&#34;&gt;pstack&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;pstack&lt;/code&gt; 是一个 shell 脚本，用于打印正在运行的进程的栈跟踪信息。pstack 命令必须由相应进程的属主或 root 运行。可以使用 &lt;code&gt;pstack&lt;/code&gt; 来确定进程挂起的位置。&lt;/p&gt;
+&lt;p&gt;使用方式如下：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;pstack &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;pid&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;h3 id=&#34;ldd&#34;&gt;ldd&lt;/h3&gt;
+&lt;p&gt;当我们编译链接时找不到静态库而导致链接失败，又或者是编译成功，在运行时加载动态库失败时，我们可以使用 &lt;code&gt;ldd&lt;/code&gt; 命令来分析该程序依赖了哪些库以及这些库所在的路径，从而解程序因缺少某个库文件而不能运行的一些问题。使用方式如下：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;ldd 程序名
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;例如：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;3
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;4
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;5
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;6
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;7
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;ldd &lt;span class=&#34;nb&#34;&gt;test&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;	linux-vdso.so.1 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;0x00007ffeefb2f000&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;	libstdc++.so.6 &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&amp;gt; /lib64/libstdc++.so.6 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;0x00007fa30f54a000&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;	libm.so.6 &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&amp;gt; /lib64/libm.so.6 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;0x00007fa30f1c8000&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;	libgcc_s.so.1 &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&amp;gt; /lib64/libgcc_s.so.1 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;0x00007fa30efb0000&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;	libc.so.6 &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&amp;gt; /lib64/libc.so.6 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;0x00007fa30ebeb000&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;	/lib64/ld-linux-x86-64.so.2 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;0x00007fa30f8df000&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;其中每一行的第一个参数程序依赖的库名，第二个则是系统所提供的对应的库（如果系统找不到，则会显示 not found），第三个是库加载的起始地址。&lt;/p&gt;
+&lt;h3 id=&#34;stringscfilt&#34;&gt;strings、c++filt&lt;/h3&gt;
+&lt;p&gt;C++ 为了支持函数重载功能，需要编译器在使用 name mangling 机制将符号表中的函数进行重命名，而我们使用 &lt;code&gt;strings&lt;/code&gt;  就可以查看到重命名后的函数名：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;strings 程序名
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;p&gt;如果使用 &lt;code&gt;c++filt&lt;/code&gt; 工具，就可以根据符号表中的函数名，还原为原始的函数定义：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;c++filt 重命名后的函数名
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;h1 id=&#34;原理&#34;&gt;原理&lt;/h1&gt;
+&lt;h2 id=&#34;调试原理&#34;&gt;调试原理&lt;/h2&gt;
+&lt;p&gt;当我们开始使用 GDB 开始调试时，系统首先会启动一个 GDB 进程，紧接着这个进程会 &lt;code&gt;fork&lt;/code&gt; 出一个子进程来控制被调试程序，它会执行以下操作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;调用 &lt;code&gt;ptrace(PTRACE_TRACEME)&lt;/code&gt; 来让 GDB 进程接管本进程的执行。&lt;/li&gt;
+&lt;li&gt;通过 &lt;code&gt;execv&lt;/code&gt; 来将被调试程序替换到子进程中。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;详细流程如下图所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/gdb/gdb2.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;接下来就介绍里面最关键的 &lt;code&gt;ptrace&lt;/code&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;ptrace&#34;&gt;ptrace&lt;/h2&gt;
+&lt;p&gt;&lt;code&gt;ptrace&lt;/code&gt; 是 Linux 内核提供的一个用于进程跟踪的系统调用，通过它，一个进程（GDB）可以读写另外一个进程（被调试进程）的指令空间、数据空间、堆栈和寄存器的值，并且 GDB 进程接管了被调试进程的所有信号，这样一来，被调试进程的执行就被 GDB 控制，从而达到调试的目的。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/gdb/gdb3.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;code&gt;ptrace&lt;/code&gt;  的定义如下：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;div class=&#34;chroma&#34;&gt;
+&lt;table class=&#34;lntable&#34;&gt;&lt;tr&gt;&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code&gt;&lt;span class=&#34;lnt&#34;&gt;1
+&lt;/span&gt;&lt;span class=&#34;lnt&#34;&gt;2
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;
+&lt;td class=&#34;lntd&#34;&gt;
+&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#include &amp;lt;sys/ptrace.h&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;long ptrace&lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;enum __ptrace_request request, pid_t pid, void *addr, void *data&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;&lt;ul&gt;
+&lt;li&gt;enum __ptrace_request request：指示了 &lt;code&gt;ptrace&lt;/code&gt; 要执行的命令。&lt;/li&gt;
+&lt;li&gt;pid_t pid：指示 ptrace 要跟踪的进程&lt;/li&gt;
+&lt;li&gt;void *addr：指示要监控的内存地址&lt;/li&gt;
+&lt;li&gt;void *data：存放读取出的或者要写入的数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;调试运行中程序&#34;&gt;调试运行中程序&lt;/h2&gt;
+&lt;p&gt;如果想要调试一个已经执行的进程，就需要在 GDB 进程中调用 &lt;code&gt;ptrace(PTRACE_ATTACH,...)&lt;/code&gt;，此时 GDB 进程会 &lt;code&gt;attach&lt;/code&gt; 已经执行的被调试进程，将其收养为自己的子进程，接着会向被调试进程发送一个 &lt;code&gt;SIGSTO&lt;/code&gt; 信号，当被调试进程接收到这个信号时，就会暂时执行并进入 &lt;code&gt;TASK_STOPED&lt;/code&gt; 状态，表示其已经准备好接受调试。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;code&gt;attach&lt;/code&gt; 的一些限制：不予许 &lt;code&gt;attach&lt;/code&gt; 自己；不允许多次 &lt;code&gt;attach&lt;/code&gt; 到同一个进程；不允许 &lt;code&gt;attach&lt;/code&gt; 1 号进程；&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;http://img.orekilee.top//imgbed/gdb/gdb4.png&#34;
+	
+	
+	
+	loading=&#34;lazy&#34;
+	
+	
+&gt;&lt;/p&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;h2 id=&#34;断点-break&#34;&gt;断点 break&lt;/h2&gt;
+&lt;p&gt;当我们使用 &lt;code&gt;break&lt;/code&gt; 命令设置断点的时候，GDB 首先会将原来的汇编代码存储到一个断点链表中，接着会在对应的汇编代码的位置插入一个 &lt;code&gt;INT3&lt;/code&gt; 中断指令。&lt;/p&gt;
+&lt;p&gt;当被调试的程序运行到这个位置时，就会执行 &lt;code&gt;INT3&lt;/code&gt; 指令，此时会发生软中断，接着内核会向被调试进程发送一个 &lt;code&gt;SIGTRAP&lt;/code&gt; 信号，由于当前 GDB 通过 &lt;code&gt;ptrace&lt;/code&gt; 接管了被调试进程，所以这个信号自然又转发到了 GDB 进程中。GDB 此时会对比当前停止的位置和断点链表中存储的断点位置，将该位置的代码恢复成断点链表中存储的原来的代码，接着将程序计数器（pc 指针）回退一步，指向用户 &lt;code&gt;break&lt;/code&gt; 的位置。&lt;/p&gt;
+&lt;p&gt;此时就达到了断点的目的，接着 GDB 会一直等待用户输入调试指令。&lt;/p&gt;
+&lt;h2 id=&#34;单步-next&#34;&gt;单步 next&lt;/h2&gt;
+&lt;p&gt;当我们使用 &lt;code&gt;next&lt;/code&gt; 执行单步命令时，此时 GDB 会控制其执行一行代码，它首先会计算出这一行代码所对应的汇编代码的位置，接着控制程序计数器一直往下执行，直到执行到这个位置时就会停下来，继续等待用户输入调试指令。&lt;/p&gt;
+&lt;p&gt;这个功能其实借助 &lt;code&gt;ptrace&lt;/code&gt; 就可以直接实现，只需要在第一个参数中传递 &lt;code&gt;PTRACE_SINGLESTEP&lt;/code&gt; 即可。&lt;/p&gt;
+&lt;h1 id=&#34;参考&#34;&gt;参考&lt;/h1&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://mp.weixin.qq.com/s/G8u1WH2K8NANohhpc6347A&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GDB调试-从入门实践到原理&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://mp.weixin.qq.com/s/dNZVQGRYLjy6_LcOjXb5xw&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GDB调试入门，看这篇就够了&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://mp.weixin.qq.com/s/Pl8GIhiaxGWnrH5kcY_69w&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;图文并茂 | 彻底弄懂GDB调试原理&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;http://c.biancheng.net/view/8130.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GDB教程&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://zh.wikipedia.org/zh-cn/GNU%E4%BE%A6%E9%94%99%E5%99%A8&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GNU调试器&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

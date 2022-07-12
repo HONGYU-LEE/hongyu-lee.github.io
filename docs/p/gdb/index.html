@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='基本概念 什么是 GDB？ GDB（GNU Debugger），是一个由 GNU 开源组织发布的、UNIX/LINUX 操作系统下的、基于命令行的、功能强大的程序调试工具；GDB 支持断点、单步执行、打印变量、观察变量、查看寄存器、查看堆栈等调试手段；GDB 支持调试多种编程语言编写的程序，包括 C、C&#43;&#43;、Go、Objective-C、OpenCL、Ada 等。实际场景中，GDB 更常用来调试 C 和 C&#43;&#43; 程序。
+GDB 可以用来做些什么？ 一般来说，借助 GDB 调试器可以实现以下几个功能：
+ 程序启动时，可以按照我们自定义的要求运行程序，例如设置参数和环境变量。 可使被调试程序在指定代码处暂停运行，并查看当前程序的运行状态（例如当前变量的值，函数的执行结果等），即支持断点调试。 程序执行过程中，可以改变某个变量的值，还可以改变代码的执行顺序，从而尝试修改程序中出现的逻辑错误。  调试模型 根据 GDB 程序与被调试程序是否运行在同一台机器中，可以把 GDB 的调试模型分为以下两种：
+ 本地调试 远程调试  本地调试 本地调试指的是调试程序和被调试程序运行在同一台机器中，如下图所示：
+ 可视化调试程序只是对 GDB 操作的一层封装，例如 Visual Studio、CLion 等 IDE 中的可视化调试。当然我们也可以直接通过 bash 来手动输入调试命令。
+ 远程调试 调试程序运行在一台机器中，被调试程序运行在另一台机器中，如下图所示：
+ GdbServer 的主要工作是负责完成 GDB 与目标程序之间的通信，其采用了 RSP（GDB Remote Serial Protocol） 协议。
+ 安装 GDB 这里以 CentOS 8 举例，来演示 GDB 的安装。'><title>GDB</title>
+
+<link rel='canonical' href='https://blog.orekilee.top/p/gdb/'>
+
+<link rel="stylesheet" href="/scss/style.min.d9e0562edde3d2bdf9d3d81365095a29d062ddaaa5d671f22168e57dfdb18b4f.css"><meta property='og:title' content='GDB'>
+<meta property='og:description' content='基本概念 什么是 GDB？ GDB（GNU Debugger），是一个由 GNU 开源组织发布的、UNIX/LINUX 操作系统下的、基于命令行的、功能强大的程序调试工具；GDB 支持断点、单步执行、打印变量、观察变量、查看寄存器、查看堆栈等调试手段；GDB 支持调试多种编程语言编写的程序，包括 C、C&#43;&#43;、Go、Objective-C、OpenCL、Ada 等。实际场景中，GDB 更常用来调试 C 和 C&#43;&#43; 程序。
+GDB 可以用来做些什么？ 一般来说，借助 GDB 调试器可以实现以下几个功能：
+ 程序启动时，可以按照我们自定义的要求运行程序，例如设置参数和环境变量。 可使被调试程序在指定代码处暂停运行，并查看当前程序的运行状态（例如当前变量的值，函数的执行结果等），即支持断点调试。 程序执行过程中，可以改变某个变量的值，还可以改变代码的执行顺序，从而尝试修改程序中出现的逻辑错误。  调试模型 根据 GDB 程序与被调试程序是否运行在同一台机器中，可以把 GDB 的调试模型分为以下两种：
+ 本地调试 远程调试  本地调试 本地调试指的是调试程序和被调试程序运行在同一台机器中，如下图所示：
+ 可视化调试程序只是对 GDB 操作的一层封装，例如 Visual Studio、CLion 等 IDE 中的可视化调试。当然我们也可以直接通过 bash 来手动输入调试命令。
+ 远程调试 调试程序运行在一台机器中，被调试程序运行在另一台机器中，如下图所示：
+ GdbServer 的主要工作是负责完成 GDB 与目标程序之间的通信，其采用了 RSP（GDB Remote Serial Protocol） 协议。
+ 安装 GDB 这里以 CentOS 8 举例，来演示 GDB 的安装。'>
+<meta property='og:url' content='https://blog.orekilee.top/p/gdb/'>
+<meta property='og:site_name' content='凌桓&#39;s BLOG'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='调试工具' /><meta property='article:tag' content='GDB' /><meta property='article:published_time' content='2022-07-11T18:55:13&#43;08:00'/><meta property='article:modified_time' content='2022-07-12T16:09:58&#43;08:00'/>
+<meta name="twitter:title" content="GDB">
+<meta name="twitter:description" content="基本概念 什么是 GDB？ GDB（GNU Debugger），是一个由 GNU 开源组织发布的、UNIX/LINUX 操作系统下的、基于命令行的、功能强大的程序调试工具；GDB 支持断点、单步执行、打印变量、观察变量、查看寄存器、查看堆栈等调试手段；GDB 支持调试多种编程语言编写的程序，包括 C、C&#43;&#43;、Go、Objective-C、OpenCL、Ada 等。实际场景中，GDB 更常用来调试 C 和 C&#43;&#43; 程序。
+GDB 可以用来做些什么？ 一般来说，借助 GDB 调试器可以实现以下几个功能：
+ 程序启动时，可以按照我们自定义的要求运行程序，例如设置参数和环境变量。 可使被调试程序在指定代码处暂停运行，并查看当前程序的运行状态（例如当前变量的值，函数的执行结果等），即支持断点调试。 程序执行过程中，可以改变某个变量的值，还可以改变代码的执行顺序，从而尝试修改程序中出现的逻辑错误。  调试模型 根据 GDB 程序与被调试程序是否运行在同一台机器中，可以把 GDB 的调试模型分为以下两种：
+ 本地调试 远程调试  本地调试 本地调试指的是调试程序和被调试程序运行在同一台机器中，如下图所示：
+ 可视化调试程序只是对 GDB 操作的一层封装，例如 Visual Studio、CLion 等 IDE 中的可视化调试。当然我们也可以直接通过 bash 来手动输入调试命令。
+ 远程调试 调试程序运行在一台机器中，被调试程序运行在另一台机器中，如下图所示：
+ GdbServer 的主要工作是负责完成 GDB 与目标程序之间的通信，其采用了 RSP（GDB Remote Serial Protocol） 协议。
+ 安装 GDB 这里以 CentOS 8 举例，来演示 GDB 的安装。">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_hu79fea4b9296c85deb154197379070de6_22402_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">凌桓&#39;s BLOG</a></h1>
+            <h2 class="site-description">沙漠尽头必是绿洲</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://oreki.blog.csdn.net'
+                        target="_blank"
+                        title="CSDN"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209063639" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2377" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 1024C229.2224 1024 0 794.7776 0 512 0 229.2224 229.2224 0 512 0c282.7776 0 512 229.2224 512 512 0 282.7776-229.2224 512-512 512z m17.066667-413.525333c34.850133 4.352 68.778667 5.12 102.741333 2.0992 23.04-2.048 44.817067-8.362667 64.170667-21.9136 38.212267-26.794667 49.783467-85.1968 24.251733-123.050667-14.626133-21.7088-36.8128-30.344533-60.757333-35.498667-35.054933-7.543467-70.4512-5.751467-105.847467-3.413333-5.666133 0.3584-6.7584 3.072-7.236267 8.209067-3.072 32.682667-6.536533 65.314133-9.813333 97.962666-2.5088 24.814933-4.932267 49.629867-7.509333 75.605334z m53.4016-33.928534c1.962667-20.906667 3.6352-39.338667 5.4272-57.770666 1.553067-15.906133 3.413333-31.778133 4.727466-47.701334 0.3584-4.283733 1.553067-6.656 5.956267-6.382933 15.616 1.041067 31.709867 0.034133 46.728533 3.652267 36.488533 8.823467 48.725333 54.306133 23.3472 83.029333-15.8208 17.902933-36.7616 23.586133-59.255466 25.088-8.465067 0.546133-17.015467 0.085333-26.9312 0.085333zM512 434.295467c-2.184533-0.648533-3.5328-1.1776-4.932267-1.4336-37.717333-6.877867-75.690667-8.328533-113.646933-2.816-20.974933 3.037867-41.0112 9.489067-57.480533 23.330133-22.9888 19.319467-21.640533 46.848 4.4032 62.0032 13.056 7.594667 28.023467 12.509867 42.5984 17.288533 14.08 4.608 28.996267 6.826667 43.144533 11.264 12.5952 3.925333 14.011733 14.318933 3.584 22.306134-3.345067 2.56-7.441067 5.085867-11.537067 5.751466-11.195733 1.826133-22.698667 4.386133-33.826133 3.566934-24.098133-1.774933-48.042667-5.461333-72.5504-8.430934-1.365333 10.615467-2.935467 23.0912-4.5568 35.9424 4.181333 1.365333 7.68 2.730667 11.264 3.618134 33.9456 8.4992 68.386133 9.608533 102.912 5.12 20.087467-2.6112 39.4752-7.901867 56.695467-19.029334 28.603733-18.4832 36.693333-57.1904-4.676267-75.383466-14.506667-6.382933-30.190933-10.410667-45.482667-15.086934-11.4176-3.4816-23.313067-5.614933-34.525866-9.5232-9.7792-3.413333-11.144533-12.202667-3.037867-18.397866 4.6592-3.549867 10.717867-6.997333 16.384-7.3728a480.853333 480.853333 0 0 1 53.384533-0.853334c15.377067 0.699733 30.651733 3.549867 46.4896 5.5296L512 434.295467z m257.143467 2.048L750.933333 614.2976h54.152534c4.778667-45.636267 9.710933-90.7264 14.062933-135.8848 0.6144-6.365867 2.3552-8.840533 8.686933-9.0112 11.434667-0.273067 22.8864-1.979733 34.286934-1.570133 23.722667 0.853333 42.3936 9.728 38.4 43.264-2.901333 24.2688-5.597867 48.571733-8.2432 72.874666-1.092267 10.069333-1.826133 20.189867-2.730667 30.4128h55.330133c3.584-35.259733 7.9872-70.058667 10.496-104.994133 3.413333-47.4624-17.7664-73.3184-64.682666-80.213333-40.96-6.007467-81.339733-0.341333-121.5488 7.133866z m-483.498667 134.6048c-8.738133 1.297067-16.384 2.798933-24.098133 3.4816-25.6512 2.235733-51.319467 3.9424-76.305067-4.266667-13.909333-4.590933-24.6784-12.578133-29.7984-25.9584-7.901867-20.701867 0.887467-47.104 19.831467-60.3136 17.373867-12.117333 37.717333-15.9232 58.453333-15.9232 22.545067-0.017067 45.090133 2.423467 68.232533 3.84L307.2 432.298667c-15.069867-1.723733-29.4912-3.925333-43.997867-4.9152-41.0112-2.798933-80.64 2.6112-117.469866 20.462933-30.020267 14.557867-52.053333 36.010667-58.6752 68.130133-7.850667 38.144 11.537067 69.495467 51.7632 85.845334 19.1488 7.765333 39.287467 12.509867 60.0064 12.5952 24.746667 0.1024 49.493333-1.570133 74.205866-2.952534 3.106133-0.170667 8.311467-2.901333 8.669867-5.034666 1.979733-11.554133 2.730667-23.278933 3.9424-35.464534z" fill="#DD1700" p-id="2378"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:orekilee@163.com'
+                        target="_blank"
+                        title="Email"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653220689510" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1326" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M874.666667 375.189333V746.666667a64 64 0 0 1-64 64H213.333333a64 64 0 0 1-64-64V375.189333l64 54.250667V746.666667h597.333334V429.44l64-54.250667zM810.666667 213.333333a64.789333 64.789333 0 0 1 22.826666 4.181334 63.616 63.616 0 0 1 26.794667 19.413333 64.32 64.32 0 0 1 9.344 15.466667c2.773333 6.570667 4.48 13.696 4.906667 21.184L874.666667 277.333333v21.333334L553.536 572.586667a64 64 0 0 1-79.893333 2.538666l-3.178667-2.56L149.333333 298.666667v-21.333334a63.786667 63.786667 0 0 1 35.136-57.130666A63.872 63.872 0 0 1 213.333333 213.333333h597.333334z m-9.6 64h-578.133334L512 523.882667 801.066667 277.333333z" p-id="1327"></path></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://github.com/HONGYU-LEE'
+                        target="_blank"
+                        title="GitHub"
+                    >
+                        
+                        
+                            <?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1653209160970" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1306" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200"><defs><style type="text/css">@font-face { font-family: feedback-iconfont; src: url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff2?t=1630033759944") format("woff2"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.woff?t=1630033759944") format("woff"), url("//at.alicdn.com/t/font_1031158_u69w8yhxdu.ttf?t=1630033759944") format("truetype"); }
+</style></defs><path d="M512 42.666667A464.64 464.64 0 0 0 42.666667 502.186667 460.373333 460.373333 0 0 0 363.52 938.666667c23.466667 4.266667 32-9.813333 32-22.186667v-78.08c-130.56 27.733333-158.293333-61.44-158.293333-61.44a122.026667 122.026667 0 0 0-52.053334-67.413333c-42.666667-28.16 3.413333-27.733333 3.413334-27.733334a98.56 98.56 0 0 1 71.68 47.36 101.12 101.12 0 0 0 136.533333 37.973334 99.413333 99.413333 0 0 1 29.866667-61.44c-104.106667-11.52-213.333333-50.773333-213.333334-226.986667a177.066667 177.066667 0 0 1 47.36-124.16 161.28 161.28 0 0 1 4.693334-121.173333s39.68-12.373333 128 46.933333a455.68 455.68 0 0 1 234.666666 0c89.6-59.306667 128-46.933333 128-46.933333a161.28 161.28 0 0 1 4.693334 121.173333A177.066667 177.066667 0 0 1 810.666667 477.866667c0 176.64-110.08 215.466667-213.333334 226.986666a106.666667 106.666667 0 0 1 32 85.333334v125.866666c0 14.933333 8.533333 26.88 32 22.186667A460.8 460.8 0 0 0 981.333333 502.186667 464.64 464.64 0 0 0 512 42.666667" fill="#231F20" p-id="1307"></path></svg>
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>主页</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+
+        <li >
+            <a href='/%E5%85%B3%E4%BA%8E/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-user" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="7" r="4" />
+  <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+</svg>
+
+
+
+                
+                <span>关于</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>暗色模式</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+<main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/%E5%B7%A5%E5%85%B7/" style="background-color: #2a9d8f; color: #fff;">
+                工具
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/gdb/">GDB</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 11, 2022</time>
+            </div>
+        
+
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <h1 id="基本概念">基本概念</h1>
+<h2 id="什么是-gdb">什么是 GDB？</h2>
+<p><img src="http://img.orekilee.top//imgbed/gdb/gdb7.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>GDB（GNU Debugger），是一个由 GNU 开源组织发布的、UNIX/LINUX 操作系统下的、<strong>基于命令行的、功能强大的程序调试工具</strong>；GDB 支持断点、单步执行、打印变量、观察变量、查看寄存器、查看堆栈等调试手段；GDB 支持调试多种编程语言编写的程序，包括 C、C++、Go、Objective-C、OpenCL、Ada 等。实际场景中，GDB 更常用来调试 C 和 C++ 程序。</p>
+<h2 id="gdb-可以用来做些什么">GDB 可以用来做些什么？</h2>
+<p>一般来说，借助 GDB 调试器可以实现以下几个功能：</p>
+<ol>
+<li>程序启动时，可以按照我们自定义的要求运行程序，例如设置参数和环境变量。</li>
+<li>可使被调试程序在指定代码处暂停运行，并查看当前程序的运行状态（例如当前变量的值，函数的执行结果等），即支持断点调试。</li>
+<li>程序执行过程中，可以改变某个变量的值，还可以改变代码的执行顺序，从而尝试修改程序中出现的逻辑错误。</li>
+</ol>
+<h2 id="调试模型">调试模型</h2>
+<p>根据 GDB 程序与被调试程序是否运行在同一台机器中，可以把 GDB 的调试模型分为以下两种：</p>
+<ul>
+<li><strong>本地调试</strong></li>
+<li><strong>远程调试</strong></li>
+</ul>
+<h3 id="本地调试">本地调试</h3>
+<p>本地调试指的是调试程序和被调试程序运行在同一台机器中，如下图所示：</p>
+<p><img src="http://img.orekilee.top//imgbed/gdb/gdb5.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<blockquote>
+<p>可视化调试程序只是对 GDB 操作的一层封装，例如 Visual Studio、CLion 等 IDE 中的可视化调试。当然我们也可以直接通过 bash 来手动输入调试命令。</p>
+</blockquote>
+<h3 id="远程调试">远程调试</h3>
+<p>调试程序运行在一台机器中，被调试程序运行在另一台机器中，如下图所示：</p>
+<p><img src="http://img.orekilee.top//imgbed/gdb/gdb6.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<blockquote>
+<p>GdbServer 的主要工作是负责完成 GDB 与目标程序之间的通信，其采用了 RSP（GDB Remote Serial Protocol） 协议。</p>
+</blockquote>
+<h2 id="安装-gdb">安装 GDB</h2>
+<p>这里以 CentOS 8 举例，来演示 GDB 的安装。</p>
+<p>首先查看当前机器中是否存在 GDB：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gdb -v
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果提示 <code>bash: gdb: command not found</code>，则说明当前机器没有，继续执行下面的步骤，反之则无需安装。</p>
+<p>通过 yum 安装 GDB：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">sudo yum -y install gdb
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果使用的是官方的 yum 下载源，这里就会报错 <code>Error: Failed to download metadata for repo 'appstream': Cannot prepare internal mirrorlist: No URLs in mirrorlist</code>，这主要是因为在 2021 年底官方就停止对 CentOS 8 提供服务，这时我们就需要将 yum 源切换为国内的：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 进入yum的repos目录</span>
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> /etc/yum.repos.d/
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 修改所有的CentOS文件内容</span>
+</span></span><span class="line"><span class="cl">sed -i <span class="s1">&#39;s/mirrorlist/#mirrorlist/g&#39;</span> /etc/yum.repos.d/CentOS-*
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sed -i <span class="s1">&#39;s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g&#39;</span> /etc/yum.repos.d/CentOS-*
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 更新yum源为阿里镜像</span>
+</span></span><span class="line"><span class="cl">wget -O /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-vault-8.5.2111.repo
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">yum clean all
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">yum makecache
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>这时候重新通过 yum 安装即可。</p>
+<h1 id="实战">实战</h1>
+<h2 id="启动调试">启动调试</h2>
+<blockquote>
+<p><strong>GDB 的使用前提</strong>：需要在编译时加上-g 参数，保留调试信息，否则会提示 no debugging symbols found，无法使用 GDB 进行调试。</p>
+</blockquote>
+<h3 id="调试未运行的程序">调试未运行的程序</h3>
+<h4 id="无参数">无参数</h4>
+<p>使用 <code>GDB 可执行程序名</code> 开启调试，输入 <code>run</code> 命令运行程序：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">gdb test1
+</span></span><span class="line"><span class="cl"><span class="o">(</span>gdb<span class="o">)</span> run
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h4 id="有参数">有参数</h4>
+<p>直接在 <code>run</code> 后面跟上参数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">gdb test1
+</span></span><span class="line"><span class="cl"><span class="o">(</span>gdb<span class="o">)</span> run <span class="s2">&#34;hello world&#34;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>也可以通过 <code>set args</code> 命令指定参数列表：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">gdb test1
+</span></span><span class="line"><span class="cl"><span class="o">(</span>gdb<span class="o">)</span> <span class="nb">set</span> args <span class="s2">&#34;hello world&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>gdb<span class="o">)</span> show args <span class="c1"># 查看参数列表</span>
+</span></span><span class="line"><span class="cl"><span class="o">(</span>gdb<span class="o">)</span> run
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="调试运行中的程序">调试运行中的程序</h3>
+<p>如果程序已经处于运行中的状态，那我们该如何对其进行调试呢？</p>
+<h4 id="已生成调试信息">已生成调试信息</h4>
+<p>对于已生成调试信息的，我们只需要找到它的进程 id，再使用 <code>attach</code> 命令绑定进程即可：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="c1"># 步骤一：找到进程id</span>
+</span></span><span class="line"><span class="cl">ps -ef<span class="p">|</span>grep 进程名
+</span></span><span class="line"><span class="cl"><span class="c1"># 或者</span>
+</span></span><span class="line"><span class="cl">pidof 进程名
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 步骤二：开启GDB调试</span>
+</span></span><span class="line"><span class="cl">gdb
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 步骤三：attach绑定对应的进程id</span>
+</span></span><span class="line"><span class="cl">attach <span class="o">[</span>进程id<span class="o">]</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 或者在启动时直接指定程序名与进程id</span>
+</span></span><span class="line"><span class="cl">gdb <span class="o">[</span>程序名<span class="o">]</span> --pid <span class="o">[</span>进程id<span class="o">]</span>  
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h4 id="未生成调试信息">未生成调试信息</h4>
+<p>对于已运行且未生成调试信息的程序，我们可以重新编译出一个带调试信息的版本，再使用 <code>file</code> 命令将这个版本的符号表读取出来，此时我们再次 attach 程序，就能够进行调试了，并且不需要重新启动程序：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="c1"># 步骤一：重新编译一个带调试信息的版本</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 步骤二：使用file加载这个版本的符号表</span>
+</span></span><span class="line"><span class="cl">file <span class="o">[</span>程序名<span class="o">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 接下来的步骤与已生成调试信息的一样</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="调试-core-文件">调试 core 文件</h3>
+<p>当一个程序因为出错而导致异常中断的时候，操作系统会将程序当前的状态（如程序运行时的内存，寄存器状态，堆栈指针，内存管理信息）保存为一个 core 文件。我们可以通过使用 GDB 来调试这个文件，来迅速定位导致程序出错的问题。</p>
+<h4 id="配置-core-文件生成">配置 core 文件生成</h4>
+<p>首先我们需要使用 <code>ulimit -a</code> 命令查看系统有没有限制 core 文件的生成：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="nb">ulimit</span> -c
+</span></span><span class="line"><span class="cl">unlimited <span class="c1"># 代表没有限制</span>
+</span></span><span class="line"><span class="cl"><span class="m">0</span>         <span class="c1"># 如果结果为零则代表无法生成，如果为其他数字则代表限制生成的个数</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>配置 coredump 生成，有临时配置和永久配置两种。</p>
+<ul>
+<li>
+<p><strong>临时配置</strong>：只需要简单的命令即可，但是退出 bash 后就会失效。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">$ <span class="nb">ulimit</span> -c unlimited  <span class="c1">#表示不限制core文件大小</span>
+</span></span><span class="line"><span class="cl">$ <span class="nb">ulimit</span> -c n          <span class="c1">#n为数字，表示core文件大小上限，单位为块，一块默认为512字节</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p><strong>永久配置</strong>：需要修改内核参数，指定 core 文件名、存放路径与永久配置。</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">mkdir -p /www/coredump/
+</span></span><span class="line"><span class="cl">chmod <span class="m">777</span> /www/coredump/
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">/etc/profile
+</span></span><span class="line"><span class="cl"><span class="nb">ulimit</span> -c unlimited
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">/etc/security/limits.conf
+</span></span><span class="line"><span class="cl">*          soft     core   unlimited
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s2">&#34;/www/coredump/core-%e-%p-%h-%t&#34;</span> &gt; /proc/sys/kernel/core_pattern
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+</ul>
+<h4 id="调试--core-文件">调试  core 文件</h4>
+<p>这里以一个简单的访问空指针的示例来演示：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">fault_test</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">*</span><span class="p">((</span><span class="kt">int</span> <span class="o">*</span><span class="p">)</span><span class="nb">NULL</span><span class="p">)</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>	<span class="c1">//解引用空指针并尝试修改它的值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">fault_test</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>当我们编译后执行程序时，此时就会因为访问空指针而导致段错误：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">gcc -g -o test_coredump test_coredump.c
+</span></span><span class="line"><span class="cl">./test_coredump
+</span></span><span class="line"><span class="cl">Segmentation fault <span class="o">(</span>core dumped<span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时查看 core 文件的位置：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">cat /proc/sys/kernel/core_pattern
+</span></span><span class="line"><span class="cl"><span class="p">|</span>/usr/lib/systemd/systemd-coredump %P %u %g %s %t %c %h %e
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>这时我们发现这个路径下并没有 core 文件，上述信息表明了 core 文件已经被系统转储，此时有两种方法获取到 core 文件：</p>
+<ul>
+<li>
+<p>修改生成路径：</p>
+<ul>
+<li>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="c1"># 直接在程序所在目录生成core文件</span>
+</span></span><span class="line"><span class="cl"><span class="nb">echo</span>  <span class="s2">&#34;core-%e-%p-%t&#34;</span> &gt; /proc/sys/kernel/core_pattern
+</span></span></code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+</li>
+<li>
+<p>取出 core 文件：</p>
+<ol>
+<li>执行 <code>coredumpctl</code> 命令，查看所有 coredump 的程序，找到我们需要调试的那个。</li>
+<li>执行 <code>coredumpctl -o  自定义core文件名 dump  Pid</code> 取回 core 文件。</li>
+</ol>
+</li>
+</ul>
+<p>当生成完毕 core 文件后，执行以下命令开始调试：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">gdb 程序名 core文件名
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>此时我们就能够看到 coredump 的原因：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="o">[</span>New LWP 1065384<span class="o">]</span>
+</span></span><span class="line"><span class="cl">Core was generated by <span class="sb">`</span>./test_coredump<span class="err">&#39;</span>.
+</span></span><span class="line"><span class="cl">Program terminated with signal SIGSEGV, Segmentation fault.
+</span></span><span class="line"><span class="cl"><span class="c1">#0  fault_test () at test_coredump.c:4</span>
+</span></span><span class="line"><span class="cl">4	    *<span class="o">((</span>int *<span class="o">)</span>NULL<span class="o">)</span> <span class="o">=</span> 100<span class="p">;</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>接着执行 <code>where</code> 命令就能够查看调用堆栈：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="o">(</span>gdb<span class="o">)</span> where
+</span></span><span class="line"><span class="cl"><span class="c1">#0  fault_test () at test_coredump.c:4</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#1  0x0000000000400551 in main () at test_coredump.c:8</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h2 id="常用命令">常用命令</h2>
+<p>在 GDB 中，最常用的命令有以下这些：</p>
+<p><img src="http://img.orekilee.top//imgbed/gdb/gdb1.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>下面就来详细的介绍这些命令。</p>
+<h3 id="断点">断点</h3>
+<p>断点是最常用的调试功能之一，它可以让程序中断在需要的地方，从而方便我们对程序分析。GDB 中断点主要分为以下三类：</p>
+<ol>
+<li>breakpoint。</li>
+<li>watchpoint。</li>
+<li>catchpoint。</li>
+</ol>
+<h4 id="breakpoint">breakpoint</h4>
+<p>可以根据行号、函数、条件生成断点，下面是相关命令以及对应的作用说明：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">break [file]:function</td>
+<td style="text-align:center">在文件file的function函数入口设置断点</td>
+</tr>
+<tr>
+<td style="text-align:center">break [file]:line</td>
+<td style="text-align:center">在文件file的第line行设置断点</td>
+</tr>
+<tr>
+<td style="text-align:center">info breakpoints</td>
+<td style="text-align:center">查看断点列表</td>
+</tr>
+<tr>
+<td style="text-align:center">break [+-]offset</td>
+<td style="text-align:center">在当前位置偏移量为[+-]offset处设置断点</td>
+</tr>
+<tr>
+<td style="text-align:center">break *addr</td>
+<td style="text-align:center">在地址addr处设置断点</td>
+</tr>
+<tr>
+<td style="text-align:center">break &hellip; if expr</td>
+<td style="text-align:center">设置条件断点，仅仅在条件满足时</td>
+</tr>
+<tr>
+<td style="text-align:center">ignore n count</td>
+<td style="text-align:center">接下来对于编号为n的断点忽略count次</td>
+</tr>
+<tr>
+<td style="text-align:center">clear</td>
+<td style="text-align:center">删除所有断点</td>
+</tr>
+<tr>
+<td style="text-align:center">clear function</td>
+<td style="text-align:center">删除所有位于function内的断点</td>
+</tr>
+<tr>
+<td style="text-align:center">delete n</td>
+<td style="text-align:center">删除指定编号的断点</td>
+</tr>
+<tr>
+<td style="text-align:center">enable n</td>
+<td style="text-align:center">启用指定编号的断点</td>
+</tr>
+<tr>
+<td style="text-align:center">disable n</td>
+<td style="text-align:center">禁用指定编号的断点</td>
+</tr>
+<tr>
+<td style="text-align:center">save breakpoints file</td>
+<td style="text-align:center">保存断点信息到指定文件</td>
+</tr>
+<tr>
+<td style="text-align:center">source file</td>
+<td style="text-align:center">导入文件中保存的断点信息</td>
+</tr>
+<tr>
+<td style="text-align:center">break</td>
+<td style="text-align:center">在下一个指令处设置断点</td>
+</tr>
+<tr>
+<td style="text-align:center">clear [file:]line</td>
+<td style="text-align:center">删除第line行的断点</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="watchpoint">watchpoint</h4>
+<p>watchpoint 是一种特殊类型的断点，其类似于一个表达式的监视器，即当某个表达式改变了值时，它就会让 GDB 发出暂停执行的命令。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">watch variable</td>
+<td style="text-align:center">设置变量数据断点</td>
+</tr>
+<tr>
+<td style="text-align:center">watch var1 + var2</td>
+<td style="text-align:center">设置表达式数据断点</td>
+</tr>
+<tr>
+<td style="text-align:center">rwatch variable</td>
+<td style="text-align:center">设置读断点，仅支持硬件实现</td>
+</tr>
+<tr>
+<td style="text-align:center">awatch variable</td>
+<td style="text-align:center">设置读写断点，仅支持硬件实现</td>
+</tr>
+<tr>
+<td style="text-align:center">info watchpoints</td>
+<td style="text-align:center">查看数据断点列表</td>
+</tr>
+<tr>
+<td style="text-align:center">set can-use-hw-watchpoints 0</td>
+<td style="text-align:center">强制基于软件方式实现</td>
+</tr>
+</tbody>
+</table></div>
+<p>使用数据断点时，需要注意：</p>
+<ul>
+<li>当监控变量为局部变量时，一旦局部变量失效，数据断点也会失效</li>
+<li>如果监控的是指针变量<code>p</code>，则<code>watch *p</code>监控的是<code>p</code>所指内存数据的变化情况，而<code>watch p</code>监控的是<code>p</code>指针本身有没有改变指向</li>
+</ul>
+<p>最常见的数据断点应用场景：<strong>定位堆上的结构体内部成员何时被修改</strong>。由于指针一般为局部变量，为了解决断点失效，一般有两种方法。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:left">命令</th>
+<th style="text-align:left">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">print &amp;variable</td>
+<td style="text-align:left">查看变量的内存地址</td>
+</tr>
+<tr>
+<td style="text-align:left">watch *(type *)address</td>
+<td style="text-align:left">通过内存地址间接设置断点</td>
+</tr>
+<tr>
+<td style="text-align:left">watch -l variable</td>
+<td style="text-align:left">指定location参数</td>
+</tr>
+<tr>
+<td style="text-align:left">watch variable thread 1</td>
+<td style="text-align:left">仅编号为1的线程修改变量var值时会中断</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="catchpoint">catchpoint</h4>
+<p>catchpoint 是捕获断点，其主要监测信号的产生。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">catch fork</td>
+<td style="text-align:center">程序调用fork时中断</td>
+</tr>
+<tr>
+<td style="text-align:center">tcatch fork</td>
+<td style="text-align:center">设置的断点只触发一次，之后被自动删除</td>
+</tr>
+<tr>
+<td style="text-align:center">catch syscall ptrace</td>
+<td style="text-align:center">为ptrace系统调用设置断点</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="调用栈">调用栈</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">backtrace [n]</td>
+<td style="text-align:center">打印栈帧</td>
+</tr>
+<tr>
+<td style="text-align:center">frame [n]</td>
+<td style="text-align:center">选择第n个栈帧，如果不存在，则打印当前栈帧</td>
+</tr>
+<tr>
+<td style="text-align:center">up n</td>
+<td style="text-align:center">选择当前栈帧编号+n的栈帧</td>
+</tr>
+<tr>
+<td style="text-align:center">down n</td>
+<td style="text-align:center">选择当前栈帧编号-n的栈帧</td>
+</tr>
+<tr>
+<td style="text-align:center">info frame [addr]</td>
+<td style="text-align:center">描述当前选择的栈帧</td>
+</tr>
+<tr>
+<td style="text-align:center">info args</td>
+<td style="text-align:center">当前栈帧的参数列表</td>
+</tr>
+<tr>
+<td style="text-align:center">info locals</td>
+<td style="text-align:center">当前栈帧的局部变量</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="输出">输出</h3>
+<h4 id="变量信息">变量信息</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">whatis variable</td>
+<td style="text-align:center">查看变量的类型</td>
+</tr>
+<tr>
+<td style="text-align:center">ptype variable</td>
+<td style="text-align:center">查看变量详细的类型信息</td>
+</tr>
+<tr>
+<td style="text-align:center">info variables var</td>
+<td style="text-align:center">查看定义该变量的文件，不支持局部变量</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="字符串">字符串</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>x/s str</td>
+<td style="text-align:center">打印字符串</td>
+</tr>
+<tr>
+<td>set print elements 0</td>
+<td style="text-align:center">打印不限制字符串长度/或不限制数组长度</td>
+</tr>
+<tr>
+<td>call printf(&quot;%s\n&quot;,xxx)</td>
+<td style="text-align:center">这时打印出的字符串不会含有多余的转义符</td>
+</tr>
+<tr>
+<td>printf &ldquo;%s\n&rdquo;,xxx</td>
+<td style="text-align:center">同上</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="数组">数组</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">print *array@10</td>
+<td style="text-align:center">打印从数组开头连续10个元素的值</td>
+</tr>
+<tr>
+<td style="text-align:center">print array[60]@10</td>
+<td style="text-align:center">打印array数组下标从60开始的10个元素，即第60~69个元素</td>
+</tr>
+<tr>
+<td style="text-align:center">set print array-indexes on</td>
+<td style="text-align:center">打印数组元素时，同时打印数组的下标</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="指针">指针</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">print ptr</td>
+<td style="text-align:center">查看该指针指向的类型及指针地址</td>
+</tr>
+<tr>
+<td style="text-align:center">print *(struct xxx *)ptr</td>
+<td style="text-align:center">查看指向的结构体的内容</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="内存地址">内存地址</h4>
+<p>使用 <code>x</code> 命令来打印内存的值，格式为 <code>x/nfu addr</code>，以 <code>f</code> 格式打印从 <code>addr</code> 开始的 <code>n</code> 个长度单元为 <code>u</code> 的内存值。</p>
+<ul>
+<li><code>n</code>：输出单元的个数</li>
+<li><code>f</code>：输出格式，如 <code>x</code> 表示以 <code>16</code> 进制输出，<code>o</code> 表示以 <code>8</code> 进制输出，默认为 <code>x</code></li>
+<li><code>u</code>：一个单元的长度，<code>b</code> 表示 <code>1</code> 个 <code>byte</code>，<code>h</code> 表示 <code>2</code> 个 <code>byte</code>（<code>half word</code>），<code>w</code> 表示 <code>4</code> 个 <code>byte</code>，<code>g</code> 表示 <code>8</code> 个 <code>byte</code>（<code>giant word</code>）</li>
+</ul>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">x/8xb array</td>
+<td style="text-align:center">以16进制打印数组array的前8个byte的值</td>
+</tr>
+<tr>
+<td style="text-align:center">x/8xw array</td>
+<td style="text-align:center">以16进制打印数组array的前16个word的值</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="局部变量">局部变量</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">info locals</td>
+<td style="text-align:center">打印当前函数局部变量的值</td>
+</tr>
+<tr>
+<td style="text-align:center">backtrace full</td>
+<td style="text-align:center">打印当前栈帧各个函数的局部变量值，命令可缩写为bt</td>
+</tr>
+<tr>
+<td style="text-align:center">bt full n</td>
+<td style="text-align:center">从内到外显示n个栈帧及其局部变量</td>
+</tr>
+<tr>
+<td style="text-align:center">bt full -n</td>
+<td style="text-align:center">从外向内显示n个栈帧及其局部变量</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="结构体">结构体</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">set print pretty on</td>
+<td style="text-align:center">每行只显示结构体的一名成员</td>
+</tr>
+<tr>
+<td style="text-align:center">set print null-stop</td>
+<td style="text-align:center">不显示&rsquo;\000&rsquo;这种</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="函数跳转">函数跳转</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">set step-mode on</td>
+<td style="text-align:center">不跳过不含调试信息的函数，可以显示和调试汇编代码</td>
+</tr>
+<tr>
+<td style="text-align:center">finish</td>
+<td style="text-align:center">执行完当前函数并打印返回值，然后触发中断</td>
+</tr>
+<tr>
+<td style="text-align:center">return 0</td>
+<td style="text-align:center">不再执行后面的指令，直接返回，可以指定返回值</td>
+</tr>
+<tr>
+<td style="text-align:center">call printf(&quot;%s\n&quot;, str)</td>
+<td style="text-align:center">调用printf函数，打印字符串(可以使用call或者print调用函数)</td>
+</tr>
+<tr>
+<td style="text-align:center">print func()</td>
+<td style="text-align:center">调用func函数(可以使用call或者print调用函数)</td>
+</tr>
+<tr>
+<td style="text-align:center">set var variable=xxx</td>
+<td style="text-align:center">设置变量variable的值为xxx</td>
+</tr>
+<tr>
+<td style="text-align:center">set {type}address = xxx</td>
+<td style="text-align:center">给存储地址为address，类型为type的变量赋值</td>
+</tr>
+<tr>
+<td style="text-align:center">info frame</td>
+<td style="text-align:center">显示函数堆栈的信息（堆栈帧地址、指令寄存器的值等）</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="多线程多进程">多线程、多进程</h3>
+<h4 id="多进程">多进程</h4>
+<p>GDB 在调试多进程程序（程序含 <code>fork</code> 调用）时，默认只追踪父进程。可以通过命令设置，实现只追踪父进程或子进程，或者同时调试父进程和子进程。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>info inferiors</td>
+<td>查看进程列表</td>
+</tr>
+<tr>
+<td>attach pid</td>
+<td>绑定进程id</td>
+</tr>
+<tr>
+<td>inferior num</td>
+<td>切换到指定进程上进行调试</td>
+</tr>
+<tr>
+<td>print $_exitcode</td>
+<td>显示程序退出时的返回值</td>
+</tr>
+<tr>
+<td>set follow-fork-mode child</td>
+<td>追踪子进程</td>
+</tr>
+<tr>
+<td>set follow-fork-mode parent</td>
+<td>追踪父进程</td>
+</tr>
+<tr>
+<td>set detach-on-fork on</td>
+<td>fork调用时只追踪其中一个进程</td>
+</tr>
+<tr>
+<td>set detach-on-fork off</td>
+<td>fork调用时会同时追踪父子进程</td>
+</tr>
+</tbody>
+</table></div>
+<p>在调试多进程程序时候，默认情况下，除了当前调试的进程，其他进程都处于挂起状态，所以，如果需要在调试当前进程的时候，其他进程也能正常执行，那么通过设置 <code>set schedule-multiple on</code> 即可。</p>
+<blockquote>
+<p>在默认情况下，GDB 只支持调试主进程（即 main），只有在 GDB 7.0 后才支持单独调试(调试父进程或者子进程)和同时调试多个进程。</p>
+</blockquote>
+<h4 id="多线程">多线程</h4>
+<p>默认调试多线程时，一旦程序中断，所有线程都将暂停。如果此时再继续执行当前线程，其他线程也会同时执行。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">info threads</td>
+<td style="text-align:center">查看线程列表</td>
+</tr>
+<tr>
+<td style="text-align:center">thread [thread_id]</td>
+<td style="text-align:center">切换进该线程</td>
+</tr>
+<tr>
+<td style="text-align:center">print $_thread</td>
+<td style="text-align:center">显示当前正在调试的线程编号</td>
+</tr>
+<tr>
+<td style="text-align:center">set scheduler-locking on</td>
+<td style="text-align:center">调试一个线程时，其他线程暂停执行</td>
+</tr>
+<tr>
+<td style="text-align:center">set scheduler-locking off</td>
+<td style="text-align:center">调试一个线程时，其他线程同步执行</td>
+</tr>
+<tr>
+<td style="text-align:center">set scheduler-locking step</td>
+<td style="text-align:center">仅用step调试线程时其他线程不执行，用其他命令如next调试时仍执行</td>
+</tr>
+</tbody>
+</table></div>
+<p>如果只关心当前线程，建议临时设置 <code>scheduler-locking</code> 为 <code>on</code>，避免其他线程同时运行，导致命中其他断点分散注意力。</p>
+<h3 id="其他">其他</h3>
+<h4 id="图形化">图形化</h4>
+<p>tui为<code>terminal user interface</code>的缩写，在启动时候指定<code>-tui</code>参数，或者调试时使用<code>ctrl+x+a</code>组合键，可进入或退出图形化界面。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">layout src</td>
+<td>显示源码窗口</td>
+</tr>
+<tr>
+<td style="text-align:center">layout asm</td>
+<td>显示汇编窗口</td>
+</tr>
+<tr>
+<td style="text-align:center">layout split</td>
+<td>显示源码 + 汇编窗口</td>
+</tr>
+<tr>
+<td style="text-align:center">layout regs</td>
+<td>显示寄存器 + 源码或汇编窗口</td>
+</tr>
+<tr>
+<td style="text-align:center">winheight src +5</td>
+<td>源码窗口高度增加5行</td>
+</tr>
+<tr>
+<td style="text-align:center">winheight asm -5</td>
+<td>汇编窗口高度减小5行</td>
+</tr>
+<tr>
+<td style="text-align:center">winheight cmd +5</td>
+<td>控制台窗口高度增加5行</td>
+</tr>
+<tr>
+<td style="text-align:center">winheight regs -5</td>
+<td>寄存器窗口高度减小5行</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="汇编">汇编</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align:center">命令</th>
+<th style="text-align:center">含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">disassemble function</td>
+<td style="text-align:center">查看函数的汇编代码</td>
+</tr>
+<tr>
+<td style="text-align:center">disassemble /mr function</td>
+<td style="text-align:center">同时比较函数源代码和汇编代码</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="其他工具">其他工具</h2>
+<h3 id="pstack">pstack</h3>
+<p><code>pstack</code> 是一个 shell 脚本，用于打印正在运行的进程的栈跟踪信息。pstack 命令必须由相应进程的属主或 root 运行。可以使用 <code>pstack</code> 来确定进程挂起的位置。</p>
+<p>使用方式如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">pstack <span class="o">[</span>pid<span class="o">]</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h3 id="ldd">ldd</h3>
+<p>当我们编译链接时找不到静态库而导致链接失败，又或者是编译成功，在运行时加载动态库失败时，我们可以使用 <code>ldd</code> 命令来分析该程序依赖了哪些库以及这些库所在的路径，从而解程序因缺少某个库文件而不能运行的一些问题。使用方式如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">ldd 程序名
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>例如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">ldd <span class="nb">test</span>
+</span></span><span class="line"><span class="cl">	linux-vdso.so.1 <span class="o">(</span>0x00007ffeefb2f000<span class="o">)</span>
+</span></span><span class="line"><span class="cl">	libstdc++.so.6 <span class="o">=</span>&gt; /lib64/libstdc++.so.6 <span class="o">(</span>0x00007fa30f54a000<span class="o">)</span>
+</span></span><span class="line"><span class="cl">	libm.so.6 <span class="o">=</span>&gt; /lib64/libm.so.6 <span class="o">(</span>0x00007fa30f1c8000<span class="o">)</span>
+</span></span><span class="line"><span class="cl">	libgcc_s.so.1 <span class="o">=</span>&gt; /lib64/libgcc_s.so.1 <span class="o">(</span>0x00007fa30efb0000<span class="o">)</span>
+</span></span><span class="line"><span class="cl">	libc.so.6 <span class="o">=</span>&gt; /lib64/libc.so.6 <span class="o">(</span>0x00007fa30ebeb000<span class="o">)</span>
+</span></span><span class="line"><span class="cl">	/lib64/ld-linux-x86-64.so.2 <span class="o">(</span>0x00007fa30f8df000<span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>其中每一行的第一个参数程序依赖的库名，第二个则是系统所提供的对应的库（如果系统找不到，则会显示 not found），第三个是库加载的起始地址。</p>
+<h3 id="stringscfilt">strings、c++filt</h3>
+<p>C++ 为了支持函数重载功能，需要编译器在使用 name mangling 机制将符号表中的函数进行重命名，而我们使用 <code>strings</code>  就可以查看到重命名后的函数名：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">strings 程序名
+</span></span></code></pre></td></tr></table>
+</div>
+</div><p>如果使用 <code>c++filt</code> 工具，就可以根据符号表中的函数名，还原为原始的函数定义：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">c++filt 重命名后的函数名
+</span></span></code></pre></td></tr></table>
+</div>
+</div><h1 id="原理">原理</h1>
+<h2 id="调试原理">调试原理</h2>
+<p>当我们开始使用 GDB 开始调试时，系统首先会启动一个 GDB 进程，紧接着这个进程会 <code>fork</code> 出一个子进程来控制被调试程序，它会执行以下操作：</p>
+<ol>
+<li>调用 <code>ptrace(PTRACE_TRACEME)</code> 来让 GDB 进程接管本进程的执行。</li>
+<li>通过 <code>execv</code> 来将被调试程序替换到子进程中。</li>
+</ol>
+<p>详细流程如下图所示：</p>
+<p><img src="http://img.orekilee.top//imgbed/gdb/gdb2.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p>接下来就介绍里面最关键的 <code>ptrace</code>。</p>
+<h2 id="ptrace">ptrace</h2>
+<p><code>ptrace</code> 是 Linux 内核提供的一个用于进程跟踪的系统调用，通过它，一个进程（GDB）可以读写另外一个进程（被调试进程）的指令空间、数据空间、堆栈和寄存器的值，并且 GDB 进程接管了被调试进程的所有信号，这样一来，被调试进程的执行就被 GDB 控制，从而达到调试的目的。</p>
+<p><img src="http://img.orekilee.top//imgbed/gdb/gdb3.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<p><code>ptrace</code>  的定义如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre tabindex="0" class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="c1">#include &lt;sys/ptrace.h&gt;</span>
+</span></span><span class="line"><span class="cl">long ptrace<span class="o">(</span>enum __ptrace_request request, pid_t pid, void *addr, void *data<span class="o">)</span>
+</span></span></code></pre></td></tr></table>
+</div>
+</div><ul>
+<li>enum __ptrace_request request：指示了 <code>ptrace</code> 要执行的命令。</li>
+<li>pid_t pid：指示 ptrace 要跟踪的进程</li>
+<li>void *addr：指示要监控的内存地址</li>
+<li>void *data：存放读取出的或者要写入的数据。</li>
+</ul>
+<h2 id="调试运行中程序">调试运行中程序</h2>
+<p>如果想要调试一个已经执行的进程，就需要在 GDB 进程中调用 <code>ptrace(PTRACE_ATTACH,...)</code>，此时 GDB 进程会 <code>attach</code> 已经执行的被调试进程，将其收养为自己的子进程，接着会向被调试进程发送一个 <code>SIGSTO</code> 信号，当被调试进程接收到这个信号时，就会暂时执行并进入 <code>TASK_STOPED</code> 状态，表示其已经准备好接受调试。</p>
+<blockquote>
+<p><code>attach</code> 的一些限制：不予许 <code>attach</code> 自己；不允许多次 <code>attach</code> 到同一个进程；不允许 <code>attach</code> 1 号进程；</p>
+</blockquote>
+<p><img src="http://img.orekilee.top//imgbed/gdb/gdb4.png"
+	
+	
+	
+	loading="lazy"
+	
+	
+></p>
+<!-- raw HTML omitted -->
+<h2 id="断点-break">断点 break</h2>
+<p>当我们使用 <code>break</code> 命令设置断点的时候，GDB 首先会将原来的汇编代码存储到一个断点链表中，接着会在对应的汇编代码的位置插入一个 <code>INT3</code> 中断指令。</p>
+<p>当被调试的程序运行到这个位置时，就会执行 <code>INT3</code> 指令，此时会发生软中断，接着内核会向被调试进程发送一个 <code>SIGTRAP</code> 信号，由于当前 GDB 通过 <code>ptrace</code> 接管了被调试进程，所以这个信号自然又转发到了 GDB 进程中。GDB 此时会对比当前停止的位置和断点链表中存储的断点位置，将该位置的代码恢复成断点链表中存储的原来的代码，接着将程序计数器（pc 指针）回退一步，指向用户 <code>break</code> 的位置。</p>
+<p>此时就达到了断点的目的，接着 GDB 会一直等待用户输入调试指令。</p>
+<h2 id="单步-next">单步 next</h2>
+<p>当我们使用 <code>next</code> 执行单步命令时，此时 GDB 会控制其执行一行代码，它首先会计算出这一行代码所对应的汇编代码的位置，接着控制程序计数器一直往下执行，直到执行到这个位置时就会停下来，继续等待用户输入调试指令。</p>
+<p>这个功能其实借助 <code>ptrace</code> 就可以直接实现，只需要在第一个参数中传递 <code>PTRACE_SINGLESTEP</code> 即可。</p>
+<h1 id="参考">参考</h1>
+<ol>
+<li><a class="link" href="https://mp.weixin.qq.com/s/G8u1WH2K8NANohhpc6347A"  target="_blank" rel="noopener"
+    >GDB调试-从入门实践到原理</a></li>
+<li><a class="link" href="https://mp.weixin.qq.com/s/dNZVQGRYLjy6_LcOjXb5xw"  target="_blank" rel="noopener"
+    >GDB调试入门，看这篇就够了</a></li>
+<li><a class="link" href="https://mp.weixin.qq.com/s/Pl8GIhiaxGWnrH5kcY_69w"  target="_blank" rel="noopener"
+    >图文并茂 | 彻底弄懂GDB调试原理</a></li>
+<li><a class="link" href="http://c.biancheng.net/view/8130.html"  target="_blank" rel="noopener"
+    >GDB教程</a></li>
+<li><a class="link" href="https://zh.wikipedia.org/zh-cn/GNU%E4%BE%A6%E9%94%99%E5%99%A8"  target="_blank" rel="noopener"
+    >GNU调试器</a></li>
+</ol>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/c&#43;&#43;/">C&#43;&#43;</a>
+        
+            <a href="/tags/%E8%B0%83%E8%AF%95%E5%B7%A5%E5%85%B7/">调试工具</a>
+        
+            <a href="/tags/gdb/">GDB</a>
+        
+    </section>
+
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 Jul 12, 2022 16:09 CST
+        </span>
+    </section></footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.css"integrity="sha384-RZU/ijkSsFbcmivfdRBQDtwuwVqK7GMOw6IMvKyeWL2K5UAlyp6WonmB8m7Jd0Hn"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/katex.min.js"integrity="sha384-pK1WpvzWVBQiP0/GjnvRxV4mOb0oxFuyRxJlk6vVw146n3egcN5C925NCP7a7BY8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.13.13/dist/contrib/auto-render.min.js"integrity="sha384-vZTG03m&#43;2yp6N6BNi5iM4rW4oIwk5DfcNdFfxkk9ZWpDriOkXX8voJBFrAO7MpVl"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.querySelector(`.article-content`), {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });})
+</script>
+    
+</article>
+
+    
+
+    
+
+<aside class="related-contents--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-contents">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/google-test/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Google Test</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/cmake/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">CMake</h2>
+        </div>
+    </a>
+</article>
+            
+                
+<article class="">
+    <a href="/p/bazel/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Bazel</h2>
+        </div>
+    </a>
+</article>
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    <script src='//cdn.jsdelivr.net/npm/@waline/client/dist/Waline.min.js'></script>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+    .waline-container .vcount {
+        color: var(--card-text-color-main);
+    }
+</style><script>
+    
+    new Waline({"avatar":"wavatar","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"lang":"zh-CN","locale":{"admin":"Admin"},"placeholder":"休得弄脏我的评论，注册后再与我对话","requiredMeta":["name","email","url"],"serverURL":"https://comment.orekilee.top/"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2020 - 
+        
+        2022 凌桓&#39;s BLOG
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.11.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.css"integrity="sha256-c0uckgykQ9v5k&#43;IqViZOZKc47Jn7KQil4/MP3ySA3F8="crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.css"integrity="sha256-SBLU4vv6CA6lHsZ1XyTdhyjJxCjPif/TRkjnsyGAGnE="crossorigin="anonymous"
+            >
+
+            </main>
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#什么是-gdb">什么是 GDB？</a></li>
+    <li><a href="#gdb-可以用来做些什么">GDB 可以用来做些什么？</a></li>
+    <li><a href="#调试模型">调试模型</a>
+      <ol>
+        <li><a href="#本地调试">本地调试</a></li>
+        <li><a href="#远程调试">远程调试</a></li>
+      </ol>
+    </li>
+    <li><a href="#安装-gdb">安装 GDB</a></li>
+  </ol>
+
+  <ol>
+    <li><a href="#启动调试">启动调试</a>
+      <ol>
+        <li><a href="#调试未运行的程序">调试未运行的程序</a>
+          <ol>
+            <li><a href="#无参数">无参数</a></li>
+            <li><a href="#有参数">有参数</a></li>
+          </ol>
+        </li>
+        <li><a href="#调试运行中的程序">调试运行中的程序</a>
+          <ol>
+            <li><a href="#已生成调试信息">已生成调试信息</a></li>
+            <li><a href="#未生成调试信息">未生成调试信息</a></li>
+          </ol>
+        </li>
+        <li><a href="#调试-core-文件">调试 core 文件</a>
+          <ol>
+            <li><a href="#配置-core-文件生成">配置 core 文件生成</a></li>
+            <li><a href="#调试--core-文件">调试  core 文件</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#常用命令">常用命令</a>
+      <ol>
+        <li><a href="#断点">断点</a>
+          <ol>
+            <li><a href="#breakpoint">breakpoint</a></li>
+            <li><a href="#watchpoint">watchpoint</a></li>
+            <li><a href="#catchpoint">catchpoint</a></li>
+          </ol>
+        </li>
+        <li><a href="#调用栈">调用栈</a></li>
+        <li><a href="#输出">输出</a>
+          <ol>
+            <li><a href="#变量信息">变量信息</a></li>
+            <li><a href="#字符串">字符串</a></li>
+            <li><a href="#数组">数组</a></li>
+            <li><a href="#指针">指针</a></li>
+            <li><a href="#内存地址">内存地址</a></li>
+            <li><a href="#局部变量">局部变量</a></li>
+            <li><a href="#结构体">结构体</a></li>
+          </ol>
+        </li>
+        <li><a href="#函数跳转">函数跳转</a></li>
+        <li><a href="#多线程多进程">多线程、多进程</a>
+          <ol>
+            <li><a href="#多进程">多进程</a></li>
+            <li><a href="#多线程">多线程</a></li>
+          </ol>
+        </li>
+        <li><a href="#其他">其他</a>
+          <ol>
+            <li><a href="#图形化">图形化</a></li>
+            <li><a href="#汇编">汇编</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#其他工具">其他工具</a>
+      <ol>
+        <li><a href="#pstack">pstack</a></li>
+        <li><a href="#ldd">ldd</a></li>
+        <li><a href="#stringscfilt">strings、c++filt</a></li>
+      </ol>
+    </li>
+  </ol>
+
+  <ol>
+    <li><a href="#调试原理">调试原理</a></li>
+    <li><a href="#ptrace">ptrace</a></li>
+    <li><a href="#调试运行中程序">调试运行中程序</a></li>
+    <li><a href="#断点-break">断点 break</a></li>
+    <li><a href="#单步-next">单步 next</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.5/dist/vibrant.min.js"integrity="sha256-5NovOZc4iwiAWTYIFiIM7DxKUXKWvpVEuMEPLzcm5/g="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
